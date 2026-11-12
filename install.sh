@@ -21,6 +21,7 @@ STATE_DIR="${OUC_STATE_DIR:-/var/lib/$BRAND}"
 WANT_WARP=0
 WANT_OPENCODE=0
 FORCE_PORTABLE=0
+FORCE_SYSTEMD=0
 WRAP=0
 ASSUME_YES=0
 
@@ -35,6 +36,7 @@ for arg in "$@"; do
     --with-warp)       WANT_WARP=1 ;;
     --with-opencode)   WANT_OPENCODE=1 ;;
     --portable)        FORCE_PORTABLE=1 ;;
+    --systemd)         FORCE_SYSTEMD=1 ;;
     --proxy)           FORCE_PROXY=1 ;;
     --wrap)            WRAP=1 ;;
     -y|--yes)          ASSUME_YES=1 ;;
@@ -45,6 +47,8 @@ usage: install.sh [options]
   --with-warp        install cloudflare-warp if warp-cli is missing
   --with-opencode    install the opencode CLI if it is missing
   --portable         force no-systemd mode (daemon + pidfile)
+  --systemd          force systemd mode (writes the unit even if this machine has
+                     no running systemd, e.g. while building a container image)
   --proxy            proxy mode: WARP without a TUN device (Codespaces, Docker, CI).
                      No firewall, no /etc/hosts pin; opencode reaches the tunnel
                      through a local HTTP proxy instead.
@@ -251,9 +255,10 @@ chmod 0644 "$STATE_DIR/config.json" 2>/dev/null || true
 # ---------------------------------------------------------------- mode choice
 MODE="systemd"
 if [ "$FORCE_PORTABLE" = 1 ]; then MODE="portable"; fi
-if ! command -v systemctl >/dev/null 2>&1 || [ ! -d /run/systemd/system ]; then
+if [ "$FORCE_SYSTEMD" != 1 ] && { ! command -v systemctl >/dev/null 2>&1 || [ ! -d /run/systemd/system ]; }; then
   MODE="portable"
 fi
+if [ "$FORCE_SYSTEMD" = 1 ]; then MODE="systemd"; fi
 # A *user* session is irrelevant here: we never touch systemd --user.
 say "mode: $MODE$([ "$MODE" = portable ] && echo ' (no systemd session needed)')"
 python3 - "$STATE_DIR/config.json" "$MODE" <<'PY_MODE'

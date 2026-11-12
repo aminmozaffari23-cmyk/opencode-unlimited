@@ -147,6 +147,11 @@ sb(){ # fresh sandbox for one test
   export OUC_CONNECT_WAIT=6 OUC_EGRESS_WAIT=6
   # v2.1: pinning and request-verification are tested explicitly, never by accident
   export OUC_PIN=0 OUC_VERIFY=0 OUC_ROTATION_MODE=auto
+  # Tunnel-mode behaviour (pin, kill-switch, supervisor repair) must be testable
+  # on any host — including a Codespace, where CODESPACES=true would otherwise
+  # select proxy mode and turn those tests into false failures. Proxy tests
+  # override this line explicitly right after sb.
+  export OUC_WARP_MODE=warp
   # The single-instance lock is /run/opencode-unlimited.lock for root, which a
   # real installation already holds: sandbox supervisors would refuse to start
   # (and a sandbox `stop` would be the only way to free it). Keep it in $T.
@@ -563,7 +568,9 @@ t19_install_systemd_unit(){
   # fake a working systemd so we can assert on the generated unit
   mkdir -p "$T/bin"
   printf '#!/bin/sh\nexit 0\n' > "$T/bin/systemctl"; chmod +x "$T/bin/systemctl"
-  PATH="$T/bin:$PATH" bash "$ROOT/install.sh" > "$LOGDIR/19.raw" 2>&1
+  # --systemd writes the unit on purpose: a container has no running systemd,
+  # but the generated unit is exactly what we want to assert on.
+  PATH="$T/bin:$PATH" bash "$ROOT/install.sh" --systemd > "$LOGDIR/19.raw" 2>&1
   local unit="$OUC_UNIT_DIR/opencode-unlimited.service"
   assert_file "$unit"
   grep -q "ExecStart=$OUC_BIN_PATH supervise --foreground" "$unit" && a_ok || a_fail "bad ExecStart"
