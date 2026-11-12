@@ -1,352 +1,202 @@
-# OpenCode v2 + ouc: a beginner’s guide and qualification record
+# OpenCode + ouc: the current beginner guide
 
-**Build:** unreleased working version 2.4.2 · **Native CLI tested:** OpenCode 2.2.7 · **Mode tested:** WARP proxy mode only.
+**Tested native CLI:** OpenCode 2.2.7 · **Controller:** unreleased 2.4.2 · **Tested mode:** WARP proxy mode.
 
-This single guide was written **after the executed tests** described below. It explains normal use, the reliability changes, the safety incident, the corrected tests, and the remaining limits. Historical release documents are not evidence that every current v2 path works.
+This guide was updated **after the executed follow-up tests, complete MiniMax task, installed Codespace update, and installed smoke tests**. For the detailed chronology, qualifications, and unsuccessful attempts, read the [English execution report](docs/reports/transport-resilience-follow-up.md). The [previous guide](docs/history/opencode-v2-first-qualification-guide.md) is preserved unchanged as historical evidence.
 
-## 1. Read this before running anything
+## 1. The simple daily command
 
-- **The existing installation was not replaced.** The changes belong to the review branch `fix/opencode-v2-runner-qualification`. No release, main-branch merge, permanent deployment, or new version number was authorized by this qualification.
-- The installed older working copy and this candidate both say `2.4.2`. **A version number alone cannot distinguish them.** Compare the source hash.
-- The candidate passed the guarded offline tests and several genuine native-CLI tests. However, the final MiniMax four-step task **did not finish**, and successful recovery from a genuine quota wall is **not qualified**.
-- Recommendation: **review and controlled trials, not an unattended-production or “unlimited usage” guarantee.** Do not replace a working installation without a separate deployment decision and backup.
-- Free-model availability can change during a run. A changed IP address, a model listing, or a successful request to a different model does not establish availability for your selected model.
-
-Candidate `ouc.py` SHA-256:
-
-```text
-6be5f5d328911a5cb97c9bb5caac94eda03caff9b0d31b3e8dcf122021e09d57
-```
-
-Installed source retained during qualification:
-
-```text
-ba3320a80bdd3a528bf7ffa825bb9e7fc83214c69d075179c7e7b82a824148b0
-```
-
-Read-only checks that can be used on the existing installation:
+Open a **new Codespace terminal**, enter your own project, and run:
 
 ```bash
-opencode --version
+opencode
+```
+
+That remains the ordinary interactive command. You do not need to export proxy settings or paste a long command each day.
+
+The approved update added one previously absent file, `~/.bash_aliases`, containing `alias opencode='ouc lane'`. The existing `.bashrc` already loads that file. Neither `.bashrc` nor the real OpenCode binary was replaced. If you must keep an already-open Bash terminal, load the new alias once:
+
+```bash
+source ~/.bash_aliases
+```
+
+Other shells and non-interactive scripts do not necessarily load Bash aliases. They can use `ouc lane` explicitly. Do not rename the native binary or stack another wrapper on top of it.
+
+**Important distinction:** the daily shortcut provides transparent native execution through the process-scoped proxy. It does not turn the interactive screen into a headless managed task. The new controller retry state machine is used by `ouc agent`, `ouc run`, and `ouc resume`.
+
+## 2. What the pieces mean
+
+- **OpenCode** talks to a model and uses development tools.
+- **ouc** supervises managed calls, records task progress, and coordinates network recovery.
+- **WARP** supplies the proxy connection. The HTTP bridge adapts OpenCode's HTTP-proxy support to WARP's SOCKS proxy.
+- A **supervisor** is a background process keeping runtime components healthy.
+- A **session** is a particular model conversation. A model name, project directory, and session ID are different pieces of context.
+- A **journal** is a durable notebook of steps, outcomes, and budgets. A **lock** prevents competing controllers from recovering the same connection simultaneously.
+- **Headless** means running without an interactive screen or a person answering prompts.
+- A **harness** is test code that starts, observes, and checks another program. It can have its own bugs.
+- A **fixture** deliberately fakes provider/WARP results. A **monkey test** randomizes inputs; a **stress test** adds concurrency/load. Neither automatically proves a genuine provider outage was recovered from.
+
+The tested connection is:
+
+```text
+OpenCode process tree
+  → HTTP proxy 127.0.0.1:8080
+  → WARP SOCKS proxy 127.0.0.1:40000
+  → provider
+```
+
+Ports **40000 and 8080** were retained. This update did not enable TUN or change firewall rules, routes, or hosts. It reused the existing `/usr/bin/warp-svc` and registration.
+
+Proxy settings are applied to the OpenCode subprocess tree only, not globally to your shell. This is **not a machine-wide VPN or firewall guarantee**. Arbitrary browser/tool subprocesses may ignore environment proxies. Failed direct reachability probes must be counted honestly rather than confused with successful provider connections.
+
+## 3. Check the installed build
+
+The older installation and the new controller both report `2.4.2`; use the file hash to distinguish them:
+
+```bash
 ouc --version
 ouc status
 ouc doctor
 sha256sum /usr/local/lib/opencode-unlimited/ouc.py
 ```
 
-The examples using the **new candidate behavior**, including `ouc verify -m`, assume a separately approved deployment of this branch. They are not instructions to install it now. Do not run the installer merely to try a command from this guide.
-
-## 2. What the pieces mean
-
-**OpenCode** is the program that talks to a model and uses development tools. **ouc** is the controller around it. **WARP** provides a network connection; the HTTP bridge lets OpenCode use WARP’s SOCKS proxy.
-
-In this tested setup:
+The tested installed SHA-256 is:
 
 ```text
-OpenCode process → HTTP proxy 127.0.0.1:8080
-                 → WARP SOCKS proxy 127.0.0.1:40000
-                 → provider
+e4b1b802a2697b7cc26f985fc1549549efbc24d40523f2ff9b52c101a1f0bfe2
 ```
 
-A **supervisor** is a background process that keeps the connection healthy. A **foreground run** is the command you started and are watching. A **lock** prevents two controllers from trying recovery simultaneously. A **journal** is a notebook recording task steps and outcomes.
+Implementation commit: `89ffea83531d68ed309439037d85890b62abaa34`, branch `feat/transport-retry-diagnostics`. This is an approved controlled Codespace update, **not** a new public release or a main-branch merge.
 
-**Headless** means a command runs without an interactive screen or a person answering prompts. A **test harness** is the code that starts a test, observes it, and checks results. A harness can have bugs too; this qualification found a consequential one, documented in section 12.
+`status` and `doctor` check runtime/connection conditions; they do not establish that every free model is currently available. A model listing, changed IP, successful curl, or successful different model is not proof that your chosen model can complete its task.
 
-### What proxy mode does—and does not—protect
-
-The existing ports stayed **40000 and 8080**. Qualification did not enable TUN or change firewall rules, routes, or `/etc/hosts` in the product Codespace. The existing `/usr/bin/warp-svc` was used, not replaced.
-
-The candidate sets `HTTP_PROXY`, `HTTPS_PROXY`, `http_proxy`, and `https_proxy` consistently **for the OpenCode process tree only**. It limits both `NO_PROXY` spellings to loopback and removes inherited `ALL_PROXY` settings from that tree. There are no global shell exports in these changes.
-
-This is **not a machine-wide VPN/privacy guarantee**. Other applications are outside the proxy policy. Arbitrary tools may not honor proxy environment variables. Routing observations are evidence about the traced calls, not a certificate covering every possible network operation.
-
-## 3. The ordinary daily command stays simple
-
-After an approved installation has set up the normal entry point, use:
+An explicit model verification sends a real small provider request:
 
 ```bash
-cd /path/to/your/project
-opencode
+ouc verify -m opencode/minimax-m3.1-flash-free
 ```
 
-Do not add permanent proxy exports to your shell startup files. Do not add `--auto` to every OpenCode command. Interactive use should retain its normal approval behavior.
+Availability can change after that check. The verified model must be the interrupted model when deciding whether its recovery worked.
 
-The candidate’s `ouc lane` is the transparent launch path. In proxy mode it execs the real CLI with the scoped proxy environment and v2 `--standalone`, so a resident server started with stale environment settings is not silently reused. It does not append advertising or plant an `AGENTS.md` rules file.
+## 4. Run a multi-step task with controller recovery
 
-The live `lane` check used a small JSON-output request. Its output contained native JSON records only, and no `--auto` was added. A full interactive TUI session and interactive quota recovery were **not** qualified by that check.
+Create your own task file first. Use a short list of clear steps, one per line beginning with `-`. Keep it in a project you intend the agent to edit. For example, the contents could ask for a page, a stylesheet, then verification of those files.
 
-## 4. Check the connection, then check the model
-
-Use `ouc status` and `ouc doctor` to inspect the supervisor, WARP, and bridge. A healthy bridge is necessary, but it is not a model-availability test.
-
-On the candidate, one genuine request to a chosen model is:
+From that project, replace `my-task.txt` with your actual task filename:
 
 ```bash
-ouc verify -m opencode/beam-free
+ouc agent --task ./my-task.txt --dir "$PWD" -m opencode/minimax-m3.1-flash-free
 ```
 
-Replace the model ID with the exact provider/model you intend to use. This command consumes a real verification request. It does not rotate merely because verification fails.
+`--task` names the instructions file; `--dir` is the work directory; `-m` selects the task model. A new task/directory pair gets its own journal instead of inheriting an unrelated completed task.
 
-Interpret the JSON result:
+Managed `agent` calls deliberately approve development-tool use. That is not an OS sandbox or permission to delete unrelated data. The controller has guardrails and protected-state audits, but they do not make arbitrary model-generated commands harmless. Keep your own important project backups too.
 
-- `ok: true`: this selected model completed the exact marker reply, with a successful native exit and no typed provider error, at that time.
-- `walled: true`: the native error indicated a quota wall. It is not inferred from silence or an IP change.
-- `ok: false, walled: false`: another failure or an unconfirmed result. Read `failure_class` and `detail`; do not call it exhausted quota.
-- A timeout is **unknown availability**, not proof of a provider-wide outage, an account limit, or a reset time.
-
-Without `-m`, verification uses the configured test model, normally Flint in this setup. **A Flint reply does not prove MiniMax is available.** Automatic recovery now carries the interrupted model into verification instead of silently using that general probe model.
-
-Do not use a bare inference `curl` request to decide whether the CLI is usable. Do not guess a midnight reset or wait for a fixed quota-reset hour. This implementation has no reset-wait logic.
-
-## 5. Start a managed task carefully
-
-The following examples describe the candidate **after an approved deployment**.
-
-### One managed prompt
+A small managed native call can use:
 
 ```bash
-ouc run -- -m opencode/beam-free "Review this project and propose a small change."
+ouc run -- -m opencode/minimax-m3.1-flash-free "Reply with exactly HELLO. Do not use tools."
 ```
 
-`ouc run` supervises a native headless call. Its v2 output uses native JSON events, not a byte-transparent interactive display. It does **not** blanket-enable automatic tool approval.
+The `--` separates ouc's arguments from the native run arguments. Managed v2 output includes native JSON events and controller progress. That structured output is intentional; it is not the interactive TUI. `ouc run` and ordinary `lane` do not silently add `--auto`.
 
-### A task list with `ouc agent`
+## 5. Resume the right conversation
 
-Use a disposable practice directory first:
+For an explicit continuation, enter the **same project** and supply the actual recorded session and model:
 
 ```bash
-work="$(mktemp -d "$HOME/ouc-practice.XXXXXX")"
-cd "$work"
-cat > task.txt <<'EOF'
-- Create a short README.md explaining this practice project.
-- Check the file and report honestly what you created.
-EOF
+ouc resume -s ACTUAL_RECORDED_SESSION_ID -m opencode/minimax-m3.1-flash-free
 ```
 
-After independently confirming your selected model is available:
+Do not paste the placeholder literally. Do not invent an ID: native v2 may create an unknown requested ID rather than reject it. Do not replace a known conversation with “whatever session was latest.”
 
-```bash
-ouc agent --task task.txt --dir "$PWD" -m opencode/beam-free
-```
+The transport-recovery path uses a known session exactly, keeps the original primary model, and keeps the physical cwd/PWD aligned. If it cannot identify the primary model for recovery, it asks for explicit selection rather than verifying a different model and claiming success.
 
-**Important:** `ouc agent` is intentionally unattended. Native v2 calls receive `--auto`. The controller’s guardrails are **not a security sandbox** or a per-command tool-permission firewall. Use a project where you can tolerate model mistakes; do not give it production credentials, valuable unrelated files, or an irreversible task.
+A new invocation restarts its active monotonic time budget; durable task history/counters remain in its notebook. Re-running a command is not proof that previous failed work was completed.
 
-A plain practice directory is not a Git repository, so Git checkpoints are skipped. In an existing repository, use a clean dedicated branch/worktree first. The checkpoint helper stages project changes with `git add -A`; unrelated dirty files in that worktree could be included. It does not push those checkpoints.
+## 6. How transport recovery works now
 
-A completed native call means the controller observed completion, not that the generated code meets every requirement. Review the files and run independent checks.
+A top-level native `provider.transport` / `ECONNRESET` is not automatically quota. The controller now does this:
 
-## 6. Understand the notebook and continuation
+1. The initial primary call fails with a transport/network classification.
+2. Retry the **same primary task**, up to **three additional attempts**.
+3. If still failing, start a separate secondary-model diagnostic with a fixed marker prompt and no tools/task session.
+4. If the secondary answers, retry the primary once more. Secondary success alone cannot mark the task done.
+5. If the secondary fails, or the primary still fails after that check, run bounded rotation and verify the original primary model on the resulting route.
+6. Continue only the primary task, subject to its remaining budgets. An unverifiable route is not a successful recovery.
 
-Normal user-state files are under:
+Authentication, invalid model/configuration, exhausted time/failure budgets, and cancellation can stop the sequence earlier. Native OpenCode also retries requests internally: three additional **controller invocations** is not a total limit of three provider HTTP requests.
 
-```text
-~/.local/state/opencode-unlimited/
-  journal.json
-  journal.md
-  run.json
-  run-report-<timestamp>.md
-```
+A diagnostic uses temporary HOME/XDG storage, an empty directory, a fixed prompt, and native deny permissions/policies. It receives no copied task prompt, task session, task configuration, or provider credentials, and no `--auto`. Tools/MCP/plugins/skills/web search are denied; any tool event invalidates its result. This is enforceable native permission configuration, not a prompt-only request to “be careful,” but it is still not an OS sandbox.
 
-The journal is bound to the task text and work directory. A different task/directory archives the previous notebook rather than reporting an unrelated task as already done. Older journals without binding metadata have a compatibility migration; do not assume that migration proves task identity.
+The diagnostic model defaults to the existing test-model setting—Flint in this installation—and selects a distinct alternative if that would be the primary itself. It never changes the task model. The selected secondary's availability is not guaranteed; live secondary checks during qualification returned typed quota errors, which are retained as failures.
 
-- `journal.md` is the readable notebook.
-- `run.json` gives current counters and step status.
-- The report explains what finished, what did not, and why the command stopped.
-- An interrupted step may be retried. **This is not exactly-once execution of tools.** Check partial work before retrying a non-idempotent operation.
-- Do not use `--fresh` as a casual repair command: it starts a fresh notebook instead of resuming the current one. Back up important journals first.
+Invocation-only tuning is available through `OUC_TRANSPORT_RETRIES`, `OUC_TRANSPORT_RETRY_DELAY`, `OUC_TRANSPORT_DIAGNOSTIC_MODEL`, and `OUC_TRANSPORT_DIAGNOSTIC_TIMEOUT`. Defaults are three retries, a two-second base retry delay, and a 25-second diagnostic timeout. Do not globally export qualification environments or copy a test profile into your everyday shell.
 
-The v2 launcher makes actual `cwd` and the child’s `PWD` agree, including symlink resolution. This matters because a stale `PWD` can send shell tools to the wrong project.
+## 7. Different failures mean different actions
 
-For an explicit native continuation, retain **all three**: session ID, model, and project directory:
-
-```bash
-cd /the/same/project
-ouc resume -s ACTUAL_SESSION_ID -m opencode/beam-free
-```
-
-`ACTUAL_SESSION_ID` is a placeholder, not a value to paste literally. Use the ID recorded for your real invocation. In v2, a nonexistent `-s` ID may create a session; it does not reliably produce a “not found” error. Never invent an ID or silently substitute the most recent conversation.
-
-The candidate uses a known v2 ID exactly, unless an explicit continuation preference was configured. If it cannot identify the interrupted v2 model for recovery, it stops and asks for model selection rather than pretending a different model verifies it.
-
-The live continuation test stored a random nonsensitive token, then requested it in the **same exact session** without repeating the token in the continuation prompt. It retained the selected model and directory. That proves manual session continuity for the tested CLI, **not automatic recovery from a real quota wall**.
-
-## 7. Different failures need different actions
-
-| Observed condition | Candidate behavior |
+| Observation | Correct interpretation/action |
 |---|---|
-| Typed provider free-limit error | Verify recovery using the interrupted model; rotate/retry only through the recovery path and its budgets |
-| RPM/ordinary rate error | Bounded backoff; do not spend blocks or switch model |
-| Network/transport error | Connectivity retries; no quota claim and no block consumption |
-| Authentication, invalid model, or configuration error | Actionable stop rather than an endless retry |
-| Unknown typed error or unexplained exit | Preserve evidence; bounded step attempts, not silent success |
-| No meaningful native progress | Stop owned call, retry once, then record failure |
-| User cancellation | Stop owned children, release locks, record cancellation |
+| Typed provider free-limit | Quota path; same-model verification and bounded recovery |
+| Ordinary rate/RPM limit | Bounded backoff; not evidence of a spent block |
+| Transport/network failure | Three additional primary attempts, isolated diagnosis, then primary-only recovery |
+| Authentication or unavailable/invalid model | Actionable stop; not endless rotation |
+| Tool error or quoted `429K` text | Not automatically a provider quota/rate error |
+| Unknown error, unexplained exit, incomplete stream | Record evidence; never silently call it complete |
+| No meaningful native progress | Managed stall/deadline policy cleans the owned call |
+| User cancellation | Clean owned children, release locks, record interruption/cancellation |
 
-The parser distinguishes native top-level provider/control errors from ordinary text and tool output. A tool can legitimately print `429K`, SVG coordinates containing `429`, or a quoted error example. Those are not automatically provider rate/quota failures. A tool’s own `status: error` is not a provider-error event.
+Exit zero is insufficient if the event stream contains a typed error or never completes. A marker followed by an error is not a successful verification.
 
-An exit code of zero is insufficient: a typed error still fails; a truncated v2 stream without a completed step fails; a verification marker plus a typed error fails.
+An egress probe, secondary success, or rotation success does **not** clear repeated primary task failures. Transport-only rotation does not falsely mark the old block quota-exhausted.
 
-The last MiniMax task produced a genuine `provider.transport` error containing `ECONNRESET`. Replaying that preserved record through the final classifier returned **network**, not quota. The external qualification observer cancelled the live phase conservatively; the normal network-retry sequence therefore was not exercised to completion in that live task.
+The bridge's former 20-second SOCKS handshake timeout no longer remains on an established response stream. Long model thinking pauses should not be cut off by that handshake timer. Managed inactivity/deadline/cancellation rules still apply.
 
-## 8. Defaults, progress, cancellation, and ownership
+## 8. Defaults, progress, and cancellation
 
-Approved product defaults were retained:
+The approved defaults remain:
 
-| Setting | Value |
+| Setting | Default |
 |---|---:|
-| Minimum rotation spacing | 15 seconds + 0–5 seconds jitter |
-| Rotations per hour | Unlimited count (`0`) |
-| Rotations per run | Unlimited count (`0`) |
-| Automatic resume count | Unlimited (`0`) |
-| Consecutive-failure limit | 60 |
-| One run’s time budget | 10 hours |
+| Rotation spacing | 15 seconds plus 0–5 seconds jitter |
+| Rotations per hour/run | Unlimited counts (`0`) |
+| Resume count | Unlimited (`0`) |
+| Consecutive failures | 60 |
+| Run time | 10 hours |
 | Fixed quota-reset waiting | None |
 
-Unlimited **counts** do not mean unlimited provider capacity or an endless successful run. Other time/verification/failure limits still apply. The ten-hour default was checked, not demonstrated by a ten-hour live soak. Restarting the agent starts a new invocation clock while retaining notebook history/counters.
+Unlimited counts do not create provider capacity. Verification, time, and consecutive-failure budgets still bound recovery. The ten-hour default was checked, **not proven by a ten-hour live soak**.
 
-Meaningful progress is based on native events, not an unrelated busy process’s CPU usage. The default inactivity threshold is ten minutes. Long blocking work can still be difficult to judge; inspect the report rather than assuming every silence means quota.
+Meaningful progress uses native events, not unrelated CPU activity. Status exposes steps, transport retries, diagnoses, rotations, and current detail. Use Ctrl+C to cancel your managed command. Typical exits are `130` for interrupt and `143` for termination.
 
-Active elapsed limits use a monotonic clock, which does not jump when the machine clock changes. Persistent audit timestamps, blacklist ages, rotation stamps, and cross-process heartbeat timestamps remain wall-clock values; they were not blindly converted.
+Cleanup tracks owned Linux process identities/start times; it does not kill every process with a matching name. A managed call holds the physical rotation lock so an older/competing supervisor cannot rotate behind it. Copying controller state without sharing that physical lock would defeat the coordination.
 
-Use Ctrl+C to cancel a managed command. Typical cancellation exits are `130` for interrupt and `143` for termination. The controller tracks owned processes using Linux process identities/start times. It cleans descendants on cancellation/stall/deadline and after the native CLI exits; it does not use a broad name-based kill of unrelated model calls.
+`OUC_USER_STATE_DIR` scopes journals **and fallback requests**, not just display files. Neither it nor `OUC_STATE_DIR` is a security sandbox. A previous qualification fixture leaked through an unscoped global fallback channel; current fixtures fail closed without explicit private paths. Do not restore that quarantined fixture or roll back current hop history from an old archive.
 
-A managed run holds both its foreground lease and the physical `rotation.lock`. Its own rotation re-enters that lock; an older supervisor that only understands that lock cannot rotate concurrently. Existing rotation-lock permissions are preserved.
+## 9. What actually passed—and what did not get proven
 
-**Advanced warning:** copying `OUC_STATE_DIR` creates a different lock namespace unless the physical rotation lock is deliberately shared. `OUC_USER_STATE_DIR` controls journals **and fallback request files**. Neither variable is a general security sandbox. Do not copy qualification environment settings into your everyday shell.
+Executed final-source evidence:
 
-## 9. What was actually tested
+- **100 focused regressions**, locally and in the Codespace. The exact final remote tests made **zero INET connect attempts**.
+- **56 safe-default compatibility groups**, zero failures; 11 destructive/host-installer groups intentionally skipped. Focused cases are included in those groups, not extra independent totals.
+- **128 local** and **96 remote** randomized subprocess cases, 4,000 randomly chunked event streams per environment, and 16 lease contenders per environment. Those use fakes; no real quota was deliberately exhausted.
+- A real bridge test received a response after **22 seconds** of upstream silence, longer than its former 20-second timeout.
+- The unchanged MiniMax task completed **4/4** on the final source in **1,192.031 seconds**, with zero final-run transport failures, quota walls, rotations, resumes, or stalls.
+- The actual installed controller performed a real `pwd`/file-creation smoke task in **13.613 seconds**. The ordinary `opencode` alias completed a separate proxy-routed native marker call in **6.124 seconds**, without added `--auto`.
+- Installed `doctor` passed; ports stayed 40000/8080; hop count stayed 94. Original configuration/SSH files and notebooks matched saved hashes/modes.
 
-Machine: existing GitHub Codespace, real OpenCode 2.2.7, existing WARP/HTTP bridge, proxy mode. The candidate was staged separately, never installed over the working copy.
+The website's independent browser checks passed eight render cases, but incomplete contrast/link checks and two HTML entity warnings remain disclosed in the report. It is not an accessibility certificate.
 
-### Offline results
+The original observer falsely rejected failed IPv6 reachability probes after the controller finished. Its original failed result was preserved, and a separate read-only audit disclosed all 86 failed attempts and found no successful non-loopback connection. Do not summarize that as “zero attempted direct connections.”
 
-- **70 focused runner tests passed locally**; they cover native events, models/sessions/cwd, proxy environment, content guards, recovery simulations, locks, clock jumps, cancellation, and cleanup.
-- **70/70 passed on the Codespace under external tracing**, with **zero Internet-family `connect()` attempts**, unchanged real shared-channel hashes, no global fallback request, and installed rotation counter **94 → 94**.
-- The **final safe-default suite: 55 groups passed, 0 failed, 11 skipped**. One of those groups contains the 70 focused tests; do not add the counts as independent groups.
-- The 11 skips are **five legacy installer/uninstaller groups** and **six destructive real-WARP groups**. Their absence is intentional, not a hidden pass.
-- Before the additional installer safety gate, the same product source also completed **60 groups / 0 failures / 6 excluded real-WARP groups** in the disposable local agent sandbox. This was not an install/uninstall test on the valuable product Codespace.
-- Python compilation, Bash syntax, diff-whitespace checks, and the selected Ruff undefined-name/syntax checks passed. The previously unreferenced `doctor_proxy` logger error was also fixed and tested.
+The full transport escalation is tested with simulated faults. Two real retries were observed on an intermediate build, but the final MiniMax success did not exercise an actual final-source outage. Successful genuine quota recovery, live healthy-secondary escalation, and a ten-hour soak remain unqualified.
 
-Quota, rate, network, session-error, and cancellation fixtures are explicitly **simulations**, not live quota-recovery evidence. Additional offline replay classified 21 preserved genuine free-limit records as quota and one genuine transport record as network; replay does not make another provider request.
+## 10. Backups and troubleshooting
 
-### Genuine final-source CLI results
+Backups, original metadata, and private evidence remain under `/workspaces/ouc-v2-resilience/`. No credentials or raw private state archives were published in Git. The original dirty repository was preserved rather than checked out over user changes; installed code was updated from the actual fetched commit.
 
-| Check | Measured result |
-|---|---|
-| MiniMax selected-model verification | Pass, 8.408 seconds |
-| MiniMax fresh four-step website task | **Not completed**; external safety cancellation after a native transport reset, 378.494 seconds, exit 143 |
-| Separate Beam fresh four-step website task | **4/4 done**, 337.373 seconds, four native calls, exit 0 |
-| Actual shell `pwd` through `ouc agent` | Pass, 7.088 seconds |
-| Native memory setup | Pass, 8.082 seconds |
-| Explicit-session resume, including same-model verification | Pass, 11.155 seconds, two native calls |
-| `lane` native output, no added `--auto` | Pass, 5.077 seconds |
-| Benign model text `429K` | Pass, 5.938 seconds |
-| Invalid model | Actual native fatal error, one attempt, exit 1, no rotation |
-| Process-only closed proxy | Expected unsuccessful timeout; **not** classified as quota |
-| Final configured-model verification | Genuine successful Flint marker reply |
+If something is wrong, inspect `ouc status`, `ouc doctor`, the recorded model/session/directory, and the run journal before changing anything. Do not immediately reinstall WARP, delete registration, flush iptables, edit hosts, or restore an entire old state archive. The current proxy-safe code prevents firewall/hosts mutations on proxy shutdown.
 
-The MiniMax failure was **not a quota observation** and was not a natural completion/retry outcome: the external safety observer deliberately cancelled at the provider error. Earlier candidate snapshots had completed MiniMax and Beam tasks; those records remain history, not proof that the final MiniMax run passed.
+A rollback should coordinate active work and restore only the backed-up installed source with its metadata; the new alias file can be removed only if unchanged. Old state archives must not overwrite newer history/counters. The old source loses these fixes, so rollback is a controlled maintenance action, not the first everyday command.
 
-No CLI/classifier wrapper substituted model behavior in the live qualification. The external observer inspected process/connect/exec evidence and could cancel, but could not manufacture a successful reply. Native config/data/state/cache were scoped to a copied private XDG profile; controller journals were also isolated. The physical rotation fence was independently observed during live managed calls.
-
-Across the 12 native invocations in the main corrected qualification phases, selected models, physical cwd/PWD, JSON mode, and bridge connections were observed. Destination review found no nonloopback `connect()` attempt in those traces and no WARP rotation/registration mutation command. Connection counts include internal/tool activity and are **not LLM-request counts**. Invalid-model, closed-proxy, and final-health calls are recorded separately.
-
-**Successful automatic recovery from a genuine quota wall remains unproven.** So do ten-hour unattended operation, production TUN/firewall mode, and a complete final-source MiniMax task.
-
-## 10. Independent website checks—not just the model’s self-report
-
-The final Beam files were copied without editing and hash-checked against the remote outputs:
-
-| File | Bytes |
-|---|---:|
-| `index.html` | 28,286 |
-| `about.html` | 23,948 |
-| `styles.css` | 3,070 |
-
-Independent Chromium checks covered both pages at 1440 and 390 pixels, in light and dark mode: **8 cases**, all HTTP 200, no horizontal overflow, no page-JavaScript errors, and no failed requests in that audit. Both pages linked the official Tailwind CDN and `styles.css`. Each had four desktop content-navigation links, excluding logo and CTA. Theme toggles, mobile-menu expansion, and the About FAQ interaction worked.
-
-Four desktop axe audits reported **zero confirmed violations**, but retained unresolved color-contrast checks: 8, 9, 7, and 8 nodes respectively. Mobile axe audits were not run. This is **not a WCAG certificate** or proof that every focus/contrast condition is correct.
-
-Caveats retained rather than repaired behind the model’s back:
-
-- Both pages had a recoverable HTML entity parse warning in the Google Fonts URL (`&display`); an external font is also a network dependency.
-- Some navigation destinations are demo placeholders. There is no real networking backend, authentication, billing, or product service.
-- The custom CSS had the requested gradient, smooth-scroll, hover-lift, and reduced-motion features. Its lack of a standalone `:focus` rule is not by itself proof of missing focus styles, because HTML Tailwind classes can supply them.
-- Tailwind was served from the same previously cached official script for the browser audit. The audit does not establish current CDN availability on every network.
-
-This was compatibility/task qualification, **not a new model speed ranking**. It would be misleading to compare a stopped MiniMax task with Beam’s completed task as a performance benchmark.
-
-## 11. Run the safe tests yourself
-
-For the guarded native-runner simulations, no provider account, WARP service, or GitHub device login is needed:
-
-```bash
-python3 tests/test_runner_v2.py -v
-```
-
-The safe-default compatibility run is:
-
-```bash
-OUC_TEST_REAL=0 bash tests/run_tests.sh --offline
-```
-
-The legacy compatibility script may re-exec through passwordless sudo for sandbox permission checks. Review it first and prefer a disposable development environment. Do not use it as a diagnostic command against an important installation.
-
-All focused fixture paths are checked before controller writes. Their fake executables require explicit test-owned state paths. `--version` remains side-effect-free. The legacy harness now explicitly scopes user state, fallback requests, logs, and helper state; cleanup targets the current sandbox rather than every similarly named sandbox.
-
-Five legacy installer/uninstaller tests still have branded host-system effects, so they are **excluded by default** and require an explicit disposable-host opt-in. The six legacy real-WARP tests require additional explicit destructive-test opt-ins. The valuable product Codespace did not run these groups. Do not turn these flags on there. Older documentation showing an unconditional “run everything” command is historical, not the recommended workflow.
-
-The live observer is separate from these offline simulations. Its conservative stop policy is an experimental safety boundary, not a changed product default.
-
-## 12. The safety incident and its correction
-
-An earlier new regression test failed to override `OUC_USER_STATE_DIR`. Its primary test files were temporary, but its fallback request resolved to the **real** `/tmp/opencode-unlimited/hop.request`.
-
-That harness wrote exactly `{"id":"fallback_fixture","ts":2}`. The installed older supervisor alternated that dummy request with an already acknowledged historical request, repeatedly performing manual hops. This was **a mistake in the qualification harness**, not evidence of a provider-wide outage.
-
-Consequences preserved in the record:
-
-- The contaminated candidate run observed 21 genuine native free-limit errors and recorded 20 recovery rotations/resumes, without completing the first step.
-- Its copied controller counter moved **43 → 63**.
-- The installed supervisor’s counter moved **43 → 94** while the fallback replay continued.
-- These counters are not unique IP/block counts. Neither candidate verification with Flint nor an egress change proved recovery for MiniMax.
-- That run is **invalid qualification evidence**, not a successful recovery test.
-
-The exact test-owned fallback file was identified against the original baseline, moved out of the active channel, and retained privately as evidence. The qualification controller was cancelled by its exact process identity. Existing log history was acknowledged through EOF and the pending replay flag cleared; counters, blacklist history, and WARP registration history were **not rolled back**. No real original request was deleted.
-
-While the old supervisor was registering during the incident, proxy health was temporarily poor; it was not a daemon crash or proof that general Codespace Internet access was lost. After quarantining the fixture, the existing runtime returned healthy without a reinstall. The user was informed and explicitly approved the safer continuation.
-
-Corrections then included:
-
-1. Full focused-fixture path assertions, including fallback channels, and fail-closed fake helper paths.
-2. External before/after checks showing the repaired focused tests do not touch real channels or make Internet connections.
-3. A foreground fence on the shared physical rotation lock, compatible with the older supervisor’s flock interface.
-4. Verification of the interrupted model, with no silent default-model substitution or saved-default modification.
-5. A separate native XDG profile and a conservative independent live safety observer.
-6. Explicit exclusions for legacy installer/destructive test groups that are not safe on a valuable host.
-
-There was also an earlier observer-only mistake: it expected the native tool to be named `bash`, while OpenCode emitted `shell` for a successful `pwd`. The original failure was retained and corrected using the exact recorded command/output, not fabricated evidence or overwritten logs.
-
-## 13. Final protection checks, evidence, and readiness
-
-Final checks found:
-
-- Protected-path signatures and the extra baseline content/mode checks unchanged.
-- **3,653 existing OpenCode configuration files** matched the original private backup.
-- **17 original notebook/report files**, including the original `journal.json`, `journal.md`, and `run.json`, matched the backup.
-- Original repository HEAD and dirty working-tree status were preserved.
-- The installed source remained the old hash shown in section 1.
-- Supervisor alive, WARP connected, ports 40000/8080 open, `doctor` successful, and a genuine final configured-model verification successful.
-- No test-owned native process remained.
-- Corrected-run installed hop counter **94 → 94**, with the global fallback request absent.
-- No recoverable-cache cleanup or important-file deletion was used to obtain these results. The product Codespace disk check ended around **16 GB used / 15 GB available (52%)**; these are rounded filesystem measurements.
-
-Do not summarize this as “all state unchanged”: operational rotation/history state changed during the incident and was deliberately preserved. Do not summarize it as “all live tests passed”: the final MiniMax full task did not finish.
-
-Public, deliberately limited evidence is in [`tests/qualification/`](tests/qualification/). Raw traces, native logs, private backups, and the stopped-run evidence remain in the qualification workspace. Private archives may contain registration/configuration information and must not be committed or shared as ordinary test output.
-
-Machine logs label their wall-clock timestamps `2026-11-12`, whereas the session’s supplied date was `2026-11-08`. Those observed timestamps are retained without treating them as an authoritative calendar date. Durations above use monotonic measurement; no quota/reset conclusion is based on that clock discrepancy.
-
-**Delivery decision:** commit/push the reviewed feature branch for inspection, keeping this qualification record and its limits. Do not publish a release or deploy over the working installation under this approval. A later deployment should back up source/config/state first, keep proxy mode and ports unchanged, use the existing `/usr/bin/warp-svc`, and stop if health or protected-file checks differ.
-
-**Before a production/unattended-readiness claim:** complete a final-source MiniMax task under an agreed bounded retry policy, qualify genuine quota recovery with the same model when naturally encountered, and perform an appropriately supervised long-duration test. Do not deliberately exhaust free usage to manufacture that evidence.
+For reproducible test commands and explicit simulation boundaries, see [transport testing](tests/TRANSPORT_TESTING.md). For exact hashes, successful and unsuccessful phases, deployment evidence, and limitations, see [public results](tests/qualification/transport-results.json) and the [execution report](docs/reports/transport-resilience-follow-up.md).

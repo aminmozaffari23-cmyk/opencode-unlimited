@@ -1,0 +1,499 @@
+{
+  "implementation_commit": "89ffea83531d68ed309439037d85890b62abaa34",
+  "branch": "feat/transport-retry-diagnostics",
+  "source_sha256": "e4b1b802a2697b7cc26f985fc1549549efbc24d40523f2ff9b52c101a1f0bfe2",
+  "version": "2.4.2 unreleased",
+  "native_cli_version": "opencode v2.2.7",
+  "native_cli_sha256": "589253d36810f21217edd51545cd435b328cdc3cf4f451fbe0cce6f88afcf5e1",
+  "initial_focused_baseline": {
+    "cases": 70,
+    "passed": 70,
+    "seconds": 4.523
+  },
+  "final_local_focused": {
+    "cases": 100,
+    "passed": 100,
+    "seconds": 11.684
+  },
+  "final_remote_focused": {
+    "source_sha256": "e4b1b802a2697b7cc26f985fc1549549efbc24d40523f2ff9b52c101a1f0bfe2",
+    "final_transport_tests_sha256": "8956f3fefbc5fb7fc1f50f38101476a5ee08695fa9614d2d88bf29b2ae45c2ae",
+    "tests": 100,
+    "seconds": 37.242,
+    "failure_count": 0,
+    "INET_connect_attempts": 0,
+    "shared_channels_unchanged": true,
+    "strengthened_firewall_binary_present_regression": true,
+    "bridge_inactivity_regression": true
+  },
+  "compatibility": {
+    "passed_groups": 56,
+    "failed_groups": 0,
+    "skipped_groups": 11,
+    "focused_tests_included_not_additive": true
+  },
+  "local_stress": {
+    "simulated": true,
+    "source_sha256": "e4b1b802a2697b7cc26f985fc1549549efbc24d40523f2ff9b52c101a1f0bfe2",
+    "seed": 20261108,
+    "parser_monkey": {
+      "cases": 4000,
+      "seed": 20261108,
+      "bytes": 1405796,
+      "random_chunk_boundaries": true,
+      "failures": 0
+    },
+    "subprocess_cases": 128,
+    "concurrent_workers": 12,
+    "contention": {
+      "contenders": 16,
+      "duplicate_native_calls": 0,
+      "cancel_exit": 143,
+      "owned_native_cleaned": true,
+      "unrelated_process_preserved": true,
+      "lease_reacquired": true
+    },
+    "shared_channels_unchanged": true,
+    "failures": 0,
+    "seconds": 41.09,
+    "real_provider_requests": 0,
+    "real_warp_mutations": 0,
+    "ten_hour_soak": false
+  },
+  "remote_stress": {
+    "simulated": true,
+    "source_sha256": "e4b1b802a2697b7cc26f985fc1549549efbc24d40523f2ff9b52c101a1f0bfe2",
+    "seed": 20261109,
+    "parser_monkey": {
+      "cases": 4000,
+      "seed": 20261109,
+      "bytes": 1405229,
+      "random_chunk_boundaries": true,
+      "failures": 0
+    },
+    "subprocess_cases": 96,
+    "concurrent_workers": 4,
+    "contention": {
+      "contenders": 16,
+      "duplicate_native_calls": 0,
+      "cancel_exit": 143,
+      "owned_native_cleaned": true,
+      "unrelated_process_preserved": true,
+      "lease_reacquired": true
+    },
+    "shared_channels_unchanged": true,
+    "failures": 0,
+    "seconds": 112.104,
+    "real_provider_requests": 0,
+    "real_warp_mutations": 0,
+    "ten_hour_soak": false,
+    "INET_connect_attempts": 193,
+    "nonloopback_connect_attempts": 0
+  },
+  "bridge_idle_test": {
+    "source_sha256": "e4b1b802a2697b7cc26f985fc1549549efbc24d40523f2ff9b52c101a1f0bfe2",
+    "loopback_only": true,
+    "simulated": true,
+    "provider_requests": 0,
+    "warp_mutations": 0,
+    "upstream_silent_seconds": 22,
+    "previous_stream_timeout_seconds": 20,
+    "late_response_received": true,
+    "seconds": 22.106,
+    "failures": 0
+  },
+  "minimax": {
+    "primary_model": "opencode/minimax-m3.1-flash-free",
+    "task_sha256": "58bff6793d5b4e88e0ac380229046ef348479679c3c5c2cb45f70c58345b008b",
+    "completed_steps": 4,
+    "total_steps": 4,
+    "controller_exit": 0,
+    "seconds": 1192.031,
+    "native_invocations": 4,
+    "native_exits": [
+      0,
+      0,
+      0,
+      0
+    ],
+    "files": {
+      "index.html": {
+        "bytes": 51779,
+        "sha256": "c248afe67e81dd3016c52be23c35a1cd653f27df8a4619f465032a4e06e6361d"
+      },
+      "styles.css": {
+        "bytes": 4298,
+        "sha256": "4a921711fa10513c87739687fa70d72c64d468d575d2cfb5b2ceb1831a65f9f7"
+      },
+      "about.html": {
+        "bytes": 46977,
+        "sha256": "5aeb552a3b64af58fe6d99f75e3dedc8fd5c0da0c837fd97ea2a131781a6bf07"
+      }
+    },
+    "budgets_used": {
+      "attempts": 4,
+      "consec_fail": 0,
+      "diagnostics": 0,
+      "recycles": 0,
+      "resumes": 0,
+      "rotations": 0,
+      "seconds": 1191,
+      "stalls": 0,
+      "transport_primary_checks": 0,
+      "transport_retries": 0,
+      "transport_rotations": 0,
+      "walls": 0
+    },
+    "physical_rotation_fence_observed": true,
+    "network_audit": {
+      "failed_nonloopback_connect_attempts": 86,
+      "successful_nonloopback_connects": 0,
+      "failed_probe_address": "2001:4860:4860::8888",
+      "all_failed_probe_errno": "ENETUNREACH",
+      "proxy_routes_pwd_models_verified": true,
+      "original_observer_failed": true,
+      "original_failure_preserved": true,
+      "correction": "Failed IPv6 reachability probes are not successful direct provider connections. Count and disclose them; retain original assertion failure."
+    },
+    "independent_read_only_adjudication": true,
+    "original_observer_failure_preserved": true
+  },
+  "browser": {
+    "cases": 8,
+    "http_200": 8,
+    "horizontal_overflow": 0,
+    "js_errors": 0,
+    "failed_requests": 0,
+    "desktop_axe_runs": 4,
+    "axe_confirmed_violations": 0,
+    "axe_incomplete": {
+      "index-1440-light": [
+        {
+          "id": "color-contrast",
+          "nodes": 47
+        },
+        {
+          "id": "link-in-text-block",
+          "nodes": 1
+        }
+      ],
+      "index-1440-dark": [
+        {
+          "id": "color-contrast",
+          "nodes": 47
+        },
+        {
+          "id": "link-in-text-block",
+          "nodes": 1
+        }
+      ],
+      "about-1440-light": [
+        {
+          "id": "color-contrast",
+          "nodes": 16
+        },
+        {
+          "id": "link-in-text-block",
+          "nodes": 1
+        }
+      ],
+      "about-1440-dark": [
+        {
+          "id": "color-contrast",
+          "nodes": 16
+        },
+        {
+          "id": "link-in-text-block",
+          "nodes": 1
+        }
+      ]
+    },
+    "html_parse_errors": {
+      "index.html": [
+        {
+          "position": [
+            33,
+            85
+          ],
+          "code": "expected-named-entity",
+          "data": {}
+        }
+      ],
+      "about.html": [
+        {
+          "position": [
+            33,
+            85
+          ],
+          "code": "expected-named-entity",
+          "data": {}
+        }
+      ]
+    },
+    "duplicate_ids": {
+      "index.html": [],
+      "about.html": []
+    },
+    "css_features": {
+      "gradient_text": true,
+      "smooth_scroll": true,
+      "hover_lift": true,
+      "reduced_motion": true,
+      "focus_rule": false
+    },
+    "native_theme_interactions": {
+      "index-1440-light": {
+        "before": {
+          "dark": false,
+          "light": false,
+          "data": null,
+          "bg": "rgb(255, 255, 255)",
+          "cls": ""
+        },
+        "after_click": {
+          "dark": true,
+          "light": false,
+          "data": null,
+          "bg": "rgb(2, 6, 23)",
+          "cls": "dark"
+        },
+        "after_second_click": {
+          "dark": false,
+          "light": false,
+          "data": null,
+          "bg": "rgb(255, 255, 255)",
+          "cls": ""
+        },
+        "changes_rendered_background": true,
+        "restores_background": true
+      },
+      "index-1440-dark": {
+        "before": {
+          "dark": true,
+          "light": false,
+          "data": null,
+          "bg": "rgb(2, 6, 23)",
+          "cls": "dark"
+        },
+        "after_click": {
+          "dark": false,
+          "light": false,
+          "data": null,
+          "bg": "rgb(255, 255, 255)",
+          "cls": ""
+        },
+        "after_second_click": {
+          "dark": true,
+          "light": false,
+          "data": null,
+          "bg": "rgb(2, 6, 23)",
+          "cls": "dark"
+        },
+        "changes_rendered_background": true,
+        "restores_background": true
+      },
+      "about-1440-light": {
+        "before": {
+          "dark": false,
+          "light": false,
+          "data": null,
+          "bg": "rgb(255, 255, 255)",
+          "cls": ""
+        },
+        "after_click": {
+          "dark": true,
+          "light": false,
+          "data": null,
+          "bg": "rgb(2, 6, 23)",
+          "cls": "dark"
+        },
+        "after_second_click": {
+          "dark": false,
+          "light": false,
+          "data": null,
+          "bg": "rgb(255, 255, 255)",
+          "cls": ""
+        },
+        "changes_rendered_background": true,
+        "restores_background": true
+      },
+      "about-1440-dark": {
+        "before": {
+          "dark": true,
+          "light": false,
+          "data": null,
+          "bg": "rgb(2, 6, 23)",
+          "cls": "dark"
+        },
+        "after_click": {
+          "dark": false,
+          "light": false,
+          "data": null,
+          "bg": "rgb(255, 255, 255)",
+          "cls": ""
+        },
+        "after_second_click": {
+          "dark": true,
+          "light": false,
+          "data": null,
+          "bg": "rgb(2, 6, 23)",
+          "cls": "dark"
+        },
+        "changes_rendered_background": true,
+        "restores_background": true
+      }
+    },
+    "faq_interactions": {
+      "about-1440-light": {
+        "initial": false,
+        "after_click": true,
+        "after_second_click": false,
+        "works": true
+      },
+      "about-1440-dark": {
+        "initial": false,
+        "after_click": true,
+        "after_second_click": false,
+        "works": true
+      }
+    }
+  },
+  "deployment": {
+    "implementation_commit": "89ffea83531d68ed309439037d85890b62abaa34",
+    "branch": "feat/transport-retry-diagnostics",
+    "actual_origin_fetch_verified": true,
+    "source_sha256": "e4b1b802a2697b7cc26f985fc1549549efbc24d40523f2ff9b52c101a1f0bfe2",
+    "previous_installed_source_sha256": "ba3320a80bdd3a528bf7ffa825bb9e7fc83214c69d075179c7e7b82a824148b0",
+    "installed_source_updated": true,
+    "config_preserved": true,
+    "original_HEAD_preserved": "0ee0825cb69ad0286d9f97e4e1560524553051e1",
+    "original_dirty_tree_preserved": true,
+    "original_config_and_ssh_files_preserved": 3661,
+    "supervisor_pid": 26730,
+    "supervisor_alive": true,
+    "ports": [
+      40000,
+      8080
+    ],
+    "doctor_exit": 0,
+    "hops_before": 94,
+    "hops_after": 94,
+    "warp_daemon_replaced": false,
+    "native_cli_replaced": false,
+    "firewall_or_route_or_hosts_changes": false,
+    "release_or_main_merge": false,
+    "daily_command": "opencode",
+    "new_shell_integration": "/home/codespace/.bash_aliases",
+    "existing_shell_config_preserved": true,
+    "global_proxy_exports_added": false
+  },
+  "installed_smoke": {
+    "installed_source_sha256": "e4b1b802a2697b7cc26f985fc1549549efbc24d40523f2ff9b52c101a1f0bfe2",
+    "installed_agent_passed": true,
+    "actual_tool_pwd_verified": true,
+    "daily_opencode_passed": true,
+    "daily_opencode_proxy_verified": true,
+    "daily_auto_added": false,
+    "phases": [
+      {
+        "name": "installed-agent",
+        "rc": 0,
+        "seconds": 13.613,
+        "installed_source_sha256": "e4b1b802a2697b7cc26f985fc1549549efbc24d40523f2ff9b52c101a1f0bfe2",
+        "native_calls": 1,
+        "routes_model_pwd_approval_valid": true,
+        "nonloopback_connect_attempts": 0,
+        "firewall_route_commands": 0,
+        "external_stop": ""
+      },
+      {
+        "name": "daily-opencode",
+        "rc": 0,
+        "seconds": 6.124,
+        "installed_source_sha256": "e4b1b802a2697b7cc26f985fc1549549efbc24d40523f2ff9b52c101a1f0bfe2",
+        "native_calls": 1,
+        "routes_model_pwd_approval_valid": true,
+        "nonloopback_connect_attempts": 0,
+        "firewall_route_commands": 0,
+        "external_stop": ""
+      }
+    ],
+    "original_notebook_files_preserved": 17,
+    "config_and_native_binary_preserved": true,
+    "original_bashrc_preserved": true,
+    "new_shell_alias_file": "/home/codespace/.bash_aliases",
+    "supervisor_alive": true,
+    "ports": [
+      40000,
+      8080
+    ],
+    "hops_after": 94
+  },
+  "final_health": {
+    "installed_source_sha256": "e4b1b802a2697b7cc26f985fc1549549efbc24d40523f2ff9b52c101a1f0bfe2",
+    "source_matches_fetched_commit": true,
+    "doctor_exit": 0,
+    "supervisor_alive": true,
+    "supervisor_pid": 26730,
+    "warp_connected": true,
+    "warp_daemon_pid": 1754,
+    "warp_daemon_replaced": false,
+    "bridge_pid": 26724,
+    "ports": [
+      40000,
+      8080
+    ],
+    "hops": 94,
+    "native_owned_processes_remaining": 0,
+    "original_notebook_files_preserved": 17,
+    "original_config_and_ssh_files_preserved": 3661,
+    "original_HEAD_preserved": "0ee0825cb69ad0286d9f97e4e1560524553051e1",
+    "original_dirty_tree_preserved": true,
+    "original_config_and_native_binary_preserved": true,
+    "existing_bashrc_preserved": true,
+    "added_alias_file": "/home/codespace/.bash_aliases",
+    "global_proxy_exports_added": false,
+    "defaults_preserved": true,
+    "transport_retries": 3,
+    "transport_diagnostic_model": "opencode/flint-40b-free",
+    "firewall_hosts_routes_changes": false,
+    "counters_rolled_back": false
+  },
+  "limitations": {
+    "genuine_final_source_automatic_transport_recovery_observed": false,
+    "genuine_successful_quota_recovery_proven": false,
+    "ten_hour_live_soak_proven": false,
+    "real_secondary_success_proven": false,
+    "simulated_escalation_complete": true,
+    "partial_real_retries_on_intermediate_build": 2,
+    "no_model_ranking": true,
+    "no_WCAG_certificate": true
+  },
+  "intermediate_builds": [
+    {
+      "source_sha256": "fde1b58a8f26e4abac7d5992900b9563a64d278775a4c052e121a57901559d9a",
+      "seconds": 381.64,
+      "exit": 143,
+      "complete": false,
+      "why": "intentional supersession to correct diagnostic integration routing"
+    },
+    {
+      "source_sha256": "b7f055b7bccd851bb79f0282750e447830a063b7cc7946d4625aeb525fb51e76",
+      "seconds": 1035.078,
+      "exit": 143,
+      "complete": false,
+      "controller_transport_retries": 2,
+      "why": "intentional supersession after bridge timeout defect was reproduced"
+    }
+  ],
+  "actual_final_diagnostic": {
+    "ran": true,
+    "ok": false,
+    "model": "opencode/flint-40b-free",
+    "primary_model": "opencode/minimax-m3.1-flash-free",
+    "failure_class": "quota",
+    "rc": 1,
+    "tool_events": 0,
+    "seconds": 10.259
+  }
+}

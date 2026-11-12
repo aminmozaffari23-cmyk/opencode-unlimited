@@ -5,6 +5,35 @@
 The already-unpublished 2.4.2 version/content-signature fix is retained; this
 qualification does not introduce another version bump or publish a release.
 
+### Transport resilience follow-up — implementation 89ffea8
+
+- Shared three-additional-attempt transport policy for `agent`, `run`, and
+  explicit `resume`; isolated native tool-denied secondary diagnosis, then a
+  primary retry or bounded rotation verified against the original model.
+- Egress/diagnostic/rotation success does not clear primary task failures;
+  transport-only rotation does not mark the old block quota-exhausted.
+- Proxy-safe firewall/hosts lifecycle, rotation-spacing lock/deadline cleanup,
+  terminal-native-error cleanup, and established-stream timeout correction.
+- Final-source 100 focused regressions; 56 safe-default groups pass, 0 fail,
+  11 intentionally skipped. 128 local/96 remote simulated subprocess cases,
+  4,000 randomized event streams per environment, and a 22-second idle bridge
+  test. These are not a real quota exhaustion test or a ten-hour soak.
+- Unchanged real MiniMax task: 4/4 in 1,192.031 s. Eight independent browser
+  render cases passed; incomplete accessibility checks remain disclosed.
+- Original observer failure on 86 ENETUNREACH probes preserved; separate
+  read-only adjudication confirmed completion and no successful direct
+  connection. No zero-attempt or blanket privacy guarantee is claimed.
+- Actual Codespace installation updated from the fetched commit with config,
+  native binary, Git dirty tree and registration intact. Installed task smoke
+  13.613 s; ordinary `opencode` alias smoke 6.124 s, without added `--auto`.
+- The final task needed no transport recovery. Full escalation is simulated;
+  two intermediate-build real retries are not completed-recovery proof.
+  Genuine successful quota recovery/ten-hour live soak remain unqualified.
+
+Current report: [transport-resilience follow-up](docs/reports/transport-resilience-follow-up.md).
+
+### Earlier v2 qualification — historical source 6be5f5d
+
 - Native v2 private-server/JSON launching, scoped proxies, physical cwd/PWD,
   completion/error handling, and exact-session/model continuation.
 - Same-model recovery verification; explicit `verify -m`; an unspecified v2
