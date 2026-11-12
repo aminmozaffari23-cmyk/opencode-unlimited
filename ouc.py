@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-opencode-unlimited (corrected) — single-file controller.
+opencode-unlimited — single-file controller.
 
 What this does
 --------------

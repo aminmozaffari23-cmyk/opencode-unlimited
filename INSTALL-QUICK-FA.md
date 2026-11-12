@@ -57,8 +57,8 @@ opencode --version
 
 ```bash
 cd ~
-unzip opencode-unlimited-2.2.0.zip
-cd opencode-unlimited-fixed
+unzip opencode-unlimited-2.3.1.zip
+cd opencode-unlimited-2.3.1
 ```
 
 ---

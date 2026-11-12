@@ -1,5 +1,5 @@
 #!/bin/bash
-# opencode-unlimited (corrected) — uninstaller
+# opencode-unlimited — uninstaller
 #
 # Removes: the unit/supervisor, the kill-switch chain, our files, our state,
 # the loopback IPv6-pinned launcher, AND leftovers from the old v1 version

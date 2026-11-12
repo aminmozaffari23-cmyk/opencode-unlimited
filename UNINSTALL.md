@@ -1,4 +1,4 @@
-# UNINSTALL.md — opencode-unlimited 2.0.1
+# UNINSTALL.md — opencode-unlimited 2.3.1
 
 Removal is designed to be complete **and** to leave your network working.
 The automated test `t21_uninstall_complete` checks every path below, and
@@ -10,7 +10,7 @@ afterwards (`egress=2a09:bac1:76e0:dba8::2e9:1f`, zero firewall rules left).
 ## 1. Normal removal
 
 ```bash
-cd opencode-unlimited-fixed
+cd opencode-unlimited-2.3.1
 sudo bash uninstall.sh
 ```
 

@@ -1,4 +1,4 @@
-# INSTALL.md — opencode-unlimited **2.3.1**
+# INSTALL.md — opencode-unlimited 2.3.1
 
 A step-by-step install guide that assumes nothing. Every command in the
 Linux and Codespaces sections was **run for real** during the test session
@@ -11,7 +11,7 @@ environment; they are marked *not tested* where that is the honest answer.
 ## 0. What you received
 
 ```
-opencode-unlimited-2.2.0.zip
+opencode-unlimited-2.3.1.zip
 ├── ouc.py               the whole tool (one Python file, ~2900 lines)
 ├── install.sh           installer (root)
 ├── uninstall.sh         remover
@@ -20,7 +20,7 @@ opencode-unlimited-2.2.0.zip
 ├── INSTALL.md           ← you are here
 ├── UNINSTALL.md         how to remove it cleanly
 ├── SECURITY.md          what it touches, what it never touches
-├── CHANGELOG.md         2.0.0 → 2.2.0 history
+├── CHANGELOG.md         2.0.0 → 2.3.1 history
 ├── TEST_RESULTS.md      every test, every log, including the real wall
 └── tests/               the test suite (safe offline mode included)
 ```
@@ -136,8 +136,8 @@ curl -s https://www.cloudflare.com/cdn-cgi/trace | grep -E '^(ip|colo|warp)='
 ## 5. Install the tool
 
 ```bash
-unzip opencode-unlimited-2.2.0.zip
-cd opencode-unlimited-fixed      # (or whatever the unzipped folder is called)
+unzip opencode-unlimited-2.3.1.zip
+cd opencode-unlimited-2.3.1      # (the folder the archive creates)
 sudo bash install.sh
 ```
 
@@ -170,7 +170,7 @@ Healthy output looks like this (real run, Debian 13):
   mode: systemd
   ✓ systemd unit installed and started
   ✓ warp tunnel: connected
-  opencode-unlimited 2.2.0  (mode: systemd)
+  opencode-unlimited 2.3.1  (mode: systemd)
   ✓ supervisor: running (pid 32380)
   ✓ egress: 2a09:bac5:b045:3705::57b:25   block: 2a09:bac5:b045:3705
   ✓ kill-switch: installed
@@ -244,7 +244,7 @@ Inside the Ubuntu shell:
 ```bash
 # WARP's Linux client does not work with WSL's default networking for TUN;
 # use proxy mode, which needs none of it.
-unzip opencode-unlimited-2.2.0.zip && cd opencode-unlimited-fixed
+unzip opencode-unlimited-2.3.1.zip && cd opencode-unlimited-2.3.1
 sudo bash install.sh --proxy --portable
 ```
 
@@ -268,7 +268,7 @@ There is no Linux `warp-cli` on macOS, so use a Linux container:
 docker run -it --rm --network host -v "$PWD":/w ubuntu:24.04 bash
 # inside the container:
 apt-get update && apt-get install -y python3 curl unzip
-cd /w && unzip opencode-unlimited-2.2.0.zip && cd opencode-unlimited-fixed
+cd /w && unzip opencode-unlimited-2.3.1.zip && cd opencode-unlimited-2.3.1
 bash install.sh --proxy --portable
 ```
 
@@ -312,7 +312,7 @@ If it says `off`, opencode may reach Cloudflare over IPv4 — where rotating a
 
 ```bash
 ouc run "your task" # run opencode; on a free limit it waits for a working
-                    # block and continues the SAME session (2.3.0)
+                    # block and continues the SAME session (since 2.3.0)
 ouc resume          # do that continuation on demand
 ouc status          # what am I connected to right now?
 ouc hop             # rotate to a fresh block now (asks the root supervisor)

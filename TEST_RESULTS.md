@@ -203,7 +203,7 @@ results: 28 passed  0 failed  0 skipped
 Reproduce exactly:
 
 ```bash
-cd opencode-unlimited-fixed
+cd opencode-unlimited-2.3.1
 sudo bash tests/run_tests.sh                 # offline + real (needs WARP)
 bash tests/run_tests.sh --offline            # 23 tests, no WARP, no network changes
 bash tests/run_tests.sh --select=t31         # one test

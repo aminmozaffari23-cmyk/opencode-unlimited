@@ -1,5 +1,5 @@
 #!/bin/bash
-# opencode-unlimited (corrected) — test suite
+# opencode-unlimited — test suite
 #
 #   sudo bash tests/run_tests.sh            # everything (offline + real WARP)
 #   bash tests/run_tests.sh --offline       # no root, no network, no WARP

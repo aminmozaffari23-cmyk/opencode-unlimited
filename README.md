@@ -5,7 +5,7 @@ Keeps your Cloudflare WARP tunnel up, and when opencode's free tier says
 block so you get a fresh quota — without ever cutting your internet and
 without touching a single byte of opencode's output.
 
-This is a corrected rewrite of the original `opencode-unlimited-usage`
+This is a rewrite of the original `opencode-unlimited-usage`
 script. Every claim in this README was verified by the tests in
 [`TEST_RESULTS.md`](TEST_RESULTS.md); the raw logs are in `tests/logs/`.
 
@@ -48,6 +48,20 @@ ouc lane run "hello"       # opencode, routed through WARP
 
 See [`INSTALL.md`](INSTALL.md#proxy-mode-codespaces-devcontainers-ci) for the
 Codespaces walk-through.
+
+## What changed in 2.3.1
+
+Bug fix found by installing the whole project in a fresh GitHub Codespace and
+then running `ouc run` as the normal user:
+
+* the daily commands (`ouc run`, `ouc resume`) no longer die with
+  `PermissionError: /var/lib/opencode-unlimited/state.lock` on an install that
+  was done with `sudo` — the installer now hands the state directory to the user
+  who invoked `sudo`, and the lock file is created `0666`;
+* a non-writable state directory produces one readable line with the fix
+  instead of a Python traceback;
+* new test `t51` covers the case; suite is **39 passed / 0 failed** on a plain
+  sandbox and in a fresh Codespace (`TEST_RESULTS.md`).
 
 ## What changed in 2.3.0
 
@@ -151,7 +165,7 @@ sudo ouc config # effective configuration and where each value comes from
 `ouc status` at a glance:
 
 ```
-opencode-unlimited 2.2.0  (mode: systemd)
+opencode-unlimited 2.3.1  (mode: systemd)
 
 ✓ supervisor: running (pid 18702)
 ✓ warp tunnel: Status update: Connected

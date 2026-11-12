@@ -1,5 +1,5 @@
 #!/bin/bash
-# opencode-unlimited (corrected) — installer
+# opencode-unlimited — installer
 #
 # Design goals:
 #   * never depends on a systemd *user* session (works in Docker/CI/headless)
