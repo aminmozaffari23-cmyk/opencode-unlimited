@@ -23,6 +23,7 @@ FAILED=0
 sandbox(){
   T="$(mktemp -d /tmp/ouc-chaos.XXXXXX)"
   export OUC_STATE_DIR="$T/state" OUC_TARGET_HOME="$T/home" OUC_PREFIX="$T/prefix"
+  export OUC_USER_STATE_DIR="$T/home/.local/state/opencode-unlimited" OUC_TEST_SANDBOX="$T"
   export OUC_UNIT_DIR="$T/units" OUC_BIN_PATH="$T/prefix/bin/ouc"
   export OUC_LIB_DIR="$T/prefix/lib/opencode-unlimited"
   export OUC_WARP_BIN="$HELPER/fake_warp.py" OUC_PROBE_CMD="$HELPER/fake_probe.sh"
@@ -38,10 +39,12 @@ sandbox(){
   export OUC_OC_BIN="$HELPER/fake_agent.py" OUC_AGENT_ROOT="$T/work"
   mkdir -p "$OUC_TARGET_HOME/.local/share/opencode/log" "$OUC_STATE_DIR" "$OUC_AGENT_ROOT"
   LOG="$OUC_TARGET_HOME/.local/share/opencode/log/opencode.log"; : > "$LOG"
+  export OUC_LOG_PATH="$LOG"
   JOURNAL="$OUC_TARGET_HOME/.local/state/opencode-unlimited"
   mkdir -p "$JOURNAL"
   echo '{"connected":true,"registered":true,"reg_count":1,"deleted_at":0,"fail_new":0}' > "$FAKE_WARP_STATE"
   printf -- "- survive the night\n" > "$T/task.txt"
+  python3 "$HELPER/sandbox_scope.py" "$ROOT/ouc.py" "$T" || exit 2
   ouc(){ python3 "$ROOT/ouc.py" "$@"; }
 }
 

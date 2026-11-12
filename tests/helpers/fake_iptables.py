@@ -2,8 +2,10 @@
 """iptables/ip6tables stand-in: records state so tests can assert on it."""
 import json, os, sys
 
-STATE = os.environ.get("FAKE_IPT_STATE", "/tmp/fake-ipt.json")
-LOG = os.environ.get("FAKE_IPT_LOG", "")
+from sandbox_scope import checked_path, fixture_path
+
+STATE = fixture_path("FAKE_IPT_STATE")
+LOG = fixture_path("FAKE_IPT_LOG", optional=True)
 CHAIN = "OUC_LEAKGUARD"
 
 

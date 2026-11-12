@@ -1,0 +1,8 @@
+{
+  "kind": "OFFLINE replay of preserved genuine native records; not another provider call or live recovery test",
+  "counts": {
+    "genuine_captured_transport_records_classified_network": 1,
+    "genuine_captured_free_limit_records_classified_quota": 21
+  },
+  "network_does_not_become_quota": true
+}

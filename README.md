@@ -1,13 +1,27 @@
-# opencode-unlimited 2.4.1
+# opencode-unlimited — unreleased 2.4.2 working tree
 
-Keeps your Cloudflare WARP tunnel up, and when opencode's free tier says
-**“Free usage limit reached”**, quietly moves the machine to a fresh IPv6
-block so you get a fresh quota — without ever cutting your internet and
-without touching a single byte of opencode's output.
+**Start with the single [English beginner guide](BEGINNER_GUIDE.md).** It was
+written after the v2 tests and includes the actual results, the qualification
+harness incident, and remaining limitations. This is a review branch, not a
+new release or an instruction to replace a working installation.
 
-This is a rewrite of the original `opencode-unlimited-usage`
-script. Every claim in this README was verified by the tests in
-[`TEST_RESULTS.md`](TEST_RESULTS.md); the raw logs are in `tests/logs/`.
+The controller manages WARP and observes OpenCode failures. A changed IPv6
+block does **not** promise new quota. Interactive `lane` output is exec-native;
+managed v2 runs deliberately use structured JSON events and controller status.
+There is no advertising or planted agent-rules file.
+
+Current evidence: **70 focused tests**, **55 safe-default compatibility groups
+passed / 0 failed / 11 intentionally skipped**. The same source completed a
+separate real Beam task (4/4); the final MiniMax task was safety-cancelled on a
+native network reset, not quota. Genuine successful quota recovery and a
+10-hour live run remain unqualified. See [the guide](BEGINNER_GUIDE.md) and
+[public result records](tests/qualification/v2-results.json).
+
+## Historical release material
+
+The older numbers and feature descriptions below are retained as release
+history, principally for OpenCode 1.19.5. They are **not** blanket qualification
+of OpenCode 2.2.7; where they differ, the current guide/results take precedence.
 
 ```
 57 passed, 0 failed, 0 skipped     (offline suite, 2.4.0)
@@ -70,20 +84,20 @@ What it does that a plain loop does not:
 
 | Problem | What the agent does |
 |---|---|
-| it crashes at 03:00 | every step is written to `~/.local/state/opencode-unlimited/journal.json`; a step left mid-flight is retried, never lost, never duplicated |
+| it crashes at 03:00 | every step is written to `~/.local/state/opencode-unlimited/journal.json`; an interrupted step is recorded and may be retried; tool side effects are not exactly-once |
 | the work would be lost | `git` checkpoint after each step (branch-local commit, never a push) |
-| the free limit hits | rotates to a block that *answers*, then continues the same session — no limit on walls, rotations or resumes |
+| the free limit hits | tries verification for the interrupted model, then continuation; count defaults remain unlimited, not a quota guarantee |
 | a rate limit hits | waits 60→120→240→480→900 s and **never** spends a block |
 | the network drops | keeps still, retries every 30 s for up to 10 min, **never** spends a block |
 | an auth/model error | stops immediately with the reason — retrying would only waste the night |
 | the model goes silent 10 min | kills the call, retries once, then marks the step failed and moves on |
 | the conversation grows stale | fresh session every 3 h / 2 MB / 40 turns; the journal carries the context |
 | the machine dies | `systemd` restarts the supervisor; without systemd a cron watchdog does it every 2 min |
-| it decides to do something stupid | force-push, `/etc/hosts`, firewall, SSH keys, package removal: refused before the run starts, and audited after every step |
+| it decides to do something stupid | task-pattern preflight and protected-path signatures; **not** a filesystem or tool-permission sandbox |
 
-It stops for exactly three reasons, and always says which: 10 hours passed
-(`OUC_MAX_HOURS`), 60 consecutive failures (`OUC_MAX_CONSEC_FAIL`), or the task
-list is finished. Then it writes `run-report-<timestamp>.md`: what finished, what
+Time and failure budgets include 10 hours (`OUC_MAX_HOURS`) and 60
+consecutive failures (`OUC_MAX_CONSEC_FAIL`). Completion, fatal errors,
+guardrails, unavailable recovery, and cancellation can also stop a run. Then it writes `run-report-<timestamp>.md`: what finished, what
 did not, why it stopped, and the next action.
 
 Live status while it runs: `~/.local/state/opencode-unlimited/run.json`

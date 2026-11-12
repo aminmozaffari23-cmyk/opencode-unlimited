@@ -5,12 +5,13 @@ opencode-unlimited — single-file controller.
 What this does
 --------------
 Keeps a Cloudflare WARP tunnel up, and when opencode's free tier reports that
-the daily quota is exhausted, re-registers WARP so you land on a fresh IPv6
-/64 (a fresh quota bucket).
+a genuine free-usage interruption, tries another WARP IPv6 /64 and verifies
+availability with the real CLI. A new address is not a promise of new quota.
 
 Hard rules this implementation follows
 --------------------------------------
-* It never modifies, pipes or signs opencode's output. No advertising.
+* Interactive lane output is exec-transparent. Headless calls observe native
+  JSON events, never inject instructions or advertising into model content.
 * It never leaves the machine without internet: if the tunnel cannot be
   repaired, the leak-guard firewall is left *open* (degraded mode) and the
   state is reported loudly, instead of blackholing traffic.
@@ -42,8 +43,11 @@ from __future__ import annotations
 
 import argparse
 import base64
+import copy
 import errno
 import fcntl
+import functools
+import selectors
 import hashlib
 import json
 import os
@@ -62,7 +66,7 @@ import time
 import urllib.request
 import uuid
 
-VERSION = "2.4.1"
+VERSION = "2.4.2"
 BRAND = "opencode-unlimited"
 DEFAULT_STATE_DIR = "/var/lib/opencode-unlimited"
 UNIT_NAME = "opencode-unlimited.service"
@@ -304,6 +308,7 @@ class Config:
         # to another directory or to the title agent, and then opencode answers
         # "Session not found". Default to -c (continue the last session here)
         # and keep -s as an opt-in that falls back automatically.
+        self.resume_use_session_explicit = "resume_use_session" in disk
         self.resume_use_session = env_bool(
             "OUC_RESUME_USE_SESSION_ID", bool(disk.get("resume_use_session", False)))
         # The old "sleep until the quota window reopens" option is gone: a long
@@ -362,7 +367,8 @@ class Config:
             os.environ.get("OUC_AGENT_ROOT") or disk.get("agent_root") or os.getcwd())
         # agent files live next to the user's own state, not root's
         # (user_state_dir is defined below, so build the same path here)
-        _ustate = os.path.join(self.target_home, ".local", "state", BRAND)
+        _ustate = os.path.abspath(os.environ.get("OUC_USER_STATE_DIR") or
+                                 os.path.join(self.target_home, ".local", "state", BRAND))
         self.journal_file = os.path.join(_ustate, "journal.json")
         self.journal_md = os.path.join(_ustate, "journal.md")
         self.run_status_file = os.path.join(_ustate, "run.json")
@@ -399,13 +405,13 @@ class Config:
         # paths that live under target_home
         self.opencode_log = os.environ.get("OUC_LOG_PATH") or os.path.join(
             self.target_home, ".local/share/opencode/log/opencode.log")
-        self.user_state_dir = os.path.join(
-            self.target_home, ".local/state", BRAND)
+        self.user_state_dir = _ustate
 
         # our own files
         self.state_file = os.path.join(self.state_dir, "state.json")
         self.state_lock = os.path.join(self.state_dir, "state.lock")
         self.rotation_lock = os.path.join(self.state_dir, "rotation.lock")
+        self.managed_lock = os.path.join(self.state_dir, "managed-run.lock")
         self.pid_file = os.path.join(self.state_dir, "supervisor.pid")
         self.daemon_lock = os.path.join(self.state_dir, "supervisor.lock")
         # The single-instance lock lives outside the state dir on purpose: in a
@@ -420,7 +426,9 @@ class Config:
         # fallback channel for unprivileged users who cannot write into the
         # state dir (e.g. a root-owned ~/.local). Single-user machines only;
         # see SECURITY.md.
-        self.hop_fallback_dir = "/tmp/opencode-unlimited"
+        self.hop_fallback_dir = (os.path.join(self.user_state_dir, "hop-fallback")
+                                 if os.environ.get("OUC_USER_STATE_DIR")
+                                 else "/tmp/opencode-unlimited")
         self.hop_fallback_request = os.path.join(self.hop_fallback_dir, "hop.request")
         self.hop_fallback_result = os.path.join(self.hop_fallback_dir, "hop.result")
         self.heartbeat = os.path.join(self.state_dir, "heartbeat")
@@ -566,7 +574,8 @@ class StateLock:
     while still excluding other processes.
     """
 
-    def __init__(self, path: str, blocking: bool = True):
+    def __init__(self, path: str, blocking: bool = True, fix_mode: bool = True):
+        self.fix_mode = fix_mode
         self.path = path
         self.blocking = blocking
         self.fh = None
@@ -586,7 +595,8 @@ class StateLock:
             try:
                 fd = os.open(self.path, os.O_CREAT | os.O_RDWR, 0o666)
                 try:
-                    os.chmod(self.path, 0o666)
+                    if self.fix_mode:
+                        os.chmod(self.path, 0o666)
                 except OSError:
                     pass
                 fh = os.fdopen(fd, "a+")
@@ -598,7 +608,11 @@ class StateLock:
             except OSError as exc:
                 raise StateLockError(f"cannot open {self.path}: {exc}")
             flags = fcntl.LOCK_EX if self.blocking else (fcntl.LOCK_EX | fcntl.LOCK_NB)
-            fcntl.flock(fh.fileno(), flags)
+            try:
+                fcntl.flock(fh.fileno(), flags)
+            except OSError:
+                fh.close()
+                raise
             _LOCK_REGISTRY[self.path] = [fh, 1]
             self.fh = fh
             return self
@@ -974,7 +988,7 @@ def _new_wall_since(path: str, offset: int) -> tuple[bool, int]:
             chunk = fh.read(min(size - offset, 1 << 20))
     except OSError:
         return False, offset
-    hit = any(p in chunk for p in WALL_PATTERNS)
+    hit = wall_from_chunk(chunk) is not None
     return hit, offset + len(chunk)
 
 
@@ -991,115 +1005,54 @@ def _kill(proc: "subprocess.Popen") -> None:
             continue
 
 
-def verify_request(cfg: Config, log: Log) -> dict:
-    """Prove the quota really is usable again by making one real request.
+def verify_request(cfg: Config, log: Log, *, model: str = "", cwd: str = "") -> dict:
+    """Prove availability with a genuine, invocation-scoped OpenCode reply.
 
-    A rotation that only changes the egress address proves nothing: Cloudflare
-    recycles /64s, so the "new" block may already be burned. This costs one
-    request from the fresh bucket and is the only honest signal.
-
-    A rate-limited block does not fail fast — opencode sits there streaming
-    nothing — so we watch the log while the request runs and abort the moment a
-    quota line appears instead of waiting for a timeout.
+    Neither curl refusals, a changed IP, timeouts, nor an echoed prompt are
+    evidence of available quota. Errors keep their actual taxonomy.
     """
-    out = {"ran": False, "ok": False, "walled": False, "detail": ""}
+    selected_model = model or cfg.test_model
+    out = {"ran": False, "ok": False, "walled": False, "detail": "",
+           "failure_class": "", "rc": None, "model": selected_model}
     if not (cfg.verify and cfg.oc_bin and os.access(cfg.oc_bin, os.X_OK)):
-        out["detail"] = "verification disabled or opencode not installed"
+        out['detail'] = 'verification disabled or opencode not installed'
         return out
-
-    env = dict(os.environ)
-    env.setdefault("PATH", "/usr/local/bin:/usr/bin:/bin")
-    if cfg.proxy_mode:
-        # opencode's fetch() speaks HTTP proxies; WARP only speaks SOCKS5,
-        # so the request goes through the local bridge.
-        env["HTTP_PROXY"] = env["HTTPS_PROXY"] = cfg.http_proxy
-        env["http_proxy"] = env["https_proxy"] = cfg.http_proxy
-        env.setdefault("NO_PROXY", "localhost,127.0.0.1,::1")
-        env.setdefault("no_proxy", env["NO_PROXY"])
-    preexec = None
+    cwd = os.path.realpath(cwd or getattr(cfg, 'verify_cwd', '') or os.getcwd())
+    if cwd == '/' and os.path.isdir(cfg.target_home):
+        cwd = cfg.target_home
+    env = opencode_env(cfg, cwd)
     demoted = _demote(cfg)
+    preexec = None
     if demoted:
         preexec, _uid, name = demoted
-        env["HOME"] = cfg.target_home
-        env["USER"] = env["LOGNAME"] = name
-
-    try:
-        offset = os.path.getsize(cfg.opencode_log)
-    except OSError:
-        offset = 0
-
-    out["ran"] = True
-    tmp = None
-    try:
-        import tempfile
-        fd, tmp = tempfile.mkstemp(prefix="ouc-verify-", suffix=".log")
-        sink = os.fdopen(fd, "w+")
-        proc = subprocess.Popen(
-            [cfg.oc_bin, "run", "-m", cfg.test_model, VERIFY_PROMPT],
-            stdout=sink, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
-            env=env, preexec_fn=preexec, start_new_session=True)
-    except Exception as exc:
-        out["detail"] = f"could not run opencode: {exc}"
-        if tmp:
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
+        env.update(HOME=cfg.target_home, USER=name, LOGNAME=name)
+    follower = LogFollower(cfg, State(cfg), keys=('verify_offset', 'verify_log_id'))
+    follower.skip_history()
+    out['ran'] = True
+    argv = opencode_run_argv(cfg, ['-m', selected_model, VERIFY_PROMPT])
+    result = run_child(cfg, argv, env, follower, log, cwd=cwd,
+                       deadline=time.monotonic()+cfg.verify_timeout,
+                       emit=False, preexec_fn=preexec)
+    failure = result.get('failure')
+    out['rc'] = result['rc']
+    if failure:
+        out['failure_class'] = failure['class']
+        out['walled'] = failure['class'] == 'quota'
+        out['detail'] = f"native {failure['class']} error: {failure['hit']}"
         return out
-
-    deadline = time.time() + cfg.verify_timeout
-    killed = ""
-    while True:
-        if proc.poll() is not None:
-            break
-        walled, offset = _new_wall_since(cfg.opencode_log, offset)
-        if walled:
-            out["walled"] = True
-            out["detail"] = "the new block is already rate-limited"
-            killed = "wall"
-            _kill(proc)
-            break
-        if time.time() > deadline:
-            killed = "timeout"
-            _kill(proc)
-            break
-        time.sleep(0.3)
-
-    if not out["walled"]:
-        # the wall line can land in the log microseconds before the process exits
-        walled, offset = _new_wall_since(cfg.opencode_log, offset)
-        if walled:
-            out["walled"] = True
-            out["detail"] = "the new block is already rate-limited"
-
-    text = ""
-    try:
-        sink.flush()
-        with open(tmp, "r", errors="replace") as fh:
-            text = fh.read()
-    except OSError:
-        pass
-    finally:
-        try:
-            sink.close()
-        except Exception:
-            pass
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-
-    if out["walled"]:
+    if result.get('deadline_expired') or result.get('stalled'):
+        out['failure_class'] = 'timeout'
+        out['detail'] = f'no verified reply within {cfg.verify_timeout}s; quota cause unknown'
         return out
-    if "OUC-VERIFY-OK" in text:
-        out["ok"] = True
-        out["detail"] = "opencode answered on the new block"
-        return out
-    if killed == "timeout":
-        out["detail"] = (f"no answer within {cfg.verify_timeout}s "
-                         "(rate-limited blocks tend to hang)")
+    text = result.get('text', '')
+    marker = 'OUC-VERIFY-OK' in [line.strip() for line in text.splitlines()]
+    completed = result.get('completed') or not opencode_is_v2(cfg)
+    if result['rc'] == 0 and marker and completed:
+        out['ok'] = True
+        out['detail'] = 'opencode answered on the current block'
     else:
-        out["detail"] = f"opencode exited without the marker: {text.strip()[-160:]!r}"
+        out['failure_class'] = 'unknown'
+        out['detail'] = f"opencode exit {result['rc']} without a completed exact-marker reply"
     return out
 
 
@@ -1110,7 +1063,7 @@ def _wall_count(path: str) -> int:
             size = fh.tell()
             fh.seek(max(0, size - 2 * 1024 * 1024))
             chunk = fh.read()
-        return sum(chunk.count(p) for p in WALL_PATTERNS)
+        return sum(1 for line in chunk.splitlines() if wall_from_chunk(line))
     except OSError:
         return 0
 
@@ -1568,9 +1521,9 @@ def _spent_blocks(cfg: Config, state: State) -> set[str]:
 
 def _wait_for_egress(cfg: Config, warp: "Warp", old64: str, t0: float) -> str:
     """Wait for the tunnel to come back with an IPv6 egress that differs."""
-    deadline = time.time() + min(cfg.connect_wait + cfg.egress_wait,
-                                 max(8, cfg.rotation_timeout - (time.time() - t0)))
-    while time.time() < deadline:
+    deadline = time.monotonic() + min(cfg.connect_wait + cfg.egress_wait,
+                                      max(8, cfg.rotation_timeout - (time.monotonic() - t0)))
+    while time.monotonic() < deadline:
         time.sleep(1.5)
         if not warp.connected():
             continue
@@ -1634,24 +1587,21 @@ def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
     egress address changed — Cloudflare recycles /64s, so a different address is
     not the same thing as fresh quota.
     """
-    t0 = time.time()
+    t0 = time.monotonic()
     fw = Firewall(cfg, log, state)
     warp = Warp(cfg, log)
     pinner = Pinner(cfg, log, state)
+    was_installed = False  # early probe errors must still reach lock cleanup
     result: dict = {"ok": False, "old": "", "new": "", "duration": 0.0, "why": why,
                     "error": "", "degraded": False, "how": "", "verified": False,
                     "attempts": []}
 
+    lock = StateLock(cfg.rotation_lock, blocking=False, fix_mode=False)
     try:
-        lock_fh = open(cfg.rotation_lock, "a+")
-    except OSError as exc:
-        result["error"] = f"cannot open rotation lock: {exc}"
-        return result
-    try:
-        fcntl.flock(lock_fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except OSError:
-        lock_fh.close()
-        result["error"] = "rotation already in progress"
+        lock.__enter__()
+    except (BlockingIOError, StateLockError) as exc:
+        result["error"] = ("rotation already in progress" if isinstance(exc, BlockingIOError)
+                           else str(exc))
         return result
 
     _wait_rotation_spacing(cfg, log, state)
@@ -1690,14 +1640,11 @@ def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
         if v.get("ok"):
             result["verified"] = True
         elif v.get("ran"):
-            # a rate-limited block tends to hang, and a hang is not proof of
-            # anything. Rotating again costs ~3 s; handing over a dead block
-            # costs the user a frozen request. Always spend the extra 3 s.
-            entry["reason"] = f"could not be confirmed: {v.get('detail')}"
-            log(f"{how}: {cand64} could not be confirmed with a request "
-                f"({v.get('detail')}) — trying another block", "WARN")
-            result["_fallback"] = cand
-            return False
+            entry['reason'] = f"could not be confirmed: {v.get('detail')}"
+            result['failure_class'] = v.get('failure_class') or 'unknown'
+            # A timeout/rate/network/auth error does not prove spent quota.
+            # Keep the connected candidate, but stop further registration.
+            raise RotationError(entry['reason'])
         else:
             log(f"{how}: {cand64} accepted without a verification request "
                 f"({v.get('detail')})", "INFO")
@@ -1739,7 +1686,7 @@ def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
         # ---- phase 1: rotate keys (fast) ---------------------------------
         if cfg.rotation_mode in ("auto", "keys"):
             for i in range(1, cfg.keys_attempts + 1):
-                if time.time() - t0 > cfg.rotation_timeout:
+                if time.monotonic() - t0 > cfg.rotation_timeout:
                     log("rotation budget exhausted during key rotation", "WARN")
                     break
                 ok, out = warp.rotate_keys()
@@ -1755,7 +1702,7 @@ def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
             log("using the registration path (OUC_ROTATION_MODE=register)")
         if not result["ok"] and cfg.rotation_mode in ("auto", "register"):
             for cycle in range(1, cfg.reg_retries + 1):
-                if time.time() - t0 > cfg.rotation_timeout:
+                if time.monotonic() - t0 > cfg.rotation_timeout:
                     log("rotation budget exhausted during re-registration", "WARN")
                     break
                 warp.disconnect()
@@ -1782,17 +1729,6 @@ def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
                 if try_candidate(f"re-register#{cycle}", cand, old64, spent):
                     break
 
-        if not result["ok"] and result.get("_fallback"):
-            # nothing could be confirmed: keep the last untested block rather
-            # than leaving the user with an unrotated, definitely-walled one.
-            cand = result.pop("_fallback")
-            result["ok"] = True
-            result["new"] = cand
-            result["how"] = "unconfirmed"
-            result["verified"] = False
-            log(f"no block could be confirmed by a real request; keeping "
-                f"{norm64(cand)}. If a request hangs, run: ouc hop", "WARN")
-
         if not result["ok"]:
             tried = ", ".join(f"{a['how']}={a['block'] or '-'} ({a.get('reason','')})"
                               for a in result["attempts"]) or "nothing"
@@ -1811,7 +1747,7 @@ def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
                 blacklist.append(old64)
             ts_map[old64] = now()
         blacklist = blacklist[-200:]
-        result["duration"] = round(time.time() - t0, 2)
+        result["duration"] = round(time.monotonic() - t0, 2)
         state.update(blacklist=blacklist, blacklist_ts=ts_map,
                      last_block_reused=False,
                      current=result["new"], hops=int(st.get("hops", 0)) + 1,
@@ -1837,7 +1773,7 @@ def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
         except Exception:
             pass
     finally:
-        el = time.time() - t0
+        el = time.monotonic() - t0
         result["duration"] = round(el, 2)
         if not result["ok"]:
             log(f"rotation FAILED after {result['duration']}s: {result['error']}", "ERROR")
@@ -1861,8 +1797,7 @@ def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
             else:
                 state.update(last_error=result["error"], last_rotation=result)
         try:
-            fcntl.flock(lock_fh.fileno(), fcntl.LOCK_UN)
-            lock_fh.close()
+            lock.__exit__(None, None, None)
         except Exception:
             pass
     return result
@@ -1898,7 +1833,8 @@ def scan_wall(cfg: Config, state: State, log: Log, baseline: bool = False) -> di
                 sig = hashlib.sha256(tail).hexdigest()
             except OSError:
                 sig = ""
-            state.save({**s, "log_id": log_id, "offset": st.st_size, "tail_sig": sig})
+            state.save({**s, "log_id": log_id, "offset": st.st_size,
+                        "tail_sig": sig, "wall_partial": ""})
             out["detail"] = f"baselined at {st.st_size} bytes (history ignored)"
             return out
         if s.get("log_id") != log_id or st.st_size < offset:
@@ -1929,7 +1865,14 @@ def scan_wall(cfg: Config, state: State, log: Log, baseline: bool = False) -> di
             return out
 
         new_offset = offset + len(chunk)
-        hit = next((p.decode() for p in WALL_PATTERNS if p in chunk), "")
+        partial = s.get('wall_partial', '') if offset else ''
+        records = (partial + chunk.decode('utf-8', 'replace')).splitlines(keepends=True)
+        tail = ''
+        if records and not records[-1].endswith(('\n', '\r')):
+            tail = records.pop()[-MAX_LOG_READ:]
+        found = wall_from_chunk(''.join(records).encode())
+        hit = found.get('hit', '') if found else ''
+        s['wall_partial'] = tail
         try:
             with open(path, "rb") as fh:
                 fh.seek(max(0, new_offset - 64))
@@ -1954,6 +1897,8 @@ def scan_wall(cfg: Config, state: State, log: Log, baseline: bool = False) -> di
 
 def maybe_rotate_for_wall(cfg: Config, state: State, log: Log) -> dict | None:
     """Rotate if a detected wall is pending and the cooldown has expired."""
+    if managed_run_active(cfg):
+        return {"ok": False, "skipped": "foreground owns recovery"}
     with StateLock(cfg.state_lock):
         s = state.load()
         if not s.get("pending_wall"):
@@ -1979,10 +1924,16 @@ class Supervisor:
         self.bridge = Bridge(cfg, log)
         self.warp = Warp(cfg, log)
         self.stop = False
-        self.last_request = ""
-        self.last_repair = 0
+        saved = self.state.load()
+        self.last_request = str(saved.get("last_hop_request") or "")
+        # Both the normal and fallback request files survive a restart. One
+        # last ID alone lets them replay each other forever on alternating ticks.
+        self.handled_requests = [str(x) for x in saved.get("handled_hop_requests", []) if x]
+        if self.last_request and self.last_request not in self.handled_requests:
+            self.handled_requests.append(self.last_request)
+        self.last_repair = float("-inf")
         self._was_connected = None      # for reconnect-edge detection
-        self._addr_checked = 0.0        # last live-egress check
+        self._addr_checked = float("-inf")  # monotonic last live-egress check
 
     ADDRESS_CHECK_SECS = 60
 
@@ -2000,10 +1951,10 @@ class Supervisor:
         self._was_connected = conn
         if not conn:
             return
-        due = (time.time() - self._addr_checked) >= self.ADDRESS_CHECK_SECS
+        due = (time.monotonic() - self._addr_checked) >= self.ADDRESS_CHECK_SECS
         if not (edge or due):
             return
-        self._addr_checked = time.time()
+        self._addr_checked = time.monotonic()
         try:
             sync_current(self.cfg, self.state, self.log,
                          why="warp reconnected" if edge else "periodic check")
@@ -2046,9 +1997,9 @@ class Supervisor:
             self.ensure_pin(True)
             return
         self.ensure_pin(False)
-        if now() - self.last_repair < 15:
+        if time.monotonic() - self.last_repair < 15:
             return
-        self.last_repair = now()
+        self.last_repair = time.monotonic()
         self.log("tunnel is down — repairing (kill-switch opens during repair)", "WARN")
         if self.fw.installed():
             self.fw.lift()
@@ -2064,6 +2015,10 @@ class Supervisor:
                         self.state.update(degraded=False)
                     return
             self.log(f"reconnect attempt {attempt} failed", "WARN")
+        # The foreground recovery owner decides whether registration may rotate.
+        if managed_run_active(self.cfg):
+            self.log("foreground owns recovery; reconnect only, no registration", "WARN")
+            return
         # last resort: full rotation (fresh registration)
         res = rotate(self.cfg, self.log, self.state, why="tunnel-down")
         if not res.get("ok"):
@@ -2088,15 +2043,16 @@ class Supervisor:
         req, req_path = None, ""
         for path in (self.cfg.hop_request, self.cfg.hop_fallback_request):
             r = read_json(path, None)
-            if isinstance(r, dict) and str(r.get("id") or "") != self.last_request:
+            if isinstance(r, dict) and str(r.get("id") or "") not in self.handled_requests:
                 req, req_path = r, path
                 break
         if not isinstance(req, dict):
             return
         rid = str(req.get("id") or "")
-        if not rid or rid == self.last_request:
+        if not rid or rid in self.handled_requests:
             return
         self.last_request = rid
+        self.handled_requests = (self.handled_requests + [rid])[-128:]
         self.log(f"hop request {rid} from {req.get('user', '?')}")
         res = rotate(self.cfg, self.log, self.state, why="manual-hop")
         payload = {"id": rid, "ok": bool(res.get("ok")), "old": res.get("old", ""),
@@ -2111,7 +2067,7 @@ class Supervisor:
                 os.chmod(pth, 0o644)
             except OSError:
                 pass
-        self.state.update(last_hop_request=rid)
+        self.state.update(last_hop_request=rid, handled_hop_requests=self.handled_requests)
 
     def tick(self, baseline: bool = False) -> None:
         if self.cfg.proxy_mode:
@@ -2120,10 +2076,12 @@ class Supervisor:
         self.sync_address()            # WARP may have moved us on its own
         self.ensure_pin(self.warp.connected())
         self.enforce_firewall()
-        scan_wall(self.cfg, self.state, self.log, baseline=baseline)
-        maybe_rotate_for_wall(self.cfg, self.state, self.log)
-
-        supervisor_auto_resume(self.cfg, self.state, self.log)
+        if managed_run_active(self.cfg):
+            _skip_supervisor_history(self.cfg)
+        else:
+            scan_wall(self.cfg, self.state, self.log, baseline=baseline)
+            maybe_rotate_for_wall(self.cfg, self.state, self.log)
+            supervisor_auto_resume(self.cfg, self.state, self.log)
         self.handle_request()
         self.heartbeat()
 
@@ -2492,8 +2450,8 @@ def cmd_pin(args, cfg: Config, log: Log) -> int:
 
 def cmd_verify(args, cfg: Config, log: Log) -> int:
     """One real request: is the free tier usable from here right now?"""
-    v = verify_request(cfg, log)
-    print(json.dumps({**v, "model": cfg.test_model, "ipv6_egress": ipv6_egress(cfg)}, indent=2))
+    v = verify_request(cfg, log, model=getattr(args, "model", ""))
+    print(json.dumps({**v, "model": v.get("model", cfg.test_model), "ipv6_egress": ipv6_egress(cfg)}, indent=2))
     if not v.get("ran"):
         return 2
     return 0 if v.get("ok") else 1
@@ -2659,9 +2617,9 @@ def cmd_hop(args, cfg: Config, log: Log) -> int:
         except OSError as exc:
             print(f"cannot hand a hop request to the supervisor: {exc}", file=sys.stderr)
             return 1
-    t0 = time.time()
+    t0 = time.monotonic()
     wait = args.wait if args.wait else 90
-    while time.time() - t0 < wait:
+    while time.monotonic() - t0 < wait:
         time.sleep(1)
         res = None
         for _, rp in channels:
@@ -2735,7 +2693,7 @@ def doctor_proxy(cfg: Config, out: list[str]) -> None:
                f"{'open' if port_open('127.0.0.1', cfg.proxy_socks_port) else 'CLOSED'}")
     out.append(f"  HTTP bridge {cfg.http_proxy} : "
                f"{'open' if port_open('127.0.0.1', cfg.proxy_http_port) else 'CLOSED'}")
-    W = Warp(cfg, log)
+    W = Warp(cfg, Log(os.path.join(cfg.state_dir, "ouc.log")))
     out.append(f"  warp-cli status      : {(W.status().splitlines() or ['(no answer)'])[0]}")
     egress = probe_egress(cfg)
     out.append(f"  egress via the proxy : {egress or '(none — proxy broken?)'}")
@@ -2843,12 +2801,12 @@ def cmd_lane(args, cfg: Config, log: Log) -> int:
     if cfg.proxy_mode:
         # proxy mode: the exit is a local HTTP proxy, so hand it to opencode
         # and exec. No hosts file, no namespaces, no capabilities involved.
-        os.environ["HTTP_PROXY"] = os.environ["HTTPS_PROXY"] = cfg.http_proxy
-        os.environ["http_proxy"] = os.environ["https_proxy"] = cfg.http_proxy
-        os.environ.setdefault("NO_PROXY", "localhost,127.0.0.1,::1")
-        os.environ.setdefault("no_proxy", os.environ["NO_PROXY"])
+        os.environ.update(opencode_env(cfg))
         Bridge(cfg, Log(os.path.join(cfg.state_dir, "ouc.log"))).ensure()
-        os.execv(real, [real, *args])
+        native_args = list(args)
+        if opencode_is_v2(cfg) and "--standalone" not in native_args:
+            native_args.insert(0, "--standalone")
+        os.execv(real, [real, *native_args])
         return 0
 
     addrs: list[str] = []
@@ -3085,101 +3043,204 @@ class LogFollower:
         return chunk
 
     def skip_history(self) -> None:
-        """Advance to the end without inspecting anything already written."""
-        self.poll()
+        """Seek the actual end, even when history exceeds one read window."""
+        try:
+            st = os.stat(self.cfg.opencode_log)
+        except OSError:
+            return
+        self.state.update(**{self.id_key: f"{st.st_dev}:{st.st_ino}",
+                             self.off_key: st.st_size})
 
 
 def wall_from_chunk(chunk: bytes) -> "dict | None":
-    """Return {session, model, hit} for the last quota wall in `chunk`."""
-    if not chunk:
-        return None
-    text = chunk.decode("utf-8", "replace")
-    hit = next((p.decode() for p in WALL_PATTERNS if p.decode() in text), "")
-    if not hit:
-        return None
-    session, model = "", ""
-    for line in text.splitlines():
-        m = SESSION_RE.search(line)
-        if m:
-            session = m.group(1)
-        m2 = MODEL_RE.search(line)
-        if m2:
-            model = f"{m2.group(1)}/{m2.group(2)}"
-    return {"session": session, "model": model, "hit": hit}
+    for line in chunk.splitlines():
+        found = classify_failure(line)
+        if found and found['class'] == 'quota':
+            return found
+    return None
 
 
-def opencode_env(cfg: Config) -> dict:
-    """The environment opencode must inherit to be inside the tunnel."""
+def opencode_env(cfg: Config, cwd: "str | None" = None) -> dict:
+    """Process-only proxy settings and a PWD matching the actual launch cwd."""
     env = dict(os.environ)
     env.setdefault("PATH", "/usr/local/bin:/usr/bin:/bin")
+    env["PWD"] = os.path.realpath(cwd or os.getcwd())
     if cfg.proxy_mode:
-        env["HTTP_PROXY"] = env["HTTPS_PROXY"] = cfg.http_proxy
-        env["http_proxy"] = env["https_proxy"] = cfg.http_proxy
-        env.setdefault("NO_PROXY", "localhost,127.0.0.1,::1")
-        env.setdefault("no_proxy", env["NO_PROXY"])
+        for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+            env[key] = cfg.http_proxy
+        # Inherited '*' / provider-domain bypasses defeat the whole bridge.
+        # These changes belong to this process tree, never the user's shell.
+        env["NO_PROXY"] = env["no_proxy"] = "localhost,127.0.0.1,::1"
+        env.pop("ALL_PROXY", None)
+        env.pop("all_proxy", None)
     return env
 
 
-def quota_reset_hint(cfg: Config, timeout: int = 8) -> "int | None":
-    """Seconds until the free-tier window reopens, from the API's Retry-After.
+def opencode_is_v2(cfg: Config) -> bool:
+    cached = getattr(cfg, "_opencode_v2", None)
+    if cached is not None:
+        return cached
+    try:
+        p = subprocess.run([cfg.oc_bin, "--version"], capture_output=True,
+                           text=True, timeout=5, env=opencode_env(cfg),
+                           stdin=subprocess.DEVNULL)
+        m = re.search(r"(?:^|\s)v?(\d+)\.\d+(?:\.\d+)?", p.stdout.strip())
+        answer = bool(p.returncode == 0 and m and int(m.group(1)) >= 2)
+    except (OSError, subprocess.TimeoutExpired):
+        answer = False
+    cfg._opencode_v2 = answer
+    return answer
 
-    Best effort, and deliberately unauthenticated: the same call a bare client
-    makes gets the same 429 the wall comes from, and its Retry-After points at
-    the end of the window (measured 2026-11-09: it counts down to 00:00 UTC).
-    Used only for telling the user the truth about waiting — never as proof.
+
+def opencode_run_argv(cfg: Config, args: list, *, auto: bool = False) -> list:
+    """Headless v2 calls use their own proxy-inheriting server and typed events.
+
+    --auto is confined to the explicit unattended agent, never interactive
+    lane/run/resume or the no-tools verification prompt.
     """
-    url = os.environ.get("OUC_QUOTA_HINT_URL",
-                         "https://opencode.ai/inference/openai/v1/chat/completions")
-    payload = json.dumps({"model": (cfg.resume_model or "deepseek-v4.1-flash-free")
-                                        .split("/")[-1],
-                          "messages": [{"role": "user", "content": "hi"}]}).encode()
-    try:
-        p = subprocess.run(
-            ["curl", "-sS", "-D", "-", "-o", "/dev/null", "-m", str(timeout),
-             "-X", "POST", url, "-H", "content-type: application/json",
-             "--data-binary", "@-"],
-            input=payload, capture_output=True, timeout=timeout + 5)
-        head = p.stdout.decode("utf-8", "replace")
-    except Exception:
-        return None
-    m = re.search(r"(?im)^retry-after:\s*(\d+)", head)
-    if not m:
-        return None
-    try:
-        return int(m.group(1))
-    except ValueError:
-        return None
+    args = list(args)
+    if opencode_is_v2(cfg):
+        formats = [args[i+1] if i+1 < len(args) else '' for i,a in enumerate(args) if a == '--format']
+        formats += [a.split('=', 1)[1] for a in args if a.startswith('--format=')]
+        if any(value != 'json' for value in formats):
+            raise ValueError('managed v2 runs require --format json; use opencode/ouc lane for native interactive output')
+        if not formats:
+            args = ["--format", "json", *args]
+        if auto and "--auto" not in args:
+            args = ["--auto", *args]
+        return [cfg.oc_bin, "--standalone", "run", *args]
+    return [cfg.oc_bin, "run", *args]
 
 
 def resume_argv(cfg: Config, session: str = "", model: str = "",
-                prompt: str = "") -> list:
-    """The exact command that continues an interrupted session.
+                prompt: str = "", *, auto: bool = False) -> list:
+    """Resume a known native v2 session exactly; preserve model on every path.
 
-    `-c` (continue the last session in this directory) is the default because
-    it is the one that survives real life: cleaned state, a different cwd, or a
-    session id that belongs to opencode's title agent. `-s <id>` is opt-in via
-    OUC_RESUME_USE_SESSION_ID=1, and cmd_run falls back to `-c` if it fails.
+    Legacy scraped IDs remain opt-in. Never silently fall back from a known
+    v2 session to an unrelated most-recent conversation.
     """
-    argv = [cfg.oc_bin or "opencode", "run"]
-    use_session = bool(session) and bool(getattr(cfg, "resume_use_session", False))
-    argv += (["-s", session] if use_session else ["-c"])
-    m = model or cfg.resume_model
+    explicit = ("OUC_RESUME_USE_SESSION_ID" in os.environ or
+                getattr(cfg, "resume_use_session_explicit", False))
+    use_session = bool(session) and (cfg.resume_use_session or
+                                    (opencode_is_v2(cfg) and not explicit))
+    args = (["-s", session] if use_session else ["-c"])
+    m = model or cfg.agent_model or cfg.resume_model
     if m:
-        argv += ["-m", m]
-    argv += [prompt or cfg.resume_prompt]
-    return argv
+        args += ["-m", m]
+    args += [prompt or cfg.resume_prompt]
+    return opencode_run_argv(cfg, args, auto=auto)
+
+
+def _skip_supervisor_history(cfg: Config) -> None:
+    """The foreground owns these legacy bytes; do not replay them at release."""
+    try:
+        st = os.stat(cfg.opencode_log)
+        with open(cfg.opencode_log, "rb") as fh:
+            fh.seek(max(0, st.st_size - 64))
+            sig = hashlib.sha256(fh.read()).hexdigest()
+        State(cfg).update(log_id=f"{st.st_dev}:{st.st_ino}", offset=st.st_size,
+                          tail_sig=sig, wall_partial="", pending_wall=False)
+    except OSError:
+        pass
+
+
+class ManagedRunLease:
+    """A flock shared by foreground commands and the supervisor (no PID guessing)."""
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
+        self.fh = None
+        self.rotation = None
+
+    def acquire(self) -> bool:
+        try:
+            mkdirp(self.cfg.state_dir)
+            self.fh = open(self.cfg.managed_lock, "a+")
+            os.chmod(self.cfg.managed_lock, 0o666)
+            fcntl.flock(self.fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            # Also fence an older supervisor that knows only rotation.lock.
+            # rotate() re-enters this lock in this process, never via a second
+            # competing OS flock. Existing lock-file permissions are preserved.
+            self.rotation = StateLock(self.cfg.rotation_lock, blocking=False, fix_mode=False)
+            self.rotation.__enter__()
+            return True
+        except (OSError, StateLockError):
+            self.rotation = None
+            if self.fh:
+                self.fh.close()
+                self.fh = None
+            return False
+
+    def close(self):
+        if self.fh:
+            try:
+                _skip_supervisor_history(self.cfg)
+            finally:
+                if self.rotation:
+                    self.rotation.__exit__(None, None, None)
+                    self.rotation = None
+                self.fh.close()
+                self.fh = None
+
+
+def managed_run_active(cfg: Config) -> bool:
+    # Do not create files in the supervisor's read-only polling fast path.
+    if not os.path.exists(cfg.managed_lock):
+        return False
+    try:
+        with open(cfg.managed_lock, "a+") as fh:
+            try:
+                fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return True
+    except OSError:
+        return True                 # uncertainty is not permission to rotate
+    return False
+
+
+def managed_command(fn):
+    """One owner for recovery; safe cancellation with an honest agent report."""
+    @functools.wraps(fn)
+    def wrapped(args, cfg, log):
+        lease = ManagedRunLease(cfg)
+        if not lease.acquire():
+            print("another managed run owns recovery; refusing a duplicate", file=sys.stderr)
+            return 1
+        interrupted = [signal.SIGINT]
+        old_term = signal.getsignal(signal.SIGTERM)
+        def stop(sig, frame):
+            interrupted[0] = sig
+            raise KeyboardInterrupt
+        signal.signal(signal.SIGTERM, stop)
+        try:
+            return fn(args, cfg, log)
+        except KeyboardInterrupt:
+            log("managed run cancelled; owned children stopped", "WARN")
+            if fn.__name__ == "cmd_agent" and os.path.exists(cfg.journal_file):
+                journal = Journal(cfg)
+                journal.data = read_json(cfg.journal_file, {})
+                journal.reconcile()
+                journal.finish("cancelled")
+                budget = Budget(cfg, journal)
+                RunStatus(cfg, journal, budget).update("stopped", "cancelled")
+                write_run_report(cfg, journal, "cancelled", budget)
+            return 128 + interrupted[0]
+        finally:
+            signal.signal(signal.SIGTERM, old_term)
+            lease.close()
+    return wrapped
 
 
 def _sleep_quietly(log: "Log", seconds: int, why: str) -> None:
-    end = time.time() + max(0, seconds)
-    while time.time() < end:
-        left = int(end - time.time())
-        log(f"{why}: waiting {left}s")
-        time.sleep(min(15, max(1, left)))
+    end = time.monotonic() + max(0, seconds)
+    while time.monotonic() < end:
+        left = end - time.monotonic()
+        log(f"{why}: waiting {int(left)}s")
+        time.sleep(min(15, max(0, left)))
 
 
 def rotate_until_healthy(cfg: Config, log: "Log", state: "State",
-                         deadline: float, why: str = "auto-resume") -> dict:
+                         deadline: float, why: str = "auto-resume", *,
+                         model: str = "", cwd: str = "") -> dict:
     """Rotate until a real request succeeds, or the deadline passes.
 
     This *is* the "wait and check the next WARP station" step: the rotate()
@@ -3188,7 +3249,14 @@ def rotate_until_healthy(cfg: Config, log: "Log", state: "State",
     """
     out = {"ok": False, "block": "", "attempts": 0, "detail": ""
            , "verified": False}
-    while time.time() < deadline:
+    if not model and opencode_is_v2(cfg):
+        out.update(failure_class='fatal', detail='interrupted model is unknown; select -m/--model before recovery; no rotation')
+        return out
+    if model or cwd:
+        cfg = copy.copy(cfg)  # invocation context, not a saved default change
+        cfg.test_model = model or cfg.test_model
+        cfg.verify_cwd = os.path.realpath(cwd or os.getcwd())
+    while time.monotonic() < deadline:
         out["attempts"] += 1
         rot = rotate(cfg, log, state, why=why)
         ok = bool(rot.get("ok"))
@@ -3203,9 +3271,12 @@ def rotate_until_healthy(cfg: Config, log: "Log", state: "State",
             return out
         out["detail"] = (rot.get("error") or rot.get("how")
                          or "no candidate could be confirmed")
+        if rot.get("failure_class") and rot["failure_class"] != "quota":
+            out["failure_class"] = rot["failure_class"]
+            break
         log(f"{why}: attempt {out['attempts']} did not produce a working "
             f"block ({out['detail']})", "WARN")
-        remaining = deadline - time.time()
+        remaining = deadline - time.monotonic()
         if remaining <= 1:
             break
         _sleep_quietly(log, min(cfg.resume_backoff or 3, int(remaining)),
@@ -3213,120 +3284,94 @@ def rotate_until_healthy(cfg: Config, log: "Log", state: "State",
     return out
 
 
+@managed_command
 def cmd_run(args, cfg: Config, log: Log) -> int:
-    """Run opencode; when the free limit hits, wait for a good block and go on.
-
-    This is the recommended way to use the tool interactively: one command,
-    no wrapper scripts, and the session keeps its context because the resume
-    uses opencode's own --session/--continue, not a fresh conversation.
-    """
-    extra = list(getattr(args, "args", []) or [])
-    if extra and extra[0] == "--":
+    """Headless native run with one recovery owner and v2 event-based errors."""
+    extra = list(getattr(args, 'args', []) or [])
+    if extra and extra[0] == '--':
         extra = extra[1:]
     if not (cfg.oc_bin and os.access(cfg.oc_bin, os.X_OK)):
-        print("  ✗ opencode binary not found (set OUC_OC_BIN)", file=sys.stderr)
+        print('opencode binary not found (set OUC_OC_BIN)', file=sys.stderr)
         return 2
     if not require_state_write(cfg):
         return 1
-
     state = State(cfg)
     follower = LogFollower(cfg, state)
-    follower.skip_history()          # only walls we cause may trigger a resume
-
-    base = [cfg.oc_bin, "run"] + extra
-    env = opencode_env(cfg)
-    started = time.time()
+    follower.skip_history()
+    model = cfg.resume_model
+    for i, arg in enumerate(extra):
+        if arg in ('-m', '--model') and i+1 < len(extra):
+            model = extra[i+1]
+        elif arg.startswith('--model='):
+            model = arg.split('=', 1)[1]
+    argv = opencode_run_argv(cfg, extra)
+    cwd = os.getcwd()
+    env = opencode_env(cfg, cwd)
+    started = time.monotonic()
+    deadline = started + cfg.max_hours*3600
     resumes = 0
-    wall_model = ""
-
-    print(f"  ouc run — opencode under supervision "
-          f"(auto-resume {'x' + str(cfg.resume_max) if cfg.resume_max else 'unlimited'})",
-          flush=True)
-    resumed_with_session = False
-    fallback_tried = False
-    while True:
-        log(f"run: starting opencode (attempt {resumes + 1}, "
-            f"{' '.join(extra) or 'no args'})")
-        try:
-            rc = subprocess.call(base, env=env)
-        except KeyboardInterrupt:
-            print("", file=sys.stderr)
-            return 130
-        except OSError as exc:
-            print(f"  ✗ could not start opencode: {exc}", file=sys.stderr)
-            return 2
-
-        wall = wall_from_chunk(follower.poll())
-        if rc == 0 and not wall:
+    failures = 0
+    session = ''
+    print('  ouc run — native event supervision; quota auto-resume enabled', flush=True)
+    while time.monotonic() < deadline:
+        result = run_child(cfg, argv, env, follower, log, cwd=cwd, deadline=deadline)
+        failure = result.get('failure')
+        session = result.get('session') or session
+        if not model:
+            model = result.get('model') or (failure or {}).get('model') or ''
+        if not failure and result['rc'] == 0 and not result.get('deadline_expired') and not result.get('stalled'):
             if resumes:
                 with StateLock(cfg.state_lock):
                     s = state.load()
-                    state.save({**s, "resumes": int(s.get("resumes") or 0) + resumes})
-            log(f"run: finished (exit 0) after {resumes} resume(s)")
+                    state.save({**s, 'resumes': int(s.get('resumes') or 0)+resumes})
             return 0
-        if not wall:
-            if rc != 0 and resumed_with_session and not fallback_tried:
-                # "-s <id>" is fragile: if opencode does not know that session
-                # it exits non-zero without ever touching the quota. That is
-                # not a wall, so retry once with "continue the last session".
-                fallback_tried = True
-                log("run: the session id was not usable — retrying with -c", "WARN")
-                print("  ! that session id was not usable — continuing the most "
-                      "recent session instead", file=sys.stderr)
-                base = resume_argv(cfg, session="", model=wall_model)
-                env = opencode_env(cfg)
-                continue
-            if rc == 0:
-                log(f"run: finished (exit 0) after {resumes} resume(s)")
-            else:
-                log(f"run: opencode exited {rc} with no quota wall", "WARN")
-            return rc
-
-        with StateLock(cfg.state_lock):
-            s = state.load()
-            state.save({**s,
-                        "walls_seen": int(s.get("walls_seen") or 0) + 1,
-                        "last_wall": now(), "pending_wall": False})
-        wall_model = wall.get("model", "")
-        log(f"run: quota wall hit (session {wall['session'] or 'unknown'}, "
-            f"model {wall['model'] or 'unknown'})", "WARN")
-
-        if cfg.resume_max and resumes >= cfg.resume_max:
-            print(f"  ✗ the free limit came back after {resumes} resume(s); "
-                  f"stopping (OUC_RESUME_MAX={cfg.resume_max})", file=sys.stderr)
+        failures += 1
+        if result.get('deadline_expired'):
+            print('run time budget exhausted', file=sys.stderr)
             return 1
-        elapsed = time.time() - started
-        if cfg.resume_budget and elapsed >= cfg.resume_budget:
-            print(f"  ✗ resume budget of {cfg.resume_budget}s spent; stopping",
-                  file=sys.stderr)
+        if not failure:
+            print(f"native run failed (exit {result['rc']}); quota cause unknown", file=sys.stderr)
+            return result['rc'] if result['rc'] > 0 else 1
+        cls = failure['class']
+        if cls in ('fatal', 'unknown'):
+            print(f"native {cls}: {failure['hit']}", file=sys.stderr)
+            return result['rc'] if result['rc'] > 0 else 1
+        if failures >= cfg.max_consec_fail:
+            print('stopping: consecutive-failure budget exhausted', file=sys.stderr)
             return 1
-
-        deadline = time.time() + max(30, min(cfg.resume_budget or 300, 300))
-        print("  … free limit reached: waiting for a WARP block that actually "
-              "answers", flush=True)
-        health = rotate_until_healthy(cfg, log, state, deadline=deadline)
-
-        if not health["ok"]:
-            hint = quota_reset_hint(cfg)
-            if hint:
-                print(f"  ! no working block right now; the free window reopens "
-                      f"in about {hint // 60} min", file=sys.stderr)
-            if not health["ok"]:
-                print("  ✗ could not find a working block; nothing was sent. "
-                      "Re-run `ouc run` later or `ouc hop` by hand.",
-                      file=sys.stderr)
+        if cls == 'quota':
+            state.update(last_wall=now(), pending_wall=False)
+            if cfg.resume_max and resumes >= cfg.resume_max:
+                print(f'stopping after {resumes} resume(s)', file=sys.stderr)
                 return 1
+            if cfg.resume_budget and time.monotonic()-started >= cfg.resume_budget:
+                print('stopping: quota recovery budget exhausted', file=sys.stderr)
+                return 1
+            health = rotate_until_healthy(cfg, log, state,
+                deadline=min(deadline, time.monotonic()+max(30, min(cfg.resume_budget or 300, 300))), model=model, cwd=cwd)
+            if not health['ok']:
+                print('no verified working block; stopping without a reset-time guess', file=sys.stderr)
+                return 1
+            resumes += 1
+            failures = 0
+            print(f"  ↻ continuing the same session on {health['block']} (resume {resumes})", flush=True)
+        elif cls == 'rate':
+            wait = cfg.rate_backoff[min(failures-1, len(cfg.rate_backoff)-1)]
+            _sleep_quietly(log, min(wait, max(0, deadline-time.monotonic())), 'rate limit; no rotation')
+        else:
+            # A connectivity retry, never a rotation or quota-reset probe.
+            end = min(deadline, time.monotonic()+cfg.net_retry_window)
+            while time.monotonic() < end:
+                if ipv6_egress(cfg):
+                    break
+                _sleep_quietly(log, min(cfg.net_retry_every, max(0, end-time.monotonic())), 'network retry; no rotation')
+            else:
+                return 1
+        argv = resume_argv(cfg, session=session, model=model)
+    return 1
 
-        resumes += 1
-        resumed_with_session = bool(wall.get("session")) and cfg.resume_use_session
-        base = resume_argv(cfg, session=wall.get("session", ""),
-                           model=wall.get("model", ""))
-        env = opencode_env(cfg)
-        print(f"  ↻ continuing the same session on {health['block']} "
-              f"(resume {resumes}"
-              f"{'/' + str(cfg.resume_max) if cfg.resume_max else ''})", flush=True)
 
-
+@managed_command
 def cmd_resume(args, cfg: Config, log: Log) -> int:
     """Continue the last opencode session once the quota really works."""
     if not (cfg.oc_bin and os.access(cfg.oc_bin, os.X_OK)):
@@ -3336,15 +3381,21 @@ def cmd_resume(args, cfg: Config, log: Log) -> int:
         return 1
     state = State(cfg)
     session = getattr(args, "session", "") or ""
-    model = getattr(args, "model", "") or cfg.resume_model or ""
+    model = getattr(args, "model", "") or cfg.resume_model or cfg.agent_model or ""
     prompt = getattr(args, "prompt", "") or cfg.resume_prompt
+    if not model and opencode_is_v2(cfg):
+        print("cannot verify an unspecified interrupted model; pass resume -m PROVIDER/MODEL", file=sys.stderr)
+        return 2
 
-    v = verify_request(cfg, log)
+    v = verify_request(cfg, log, model=model, cwd=os.getcwd())
+    if not v.get("ok") and not v.get("walled"):
+        print(f"verification failed without a confirmed quota wall: {v.get('detail')}", file=sys.stderr)
+        return 1
     if not v.get("ok"):
         log(f"resume: current block is not usable ({v.get('detail')}) — "
             f"looking for another one", "WARN")
         health = rotate_until_healthy(cfg, log, state,
-                                      deadline=time.time() + max(60, cfg.resume_budget))
+                                      deadline=time.monotonic() + max(60, cfg.resume_budget), model=model, cwd=os.getcwd())
         if not health["ok"]:
             print("  ✗ no working WARP block right now — nothing was sent",
                   file=sys.stderr)
@@ -3353,7 +3404,10 @@ def cmd_resume(args, cfg: Config, log: Log) -> int:
     argv = resume_argv(cfg, session=session, model=model, prompt=prompt)
     log(f"resume: continuing {session or 'the last session'} on "
         f"{ipv6_egress(cfg) or 'unknown block'}")
-    rc = subprocess.call(argv, env=opencode_env(cfg))
+    follower = LogFollower(cfg, state)
+    follower.skip_history()
+    result = run_child(cfg, argv, opencode_env(cfg), follower, log)
+    rc = result["rc"] if not result.get("failure") and not result.get("stalled") else 1
     if rc == 0:
         with StateLock(cfg.state_lock):
             s = state.load()
@@ -3369,7 +3423,7 @@ def supervisor_auto_resume(cfg: Config, state: "State", log: "Log") -> bool:
     spawning a second session would duplicate their work; `ouc run` is the
     path where the tool owns the process and can be sure it is safe.
     """
-    if not cfg.auto_resume:
+    if not cfg.auto_resume or managed_run_active(cfg):
         return False
     if not (cfg.oc_bin and os.access(cfg.oc_bin, os.X_OK)):
         return False
@@ -3392,7 +3446,10 @@ def supervisor_auto_resume(cfg: Config, state: "State", log: "Log") -> bool:
                       stderr=subprocess.STDOUT)
         demoted = _demote(cfg)
         if demoted:
-            kwargs["preexec_fn"] = demoted
+            apply, _uid, name = demoted
+            kwargs["preexec_fn"] = apply
+            env["HOME"] = cfg.target_home
+            env["USER"] = env["LOGNAME"] = name
         proc = subprocess.Popen([sys.executable, os.path.abspath(__file__),
                                  "resume", "--reason", "auto"], **kwargs)
         state.update(auto_resume_last=last, auto_resume_pid=proc.pid)
@@ -3429,36 +3486,147 @@ FATAL_PATTERNS = [b"401 Unauthorized", b"403 Forbidden", b"invalid api key",
                   b"Invalid API key", b"not logged in", b"model not found",
                   b"Unknown model", b"unsupported model", b"configuration error"]
 
-def classify_failure(chunk: bytes) -> "dict | None":
-    """Name what went wrong, so the caller can respond correctly.
+def _failure_record(message: str, *, status=None, code: str = "",
+                    session: str = "", model: str = "") -> dict:
+    """Classify an ERROR field, never an arbitrary model/tool transcript."""
+    lower = message.lower()
+    code_lower = code.lower()
+    if any(p.decode().lower() in lower for p in WALL_PATTERNS):
+        cls = "quota"
+    elif str(status) in ("401", "403", "404") or any(
+            p.decode().lower() in lower for p in FATAL_PATTERNS) or any(
+            x in code_lower for x in ("provider.no-route", "modelnotfound", "authentication", "session.not-found")) or any(
+            x in lower for x in ("model unavailable", "model not found", "session not found", "invalid model")):
+        cls = "fatal"
+    elif str(status) == "429" or re.search(r"\b429\b", message) or any(
+            p.decode().lower() in lower for p in RATE_PATTERNS if p != b"429"):
+        cls = "rate"
+    elif any(p.decode().lower() in lower for p in NETWORK_PATTERNS):
+        cls = "network"
+    else:
+        cls = "unknown"
+    return {"class": cls, "hit": message[:500] or code or "unclassified native error",
+            "session": session, "model": model, "code": code}
 
-    Order matters: a quota wall is the *good* case (rotate and carry on); an
-    auth/model error is terminal; a rate limit means wait, never rotate; a
-    network error means keep still and retry, never burn a block.
+
+def failure_from_event(event: dict) -> "dict | None":
+    """Only the CLI's top-level error event is a provider/control error.
+
+    A tool can print HTTP statuses, quota examples, or its own errors. Text,
+    reasoning and tool-use events must never enter the failure taxonomy.
+    Supports the observed v2.2.7 {error:{type,message}} shape as well as
+    {error:{name,data:{message,statusCode}}}. Unfamiliar shapes fail closed.
     """
-    if not chunk:
+    if event.get("type") != "error":
         return None
-    text = chunk.decode("utf-8", "replace")
-    session = ""
-    model = ""
-    for line in text.splitlines():
-        m = SESSION_RE.search(line)
-        if m:
-            session = m.group(1)
-        m2 = MODEL_RE.search(line)
-        if m2:
-            model = f"{m2.group(1)}/{m2.group(2)}"
-    for p in WALL_PATTERNS:
-        if p.decode() in text:
-            return {"class": "quota", "hit": p.decode(), "session": session,
-                    "model": model}
-    for pats, cls in ((FATAL_PATTERNS, "fatal"), (RATE_PATTERNS, "rate"),
-                      (NETWORK_PATTERNS, "network")):
-        for p in pats:
-            if p.decode() in text:
-                return {"class": cls, "hit": p.decode(), "session": session,
-                        "model": model}
-    return None
+    err = event.get("error")
+    if isinstance(err, str):
+        err = {"message": err}
+    if not isinstance(err, dict):
+        err = {}
+    data = err.get("data") if isinstance(err.get("data"), dict) else {}
+    message = str(err.get("message") or data.get("message") or "")
+    code = str(err.get("type") or err.get("name") or "")
+    session = str(event.get("sessionID") or "")
+    provider = event.get("providerID") or data.get("providerID")
+    model_id = event.get("modelID") or data.get("modelID")
+    model = f"{provider}/{model_id}" if provider and model_id else ""
+    return _failure_record(message, status=err.get("statusCode", data.get("statusCode")),
+                           code=code, session=session, model=model)
+
+
+def _legacy_failure(line: str) -> "dict | None":
+    # Read severity only from the record prefix, never from a quoted message.
+    # INFO message="example: level=ERROR ..." is not an ERROR event.
+    line = line.lstrip()
+    level = re.match(r'^(?:(?:timestamp|time|ts|service|run)=[^\s"]+\s+)*level=(\w+)(?:\s|$)', line)
+    is_error = bool(level and level.group(1) == 'ERROR')
+    if not is_error and not re.match(r"^error(?:\.error)?=", line):
+        return None
+    fields = {}
+    for m in re.finditer(r'(?:^|\s)(error(?:\.error)?|message)=("(?:\\.|[^"\\])*"|\S+)', line):
+        val = m.group(2)
+        try:
+            val = json.loads(val) if val.startswith('"') else val
+        except ValueError:
+            pass
+        fields[m.group(1)] = val
+    message = str(fields.get("error.error") or fields.get("error") or fields.get("message") or "")
+    if not message:
+        return None
+    s = SESSION_RE.search(line)
+    m = MODEL_RE.search(line)
+    return _failure_record(message, session=s.group(1) if s else "",
+                           model=f"{m.group(1)}/{m.group(2)}" if m else "")
+
+
+def classify_failure(chunk: bytes) -> "dict | None":
+    """Classify complete typed native events or contextual legacy ERROR lines.
+
+    Metadata comes from the error's own record, never a later unrelated line.
+    An unknown typed error is still a failure, even when a CLI returns zero.
+    """
+    result = None
+    for line in chunk.decode("utf-8", "replace").splitlines():
+        try:
+            item = json.loads(line)
+        except (ValueError, TypeError):
+            item = None
+        if isinstance(item, dict):
+            candidate = failure_from_event(item)
+        else:
+            candidate = _legacy_failure(line)
+        if candidate:
+            result = candidate
+    return result
+
+
+class NativeEvents:
+    """Incremental, bounded NDJSON reader for one invocation only."""
+    def __init__(self):
+        self.pending = b""
+        self.failure = None
+        self.session = ""
+        self.model = ""
+        self.text = ""
+        self.completed = False
+        self.events = 0
+
+    def feed(self, chunk: bytes, final: bool = False) -> bool:
+        self.pending += chunk
+        lines = self.pending.split(b"\n")
+        self.pending = lines.pop()
+        if final and self.pending:
+            lines.append(self.pending)
+            self.pending = b""
+        # A malformed/huge native record must not consume unlimited RAM.
+        if len(self.pending) > MAX_LOG_READ:
+            self.pending = b""
+            self.failure = _failure_record("native event exceeds safe size")
+        progress = False
+        for line in lines:
+            try:
+                ev = json.loads(line)
+            except (ValueError, TypeError):
+                continue
+            if not isinstance(ev, dict):
+                continue
+            typ = ev.get("type")
+            if typ in ("step_start", "step_finish", "text", "reasoning", "tool_use"):
+                progress = True
+                self.events += 1
+                self.session = self.session or str(ev.get("sessionID") or "")
+            part = ev.get("part") if isinstance(ev.get("part"), dict) else {}
+            if typ == "text":
+                self.text = (self.text + str(part.get("text") or ""))[-MAX_LOG_READ:]
+            if typ == "step_finish" and part.get("reason") == "stop":
+                self.completed = True
+            failure = failure_from_event(ev)
+            if failure:
+                self.failure = failure
+                self.session = failure.get("session") or self.session
+                self.model = failure.get("model") or self.model
+        return progress
 
 
 def _task_sha(text: str) -> str:
@@ -3671,6 +3839,7 @@ class Budget:
         self.cfg = cfg
         self.journal = journal
         self.started = started or float(journal.data.get("started") or now())
+        self._mono_started = time.monotonic() - max(0, time.time() - self.started)
         used = journal.data.setdefault("budgets_used", {})
         for k in ("walls", "rotations", "resumes", "recycles", "stalls",
                   "consec_fail", "attempts"):
@@ -3709,8 +3878,18 @@ class Budget:
     def used(self, key: str) -> int:
         return int(self.journal.data.get("budgets_used", {}).get(key, 0))
 
+    def restart_clock(self) -> None:
+        self.started = time.time()
+        self._mono_started = time.monotonic()
+
     def elapsed(self) -> float:
-        return max(0.0, time.time() - self.started)
+        return max(0.0, time.monotonic() - self._mono_started)
+
+    def remaining(self) -> float:
+        return max(0.0, self.cfg.max_hours * 3600 - self.elapsed())
+
+    def deadline(self) -> float:
+        return self._mono_started + self.cfg.max_hours * 3600
 
     # ---- the only three ways a run ends by itself ------------------------
     def stop_reason(self) -> str:
@@ -3729,7 +3908,7 @@ class Budget:
     def rate_backoff(self) -> int:
         """60 → 120 → 240 → 480 → 900 s, capped. Never a rotation."""
         seq = self.cfg.rate_backoff or [60]
-        idx = min(self.used("consec_fail"), len(seq) - 1)
+        idx = min(max(0, self.used("consec_fail") - 1), len(seq) - 1)
         return int(seq[idx])
 
 
@@ -3804,101 +3983,288 @@ def _protected_paths(cfg: Config) -> list:
             os.path.join(home, ".ssh", "authorized_keys"), cfg.config_file]
 
 
+def _file_signature(path: str):
+    """Content signature of a file. mtime is deliberately NOT part of it.
+
+    2.4.1 compared (mtime, size). A live run then died with
+    "guardrail violation: authorized_keys changed" although not a byte had
+    changed: every external SSH login rewrites the file in place, which only
+    bumps its mtime. Same size, same hash, dead run. Content is what matters.
+    """
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read(8 * 1024 * 1024)
+        return "file:%d:%s" % (len(data), hashlib.sha256(data).hexdigest())
+    except OSError:
+        return None
+
+
+def _dir_signature(path: str):
+    """Signature of a directory's entries: names and sizes, never mtimes.
+
+    ``~/.ssh`` gets a new mtime whenever sshd touches anything inside it, and
+    that is not the agent's doing, so mtime cannot be evidence here.
+    """
+    try:
+        names = sorted(os.listdir(path))
+    except OSError:
+        return None
+    parts = []
+    for name in names:
+        try:
+            parts.append("%s:%d" % (name, os.stat(os.path.join(path, name)).st_size))
+        except OSError:
+            parts.append("%s:?" % name)
+    return "dir:%s" % hashlib.sha256("\n".join(parts).encode()).hexdigest()
+
+
 def protected_snapshot(cfg: Config) -> dict:
     snap = {}
     for p in _protected_paths(cfg):
-        try:
-            st = os.stat(p)
-            snap[p] = (int(st.st_mtime), int(st.st_size))
-        except OSError:
-            snap[p] = None
+        snap[p] = _dir_signature(p) if os.path.isdir(p) else _file_signature(p)
     return snap
 
 
 def audit_step(cfg: Config, before: dict) -> list:
     """Did this step touch something it had no business touching?"""
     after = protected_snapshot(cfg)
-    return [f"{p} changed" for p, v in after.items() if before.get(p, "missing") != v]
+    return [f"{p} content changed" for p, v in after.items() if before.get(p, "missing") != v]
 
 
 # ---- running one child with stall detection ------------------------------
-def _child_cpu(proc) -> float:
+def _process_table() -> dict:
+    """Linux identities, not command-line substring matches or guessed PIDs."""
+    result = {}
     try:
-        with open(f"/proc/{proc.pid}/stat") as fh:
-            parts = fh.read().split()
-        return float(parts[13]) + float(parts[14])
-    except Exception:
-        return 0.0
+        names = os.listdir('/proc')
+    except OSError:
+        return result
+    for name in names:
+        if not name.isdigit():
+            continue
+        try:
+            with open(f'/proc/{name}/stat') as fh:
+                fields = fh.read().rsplit(') ', 1)[1].split()
+            result[int(name)] = (int(fields[1]), int(fields[2]), int(fields[19]), fields[0])
+        except (OSError, IndexError, ValueError):
+            pass
+    return result
+
+
+class OwnedProcessTree:
+    """Remember descendants with start-time identities, including detached tools."""
+    def __init__(self, proc):
+        self.proc = proc
+        self.identities = {}
+        self.root_start = None
+        self.collect()
+
+    def collect(self):
+        table = _process_table()
+        root = table.get(self.proc.pid)
+        if root and self.root_start is None:
+            self.root_start = root[2]
+            self.identities[self.proc.pid] = root[2]
+        valid = {pid for pid, start in self.identities.items()
+                 if pid in table and table[pid][2] == start}
+        # The leader may already be reaped while an orphan retains its group.
+        # Never adopt a reused root PID with a different start-time identity.
+        group_owned = self.root_start is not None and (not root or root[2] == self.root_start)
+        changed = True
+        while changed:
+            changed = False
+            for pid, info in table.items():
+                same_group = (group_owned and info[1] == self.proc.pid and info[2] >= self.root_start)
+                if pid not in valid and (info[0] in valid or same_group):
+                    self.identities[pid] = info[2]
+                    valid.add(pid)
+                    changed = True
+        return table
+
+    def active(self):
+        table = self.collect()
+        return {pid: table[pid] for pid, start in self.identities.items()
+                if pid in table and table[pid][2] == start and table[pid][3] not in ('Z', 'X')}
+
+    def stop(self, grace: float = 3.0) -> list:
+        active = self.active()
+        signalled = list(active)
+        for sig in (signal.SIGTERM, signal.SIGKILL):
+            active = self.active()
+            group = {pid for pid, info in active.items() if info[1] == self.proc.pid}
+            if group:
+                try:
+                    os.killpg(self.proc.pid, sig)
+                except ProcessLookupError:
+                    pass
+            for pid in active.keys() - group:
+                try:
+                    os.kill(pid, sig)
+                except ProcessLookupError:
+                    pass
+            end = time.monotonic() + (max(0, grace) if sig == signal.SIGTERM else 1)
+            while time.monotonic() < end and self.active():
+                self.proc.poll()
+                time.sleep(.05)
+            if not self.active():
+                break
+        try:
+            self.proc.wait(timeout=1)
+        except subprocess.TimeoutExpired:
+            pass
+        return signalled
+
+
+def _emit_native(chunk: bytes, stderr: bool = False) -> None:
+    dest = sys.stderr if stderr else sys.stdout
+    try:
+        if hasattr(dest, 'buffer'):
+            dest.buffer.write(chunk)
+            dest.buffer.flush()
+        else:
+            dest.write(chunk.decode('utf-8', 'replace'))
+            dest.flush()
+    except BrokenPipeError:
+        raise KeyboardInterrupt
 
 
 def run_child(cfg: Config, argv: list, env: dict, follower: "LogFollower",
-              log: Log, cwd: "str | None" = None) -> dict:
-    """Start the agent's command and watch it like a hawk.
+              log: Log, cwd: "str | None" = None, *, deadline: "float | None" = None,
+              on_tick=None, emit: bool = True, preexec_fn=None) -> dict:
+    """Observe this invocation's native events, not server CPU or shared prose.
 
-    A model call that goes quiet is the most common way an unattended run wastes
-    an hour: nothing crashed, nothing answers. `stall_seconds` of silence (no new
-    log bytes, no CPU time) means: stop it, retry once, then move on.
+    The process gets a private session/process group. Cleanup begins only on
+    cancellation/deadline/stall, or AFTER the native CLI exits. Pipe EOF is not
+    the completion criterion: background tools may retain inherited stdout.
     """
-    out = {"rc": 0, "chunk": b"", "stalled": False, "duration": 0.0}
-    t0 = time.time()
-    try:
-        with open(cfg.opencode_log, "rb") as fh:
-            fh.seek(0, os.SEEK_END)
-            size = fh.tell()
-    except OSError:
-        size = 0
-    try:
-        proc = subprocess.Popen(argv, env=env, cwd=cwd)
-    except OSError as exc:
-        out.update(rc=126, chunk=str(exc).encode())
-        return out
-    last_change = time.time()
-    cpu_last = _child_cpu(proc)
-    while True:
-        rc = proc.poll()
-        if rc is not None:
-            out["rc"] = rc
-            break
-        time.sleep(1)
+    out = {"rc": 0, "chunk": b"", "stalled": False, "duration": 0.0,
+           "deadline_expired": False, "failure": None, "session": "",
+           "model": "", "text": "", "completed": False, "cleaned_pids": []}
+    t0 = time.monotonic()
+    cwd = os.path.realpath(cwd or os.getcwd())
+    env = dict(env, PWD=cwd)
+    structured = opencode_is_v2(cfg) and ("json" in argv or "--format=json" in argv)
+    raw = bytearray()
+    legacy = bytearray()
+    events = NativeEvents()
+    sel = selectors.DefaultSelector()
+    proc = None
+    tree = None
+    last_change = t0
+    last_tick = t0
+    def consume(key):
+        nonlocal last_change
         try:
-            cur = os.stat(cfg.opencode_log).st_size
-        except OSError:
-            cur = size
-        cpu = _child_cpu(proc)
-        if cur != size or cpu > cpu_last + 0.05:
-            size, cpu_last, last_change = cur, cpu, time.time()
-        if cfg.stall_seconds and time.time() - last_change > cfg.stall_seconds:
-            out["stalled"] = True
-            log(f"agent: no progress for {cfg.stall_seconds}s — stopping the child",
-                "WARN")
-            try:
-                proc.terminate()
-                for _ in range(cfg.stall_kill_grace * 10):
-                    if proc.poll() is not None:
+            chunk = os.read(key.fd, 65536)
+        except BlockingIOError:
+            return
+        if not chunk:
+            sel.unregister(key.fileobj)
+            return
+        if emit:
+            _emit_native(chunk, stderr=key.data)
+        if key.data:
+            # Never interpret free-form stdout as a provider error. stderr has
+            # contextual legacy errors only; v2 top-level events are stdout.
+            if not structured:
+                legacy.extend(chunk)
+        else:
+            raw.extend(chunk)
+            if len(raw) > MAX_LOG_READ:
+                del raw[:-MAX_LOG_READ]
+            if structured:
+                if events.feed(chunk):
+                    last_change = time.monotonic()
+            else:
+                last_change = time.monotonic()
+        if len(legacy) > MAX_LOG_READ:
+            del legacy[:-MAX_LOG_READ]
+    try:
+        proc = subprocess.Popen(argv, env=env, cwd=cwd,
+                                stdin=subprocess.DEVNULL if structured else None,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                start_new_session=True, preexec_fn=preexec_fn)
+        tree = OwnedProcessTree(proc)
+        for stream, is_err in ((proc.stdout, False), (proc.stderr, True)):
+            os.set_blocking(stream.fileno(), False)
+            sel.register(stream, selectors.EVENT_READ, is_err)
+        while True:
+            tree.collect()
+            for key, _ in sel.select(.15):
+                consume(key)
+            if not structured:
+                chunk = follower.poll()
+                if chunk:
+                    legacy.extend(chunk)
+                    if len(legacy) > MAX_LOG_READ:
+                        del legacy[:-MAX_LOG_READ]
+                    last_change = time.monotonic()
+            rc = proc.poll()
+            if rc is not None:
+                out['rc'] = rc
+                # Only now may completed-call background tools be stopped.
+                out['cleaned_pids'] = tree.stop(min(cfg.stall_kill_grace, 2))
+                for _ in range(8):
+                    ready = sel.select(0)
+                    if not ready:
                         break
-                    time.sleep(0.1)
-                if proc.poll() is None:
-                    proc.kill()
-            except OSError:
-                pass
-            out["rc"] = proc.wait() if proc.poll() is not None else (proc.returncode or -9)
-            break
-    out["chunk"] = follower.poll()
-    out["duration"] = time.time() - t0
+                    for key, _ in ready:
+                        consume(key)
+                break
+            now_mono = time.monotonic()
+            if on_tick and now_mono - last_tick >= 2:
+                on_tick()
+                last_tick = now_mono
+            if deadline is not None and now_mono >= deadline:
+                out['deadline_expired'] = True
+                out['cleaned_pids'] = tree.stop(cfg.stall_kill_grace)
+                out['rc'] = proc.returncode if proc.returncode is not None else -9
+                break
+            if cfg.stall_seconds and now_mono - last_change >= cfg.stall_seconds:
+                out['stalled'] = True
+                log(f'agent: no progress for {cfg.stall_seconds}s (native events) — stopping owned children', 'WARN')
+                out['cleaned_pids'] = tree.stop(cfg.stall_kill_grace)
+                out['rc'] = proc.returncode if proc.returncode is not None else -9
+                break
+        if structured:
+            events.feed(b'', final=True)
+            if out['rc'] == 0 and not events.completed and not events.failure and not out['stalled'] and not out['deadline_expired']:
+                events.failure = _failure_record('native stream ended without a completed step')
+            out.update(failure=events.failure, session=events.session,
+                       model=events.model, text=events.text, completed=events.completed)
+        else:
+            legacy.extend(follower.poll())
+            failure = classify_failure(bytes(legacy))
+            out.update(failure=failure,
+                       session=(failure or {}).get('session', ''),
+                       model=(failure or {}).get('model', ''),
+                       text=bytes(raw).decode('utf-8', 'replace'))
+        out['chunk'] = bytes(legacy)[-MAX_LOG_READ:]
+    except OSError as exc:
+        out.update(rc=126, chunk=str(exc).encode(), failure=_failure_record(str(exc)))
+    finally:
+        if tree:
+            tree.stop(min(cfg.stall_kill_grace, 2))
+        sel.close()
+        if proc:
+            for stream in (proc.stdout, proc.stderr):
+                if stream:
+                    stream.close()
+        out['duration'] = time.monotonic() - t0
     return out
 
 
 # ---- network patience ----------------------------------------------------
 def wait_for_network(cfg: Config, log: Log, budget: Budget) -> bool:
     """Network down is a 'do nothing' event: no rotation, no spent block."""
-    end = time.time() + cfg.net_retry_window
-    while time.time() < end:
+    end = min(budget.deadline(), time.monotonic() + cfg.net_retry_window)
+    while time.monotonic() < end:
         if ipv6_egress(cfg):
             log("agent: network is back")
             return True
         log(f"agent: network down — retrying in {cfg.net_retry_every}s "
             f"(no rotation)", "WARN")
-        time.sleep(cfg.net_retry_every)
+        time.sleep(min(cfg.net_retry_every, max(0, end - time.monotonic())))
         budget.note_attempt()
     return bool(ipv6_egress(cfg))
 
@@ -3993,6 +4359,7 @@ def write_run_report(cfg: Config, journal: Journal, reason: str,
     return path
 
 
+@managed_command
 def cmd_agent(args, cfg: Config, log: Log) -> int:
     """Work through a task list for hours, on its own, and say what happened."""
     if not (cfg.oc_bin and os.access(cfg.oc_bin, os.X_OK)):
@@ -4045,7 +4412,7 @@ def cmd_agent(args, cfg: Config, log: Log) -> int:
     mkdirp(cfg.agent_root)
     state = State(cfg)
     budget = Budget(cfg, journal)
-    budget.started = time.time()
+    budget.restart_clock()
     journal.data["started"] = int(budget.started)
     journal.data["budgets_used"]["seconds"] = 0
     journal.data["state"] = "running"
@@ -4063,7 +4430,7 @@ def cmd_agent(args, cfg: Config, log: Log) -> int:
           f"package removal are refused", flush=True)
 
     reason = ""
-    session_started = time.time()
+    session_started = time.monotonic()
     session_turns = 0
     session_log_base = _log_size(cfg)
     step = journal.next_pending()
@@ -4077,12 +4444,12 @@ def cmd_agent(args, cfg: Config, log: Log) -> int:
                       else "incomplete")
             break
         if session_turns >= cfg.recycle_turns or \
-                time.time() - session_started >= cfg.recycle_hours * 3600 or \
+                time.monotonic() - session_started >= cfg.recycle_hours * 3600 or \
                 _log_size(cfg) - session_log_base >= cfg.recycle_log_bytes:
             journal.data["next_action"] = step["title"]
             journal.save()
             budget.note_recycle()
-            session_started, session_turns = time.time(), 0
+            session_started, session_turns = time.monotonic(), 0
             session_log_base = _log_size(cfg)
             log(f"agent: recycling the conversation "
                 f"(recycle {budget.used('recycles')}) — a fresh session reads the journal")
@@ -4129,121 +4496,101 @@ def _log_size(cfg: Config) -> int:
 def _run_one_step(cfg: Config, log: Log, state: State, journal: Journal,
                   budget: Budget, status: RunStatus, follower: "LogFollower",
                   step: dict) -> tuple:
-    """One step, retried as the failure class demands. Returns (ok, why)."""
+    """One native invocation at a time; all retry paths retain model and cwd."""
     journal.mark_running(step)
     before = protected_snapshot(cfg)
-    attempts = int(step.get("attempts", 0))
-    prompt = step["title"]
-    argv = [cfg.oc_bin, "run"] + (["-m", cfg.agent_model] if cfg.agent_model else []) + [prompt]
-    env = opencode_env(cfg)
-    wall = {"session": "", "model": ""}
-
+    attempts = int(step.get('attempts', 0))
+    model = cfg.agent_model or step.get('model', '') or cfg.resume_model
+    session = step.get('session', '')
+    argv = opencode_run_argv(cfg, (["-m", model] if model else [])+[step['title']], auto=True)
+    env = opencode_env(cfg, cfg.agent_root)
     while True:
-        if budget.stop_reason():
-            return False, budget.stop_reason()
-        res = run_child(cfg, argv, env, follower, log, cwd=cfg.agent_root)
-        chunk = res.get("chunk") or b""
+        stop_reason = budget.stop_reason()
+        if stop_reason:
+            step['state'] = 'interrupted'
+            journal.save()
+            return False, stop_reason
+        res = run_child(cfg, argv, env, follower, log, cwd=cfg.agent_root,
+                        deadline=budget.deadline(),
+                        on_tick=lambda: status.update('running', f"step {step['id']} in progress"))
         budget.note_attempt()
+        kind = res.get('failure')
+        session = res.get('session') or (kind or {}).get('session') or session
+        model = model or res.get('model') or (kind or {}).get('model') or ''
+        step.update(session=session, model=model, attempts=attempts)
+        journal.save()
         violations = audit_step(cfg, before)
         if violations:
-            detail = "guardrail violation: " + "; ".join(violations)
-            journal.note_error("guardrail", detail)
+            detail = 'guardrail violation: ' + '; '.join(violations)
+            journal.note_error('guardrail', detail)
             journal.mark_failed(step, detail)
-            print(f"  ✗ {detail}", file=sys.stderr)
-            return False, "guardrail"
-
-        kind = classify_failure(chunk)
-        if res.get("stalled"):
+            print(f'  ✗ {detail}', file=sys.stderr)
+            return False, 'guardrail'
+        if res.get('deadline_expired'):
+            step['state'] = 'interrupted'
+            step['note'] = 'run time budget expired during native call'
+            journal.save()
+            return False, budget.stop_reason() or 'max-hours'
+        if res.get('stalled'):
             budget.note_stall()
-            journal.note_error("stall", f"no progress for {cfg.stall_seconds}s")
-            status.update("running", "stalled")
-            if attempts >= 2:
-                journal.mark_failed(step, "stalled twice")
-                return False, "stall"
-            attempts += 1
-            argv = resume_argv(cfg, prompt=cfg.resume_prompt)
-            env = opencode_env(cfg)
-            continue
-
-        if kind is None:
-            if res["rc"] == 0:
-                budget.note_ok()
-                journal.mark_done(step)
-                git_checkpoint(cfg, log, journal, step["id"])
-                print(f"  ✓ step {step['id']} done "
-                      f"({int(res['duration'])}s)", flush=True)
-                return True, ""
             budget.note_fail()
-            journal.note_error("exit", f"opencode exited {res['rc']} with no known "
-                                       f"cause (attempt {attempts})")
-            if attempts >= cfg.max_step_attempts:
-                journal.mark_failed(step, f"exit {res['rc']} after {attempts} attempts")
-                return False, "exit"
-            attempts += 1
-            argv = resume_argv(cfg, prompt=cfg.resume_prompt)
-            continue
-
-        cls = kind.get("class")
-        budget.note_fail()
-        journal.note_error(cls, f"{kind.get('hit')} (attempt {attempts})")
-        status.update("waiting", cls)
-        log(f"agent: step {step['id']} hit a {cls} event ({kind.get('hit')})", "WARN")
-
-        if cls == "fatal":
-            journal.mark_failed(step, f"fatal: {kind.get('hit')}")
-            print(f"  ✗ unrecoverable ({kind.get('hit')}) — stopping, retrying "
-                  f"would not help", file=sys.stderr)
-            return False, "fatal"
-
-        if cls == "quota":
-            wall = kind
-            budget.note_wall()
-            before_rot = int(state.load().get("hops") or 0)
-            print("  … free limit reached: finding a block that really answers",
-                  flush=True)
-            deadline = time.time() + max(60, cfg.resume_budget)
-            health = rotate_until_healthy(cfg, log, state, deadline=deadline,
-                                          why="agent")
-            budget.note_rotations(int(state.load().get("hops") or 0) - before_rot)
-            if not health.get("ok"):
-                journal.mark_failed(step, "no working block")
-                print("  ✗ no working block right now — nothing was sent",
-                      file=sys.stderr)
-                return False, "no-block"
-            budget.note_resume()
+            journal.note_error('stall', f'no native progress for {cfg.stall_seconds}s')
+            status.update('running', 'stalled')
+            if attempts >= 2:
+                journal.mark_failed(step, 'stalled twice')
+                return False, 'stall'
+        elif kind is None and res['rc'] == 0:
             budget.note_ok()
-            print(f"  ↻ continuing the same session on {health['block']} "
-                  f"(wall {budget.used('walls')}, resume {budget.used('resumes')})",
-                  flush=True)
-            argv = resume_argv(cfg, session=wall.get("session", ""),
-                               model=wall.get("model", ""), prompt=cfg.resume_prompt)
-            env = opencode_env(cfg)
-            attempts += 1
-            continue
-
-        if cls == "rate":
-            wait = budget.rate_backoff()
-            print(f"  … rate limited: waiting {wait}s (no rotation, no new block)",
-                  flush=True)
-            _sleep_quietly(log, wait, "agent: rate limit")
-            argv = resume_argv(cfg, session=wall.get("session", ""),
-                               prompt=cfg.resume_prompt)
-            env = opencode_env(cfg)
-            attempts += 1
-            continue
-
-        # network
-        print(f"  … network problem: waiting up to {cfg.net_retry_window}s "
-              f"before touching anything", flush=True)
-        if not wait_for_network(cfg, log, budget):
-            journal.mark_failed(step, "network stayed down")
-            return False, "network"
-        budget.note_ok()
-        argv = resume_argv(cfg, session=wall.get("session", ""),
-                           prompt=cfg.resume_prompt)
-        env = opencode_env(cfg)
+            journal.mark_done(step)
+            git_checkpoint(cfg, log, journal, step['id'])
+            print(f"  ✓ step {step['id']} done ({int(res['duration'])}s)", flush=True)
+            return True, ''
+        elif kind is None or kind['class'] == 'unknown':
+            budget.note_fail()
+            detail = (kind or {}).get('hit') or f"opencode exited {res['rc']} with no known cause"
+            journal.note_error('unknown', f'{detail} (attempt {attempts})')
+            if attempts >= cfg.max_step_attempts:
+                journal.mark_failed(step, f'unknown failure after {attempts} attempts')
+                return False, 'exit'
+        else:
+            cls = kind['class']
+            budget.note_fail()
+            journal.note_error(cls, f"{kind['hit']} (attempt {attempts})")
+            status.update('waiting', cls)
+            log(f"agent: step {step['id']} hit a {cls} event ({kind['hit']})", 'WARN')
+            if cls == 'fatal':
+                journal.mark_failed(step, f"fatal: {kind['hit']}")
+                print(f"  ✗ unrecoverable ({kind['hit']}) — stopping", file=sys.stderr)
+                return False, 'fatal'
+            if cls == 'quota':
+                budget.note_wall()
+                state.update(last_wall=now(), pending_wall=False)
+                before_rot = int(state.load().get('hops') or 0)
+                print('  … free limit reached: finding a block that really answers', flush=True)
+                health = rotate_until_healthy(cfg, log, state,
+                    deadline=min(budget.deadline(), time.monotonic()+max(60, cfg.resume_budget)), why='agent', model=model, cwd=cfg.agent_root)
+                budget.note_rotations(int(state.load().get('hops') or 0)-before_rot)
+                if not health.get('ok'):
+                    journal.mark_failed(step, 'no working block')
+                    return False, 'no-block'
+                budget.note_resume()
+                budget.note_ok()
+                print(f"  ↻ continuing the same session on {health['block']} "
+                      f"(wall {budget.used('walls')}, resume {budget.used('resumes')})", flush=True)
+            elif cls == 'rate':
+                wait = min(budget.rate_backoff(), budget.remaining())
+                print(f'  … rate limited: waiting {int(wait)}s (no rotation, no new block)', flush=True)
+                _sleep_quietly(log, wait, 'agent: rate limit')
+            else:
+                print(f'  … network problem: connectivity retries, no rotation', flush=True)
+                if not wait_for_network(cfg, log, budget):
+                    journal.mark_failed(step, 'network stayed down')
+                    return False, 'network'
+                budget.note_ok()
         attempts += 1
-        continue
+        argv = resume_argv(cfg, session=session, model=model,
+                           prompt=cfg.resume_prompt, auto=True)
+        env = opencode_env(cfg, cfg.agent_root)
 
 
 # ---- watchdog: restart the supervisor if it dies -------------------------
@@ -4325,7 +4672,8 @@ def build_parser() -> argparse.ArgumentParser:
     add("rescue", cmd_rescue, "force a working network, whatever the state")
     s = add("pin", cmd_pin, "pin opencode's hosts to the tunnel's IPv6 (on|off|status)")
     s.add_argument("action", nargs="?", default="status", choices=["on", "off", "status"])
-    add("verify", cmd_verify, "make one real request and report whether the quota works")
+    s = add("verify", cmd_verify, "make one real request and report availability for the selected model")
+    s.add_argument("-m", "--model", default="", help="model to verify (default: configured test model)")
     s = add("bridge", cmd_bridge, "run the HTTP->SOCKS5 bridge for proxy mode")
     s.add_argument("--listen", default="")
     s.add_argument("--socks", default="")
@@ -4391,6 +4739,9 @@ def main(argv: list[str]) -> int:
     except StateLockError as exc:
         print(f"  ✗ {exc}", file=sys.stderr)
         return 1
+    except ValueError as exc:
+        print(f"  ✗ configuration/argument error: {exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

@@ -8,7 +8,9 @@ block we were handed is already exhausted); after that they print the marker.
 """
 import json, os, sys, time
 
-STATE = os.environ.get("FAKE_OC_STATE", "/tmp/fake-oc-state.json")
+from sandbox_scope import checked_path, fixture_path
+
+STATE = fixture_path("FAKE_OC_STATE")
 MARKER = "OUC-VERIFY-OK"
 WALL = ('timestamp=2026-11-08T00:00:00.000Z level=ERROR message="stream error" '
         'error.error="AI_APICallError: Free usage limit reached. Free models work '
@@ -25,6 +27,10 @@ def save(d):
     with open(STATE + ".tmp", "w") as fh:
         json.dump(d, fh)
     os.replace(STATE + ".tmp", STATE)
+
+if sys.argv[1:] == ["--version"]:
+    print("opencode v1.0.0")
+    sys.exit(0)
 
 if len(sys.argv) > 1 and sys.argv[1] == "run":
     if os.environ.get("FAKE_OC_REQUIRE_PROXY"):
@@ -46,6 +52,7 @@ if len(sys.argv) > 1 and sys.argv[1] == "run":
                                  ".local/share/opencode/log/opencode.log")
                     if os.environ.get("OUC_TARGET_HOME") else "")
                 or os.path.expanduser("~/.local/share/opencode/log/opencode.log"))
+        path = checked_path(path)
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "a") as fh:

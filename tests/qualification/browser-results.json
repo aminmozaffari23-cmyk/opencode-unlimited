@@ -1,0 +1,287 @@
+{
+  "cases": 8,
+  "http_all_200": true,
+  "overflow_cases": [],
+  "js_error_cases": {},
+  "failed_requests": {},
+  "desktop_axe_audits": 4,
+  "axe_violations": {
+    "index-1440-light": [],
+    "index-1440-dark": [],
+    "about-1440-light": [],
+    "about-1440-dark": []
+  },
+  "axe_incomplete": {
+    "index-1440-light": [
+      {
+        "id": "color-contrast",
+        "nodes": 8
+      }
+    ],
+    "index-1440-dark": [
+      {
+        "id": "color-contrast",
+        "nodes": 9
+      }
+    ],
+    "about-1440-light": [
+      {
+        "id": "color-contrast",
+        "nodes": 7
+      }
+    ],
+    "about-1440-dark": [
+      {
+        "id": "color-contrast",
+        "nodes": 8
+      }
+    ]
+  },
+  "desktop_nav_links": {
+    "index-1440-light": [
+      "Warpwave",
+      "Features",
+      "Pricing",
+      "Docs",
+      "Community",
+      "Get started"
+    ],
+    "index-1440-dark": [
+      "Warpwave",
+      "Features",
+      "Pricing",
+      "Docs",
+      "Community",
+      "Get started"
+    ],
+    "about-1440-light": [
+      "Warpwave",
+      "Features",
+      "Pricing",
+      "Docs",
+      "About",
+      "Get started"
+    ],
+    "about-1440-dark": [
+      "Warpwave",
+      "Features",
+      "Pricing",
+      "Docs",
+      "About",
+      "Get started"
+    ]
+  },
+  "theme_interactions": {
+    "index-1440-light": {
+      "before": {
+        "dark": false,
+        "light": false,
+        "data": null,
+        "bg": "rgb(255, 255, 255)",
+        "cls": "scroll-smooth"
+      },
+      "after_click": {
+        "dark": true,
+        "light": false,
+        "data": null,
+        "bg": "rgb(2, 6, 23)",
+        "cls": "scroll-smooth dark"
+      },
+      "after_second_click": {
+        "dark": false,
+        "light": false,
+        "data": null,
+        "bg": "rgb(255, 255, 255)",
+        "cls": "scroll-smooth"
+      },
+      "changes_rendered_background": true,
+      "restores_background": true
+    },
+    "index-1440-dark": {
+      "before": {
+        "dark": true,
+        "light": false,
+        "data": null,
+        "bg": "rgb(2, 6, 23)",
+        "cls": "scroll-smooth dark"
+      },
+      "after_click": {
+        "dark": false,
+        "light": false,
+        "data": null,
+        "bg": "rgb(255, 255, 255)",
+        "cls": "scroll-smooth"
+      },
+      "after_second_click": {
+        "dark": true,
+        "light": false,
+        "data": null,
+        "bg": "rgb(2, 6, 23)",
+        "cls": "scroll-smooth dark"
+      },
+      "changes_rendered_background": true,
+      "restores_background": true
+    },
+    "about-1440-light": {
+      "before": {
+        "dark": false,
+        "light": false,
+        "data": null,
+        "bg": "rgb(255, 255, 255)",
+        "cls": "scroll-smooth"
+      },
+      "after_click": {
+        "dark": true,
+        "light": false,
+        "data": null,
+        "bg": "rgb(2, 6, 23)",
+        "cls": "scroll-smooth dark"
+      },
+      "after_second_click": {
+        "dark": false,
+        "light": false,
+        "data": null,
+        "bg": "rgb(255, 255, 255)",
+        "cls": "scroll-smooth"
+      },
+      "changes_rendered_background": true,
+      "restores_background": true
+    },
+    "about-1440-dark": {
+      "before": {
+        "dark": true,
+        "light": false,
+        "data": null,
+        "bg": "rgb(2, 6, 23)",
+        "cls": "scroll-smooth dark"
+      },
+      "after_click": {
+        "dark": false,
+        "light": false,
+        "data": null,
+        "bg": "rgb(255, 255, 255)",
+        "cls": "scroll-smooth"
+      },
+      "after_second_click": {
+        "dark": true,
+        "light": false,
+        "data": null,
+        "bg": "rgb(2, 6, 23)",
+        "cls": "scroll-smooth dark"
+      },
+      "changes_rendered_background": true,
+      "restores_background": true
+    }
+  },
+  "faq_interactions": {
+    "about-1440-light": {
+      "initial": false,
+      "after_click": true,
+      "after_second_click": false,
+      "works": true
+    },
+    "about-1440-dark": {
+      "initial": false,
+      "after_click": true,
+      "after_second_click": false,
+      "works": true
+    }
+  },
+  "mobile_menus": {
+    "index-390-light": [
+      {
+        "label": "Open menu",
+        "before": "false",
+        "after": "true",
+        "changed": true,
+        "target_id": "mobileMenu",
+        "visible_before": false,
+        "visible_after": true
+      }
+    ],
+    "index-390-dark": [
+      {
+        "label": "Open menu",
+        "before": "false",
+        "after": "true",
+        "changed": true,
+        "target_id": "mobileMenu",
+        "visible_before": false,
+        "visible_after": true
+      }
+    ],
+    "about-390-light": [
+      {
+        "label": "Open menu",
+        "before": "false",
+        "after": "true",
+        "changed": true,
+        "target_id": "mobileMenu",
+        "visible_before": false,
+        "visible_after": true
+      }
+    ],
+    "about-390-dark": [
+      {
+        "label": "Open menu",
+        "before": "false",
+        "after": "true",
+        "changed": true,
+        "target_id": "mobileMenu",
+        "visible_before": false,
+        "visible_after": true
+      }
+    ]
+  },
+  "css_features": {
+    "gradient_text": true,
+    "smooth_scroll": true,
+    "hover_lift": true,
+    "reduced_motion": true,
+    "focus_rule": false
+  },
+  "static_html": {
+    "index.html": {
+      "cdn_scripts": [
+        "https://cdn.tailwindcss.com"
+      ],
+      "linked_styles": [
+        "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap",
+        "styles.css"
+      ],
+      "details_count": 0,
+      "duplicate_ids": [],
+      "html5_parse_errors": [
+        {
+          "position": [
+            42,
+            89
+          ],
+          "code": "expected-named-entity",
+          "data": {}
+        }
+      ]
+    },
+    "about.html": {
+      "cdn_scripts": [
+        "https://cdn.tailwindcss.com"
+      ],
+      "linked_styles": [
+        "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap",
+        "styles.css"
+      ],
+      "details_count": 4,
+      "duplicate_ids": [],
+      "html5_parse_errors": [
+        {
+          "position": [
+            42,
+            89
+          ],
+          "code": "expected-named-entity",
+          "data": {}
+        }
+      ]
+    }
+  }
+}

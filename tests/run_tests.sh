@@ -1,7 +1,7 @@
 #!/bin/bash
 # opencode-unlimited — test suite
 #
-#   sudo bash tests/run_tests.sh            # everything (offline + real WARP)
+#   OUC_TEST_REAL=1 OUC_TEST_DESTRUCTIVE_REAL=1 sudo -E bash tests/run_tests.sh  # disposable host ONLY
 #   bash tests/run_tests.sh --offline       # no root, no network, no WARP
 #
 # Every test writes its full log to tests/logs/NN-name.log.
@@ -35,7 +35,7 @@ if [ "$(id -u)" != 0 ]; then
     [ "$OFFLINE_ONLY" = 1 ] && extra="$extra --offline"
     [ "$SINGLE" = 1 ] && extra="$extra --single"
     [ -n "$TEST_ONLY" ] && extra="$extra --select=$TEST_ONLY"
-    exec sudo -n env OUC_TEST_REAL="${OUC_TEST_REAL:-1}" bash "$0" $extra
+    exec sudo -n env OUC_TEST_REAL="${OUC_TEST_REAL:-0}" OUC_TEST_DESTRUCTIVE_REAL="${OUC_TEST_DESTRUCTIVE_REAL:-0}" OUC_TEST_DISPOSABLE_HOST="${OUC_TEST_DISPOSABLE_HOST:-0}" bash "$0" $extra
   else
     echo "no passwordless sudo: running the offline subset only"
     OFFLINE_ONLY=1
@@ -116,10 +116,10 @@ kill_sandbox_daemons(){
   local pid st
   for pid in $(pgrep -f "ouc.py (start|supervise|bridge)" 2>/dev/null); do
     st=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | sed -n 's/^OUC_STATE_DIR=//p' | head -1)
-    case "${st:-}" in
-      /tmp/ouc-test.*|/tmp/ouc-sandbox.*|/tmp/ouc-safe.*|/tmp/ouc-probe.*)
-        kill "$pid" >/dev/null 2>&1 || true ;;
-      *) : ;;   # not ours: leave it alone (this is the fix)
+    case "${T:-}" in
+      /tmp/ouc-test.*)
+        [ "$st" = "$T/state" ] && kill "$pid" >/dev/null 2>&1 || true ;;
+      *) : ;;
     esac
   done
 }
@@ -130,6 +130,8 @@ sb(){ # fresh sandbox for one test
   T="$(mktemp -d /tmp/ouc-test.XXXXXX)"
   export OUC_STATE_DIR="$T/state"
   export OUC_TARGET_HOME="$T/home"
+  export OUC_USER_STATE_DIR="$T/home/.local/state/opencode-unlimited"
+  export OUC_TEST_SANDBOX="$T"
   export OUC_PREFIX="$T/prefix"
   export OUC_UNIT_DIR="$T/units"
   export OUC_BIN_PATH="$T/prefix/bin/ouc"
@@ -154,7 +156,7 @@ sb(){ # fresh sandbox for one test
   export OUC_WATCHDOG=0
   unset OUC_MAX_HOURS OUC_MAX_CONSEC_FAIL OUC_MAX_WALLS OUC_MAX_ROTATIONS \
         OUC_RECYCLE_TURNS OUC_STALL_SECONDS OUC_AGENT_ROOT OUC_RESUME_MAX \
-        OUC_RATE_LIMIT_BACKOFF OUC_AGENT_LOCK 2>/dev/null || true
+        OUC_RATE_LIMIT_BACKOFF OUC_AGENT_LOCK OUC_V2_FIXTURE 2>/dev/null || true
   # Tunnel-mode behaviour (pin, kill-switch, supervisor repair) must be testable
   # on any host — including a Codespace, where CODESPACES=true would otherwise
   # select proxy mode and turn those tests into false failures. Proxy tests
@@ -166,17 +168,21 @@ sb(){ # fresh sandbox for one test
   export OUC_INSTANCE_LOCK="$T/state/supervisor.lock"
   export OUC_HOSTS_FILE="$T/hosts"
   printf '127.0.0.1 localhost\n' > "$OUC_HOSTS_FILE"
-  unset OUC_PIN_AAAA OUC_OC_BIN OUC_KEYS_ATTEMPTS OUC_BLACKLIST_TTL 2>/dev/null || true
+  unset OUC_PIN_AAAA OUC_KEYS_ATTEMPTS OUC_BLACKLIST_TTL 2>/dev/null || true
   mkdir -p "$OUC_TARGET_HOME/.local/share/opencode/log" "$OUC_STATE_DIR"
   LOG="$OUC_TARGET_HOME/.local/share/opencode/log/opencode.log"
   : > "$LOG"
+  export OUC_LOG_PATH="$LOG" OUC_OC_BIN="$HELPER/fake_opencode.sh"
+  export FAKE_OC_STATE="$T/oc.json" FAKE_OC_ARGS="$T/args.txt"
+  export FAKE_AGENT_STATE="$T/agent.json" FAKE_PROBE_COUNTER="$T/probe-counter"
   echo '{"connected":true,"registered":true,"reg_count":1,"deleted_at":0,"fail_new":0}' \
     > "$FAKE_WARP_STATE"
+  python3 "$HELPER/sandbox_scope.py" "$ROOT/ouc.py" "$T" || exit 2
   ouc(){ python3 "$ROOT/ouc.py" "$@"; }
 }
 sb_cleanup(){
   kill_sandbox_daemons
-  [ -n "${T:-}" ] && rm -rf "$T" 2>/dev/null
+  case "${T:-}" in /tmp/ouc-test.*) rm -rf "$T" 2>/dev/null ;; *) : ;; esac
   T=""
 }
 
@@ -1642,12 +1648,52 @@ t70_a_new_task_never_inherits_an_old_journal(){
   finish "70-task-switch.log"
 }
 
-ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal"
+t71_a_touched_key_file_is_not_tampering(){
+  begin "an external SSH login that rewrites authorized_keys with identical bytes is not a violation"
+  sb
+  local out
+  out=$(python3 "$HELPER/guard_probe.py" "$ROOT/ouc.py" "$T/home" 2>&1)
+  echo "$out" >> "$LOGDIR/71.raw"
+  echo "$out"
+  assert_contains "$out" '"touch_is_silent": true'
+  assert_contains "$out" '"dir_touch_is_silent": true'
+  assert_contains "$out" '"append_is_caught": true'
+  sb_cleanup
+  finish "71-guard-touch.log"
+}
+
+t72_native_v2_runner_regressions(){
+  begin "native v2 events, proxy/cwd, context, ownership and cancellation regressions"
+  local out rc=0
+  out=$(python3 "$ROOT/tests/test_runner_v2.py" -v 2>&1) || rc=$?
+  printf '%s\n' "$out"
+  assert_eq "$rc" "0"
+  assert_contains "$out" "OK"
+  finish "72-native-v2.log"
+}
+
+ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions"
 REAL_TESTS="t30_real_install t31_real_auto_rotation t32_real_no_deadlock t33_real_hop t34_real_uninstall t45_real_proxy_rotation"
 TEST_TIMEOUT="${TEST_TIMEOUT:-240}"
 
+# These legacy installer tests still touch a branded system sudoers path.
+# They are NOT as isolated as the native-runner fixtures. Never run them on a
+# valuable host just because --offline is set. The qualification Codespace runs
+# only test_runner_v2.py; full installer coverage belongs to a disposable host.
+requires_disposable_host(){
+  case "$1" in t18_*|t19_*|t20_*|t21_*|t44_*|t30_*|t31_*|t32_*|t33_*|t34_*|t45_*) return 0 ;; *) return 1 ;; esac
+}
+
 run_isolated(){ # $1 = function name ; runs it in its own process with a timeout
   local fn="$1" out="$LOGDIR/runner.${1%%_*}.log"
+  if requires_disposable_host "$fn"; then
+    if [ "${OUC_TEST_DISPOSABLE_HOST:-0}" != 1 ]; then
+      skip "legacy installer test requires explicit OUC_TEST_DISPOSABLE_HOST=1"; return
+    fi
+    if [ -e /etc/sudoers.d/opencode-unlimited ] || [ -L /etc/sudoers.d/opencode-unlimited ]; then
+      fail "refusing to alter an existing system sudoers file; use a fresh disposable host"; return
+    fi
+  fi
   TEST_ONLY="$fn" timeout "$TEST_TIMEOUT" bash "$0" --single --select="$fn" \
     $( [ "$OFFLINE_ONLY" = 1 ] && echo --offline ) > "$out" 2>&1
   local rc=$?
@@ -1669,6 +1715,14 @@ if [ "$SINGLE" = 1 ]; then
       case "$cand" in "$TEST_ONLY"*) TEST_ONLY="$cand"; break ;; esac
     done
   fi
+  if requires_disposable_host "$TEST_ONLY" && [ "${OUC_TEST_DISPOSABLE_HOST:-0}" != 1 ]; then
+    echo "refusing legacy installer test without explicit disposable-host permission" >&2; exit 2
+  fi
+  case "$TEST_ONLY" in t30_*|t31_*|t32_*|t33_*|t34_*|t45_*)
+    if [ "$OFFLINE_ONLY" = 1 ] || [ "${OUC_TEST_REAL:-0}" != 1 ] || [ "${OUC_TEST_DESTRUCTIVE_REAL:-0}" != 1 ]; then
+      echo "refusing destructive real test without explicit opt-in" >&2; exit 2
+    fi ;;
+  esac
   $TEST_ONLY
   [ "$A_FAILED" = 0 ] && exit 0 || exit 1
 fi
@@ -1687,14 +1741,17 @@ for fn in $ALL_TESTS; do
   run_isolated "$fn"
 done
 
-if [ "$OFFLINE_ONLY" = 0 ] && [ "${OUC_TEST_REAL:-1}" != "0" ]; then
+if [ "$OFFLINE_ONLY" = 0 ] && [ "${OUC_TEST_REAL:-0}" = "1" ] && [ "${OUC_TEST_DESTRUCTIVE_REAL:-0}" = "1" ] && [ "${OUC_TEST_DISPOSABLE_HOST:-0}" = "1" ]; then
   for fn in $REAL_TESTS; do
     case "$fn" in ${TEST_ONLY:-t}*) ;; *) continue ;; esac
     CURRENT="$fn"
     run_isolated "$fn"
   done
 else
-  echo; echo "  (REAL WARP tests skipped)"
+  echo; echo "  (destructive REAL WARP tests excluded; explicit disposable-host opt-in required)"
+  for fn in $REAL_TESTS; do
+    case "$fn" in ${TEST_ONLY:-t}*) SKIP=$((SKIP+1)) ;; *) : ;; esac
+  done
 fi
 
 echo ""

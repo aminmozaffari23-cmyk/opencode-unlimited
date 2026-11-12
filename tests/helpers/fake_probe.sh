@@ -1,6 +1,7 @@
 #!/bin/bash
 # Emulates "what address does the world see": only exists while the tunnel is up.
-ST="${FAKE_WARP_STATE:-/tmp/fake-warp-state.json}"
+ST="${FAKE_WARP_STATE:?explicit fake state required}"
+case "$ST" in "${OUC_TEST_SANDBOX:?explicit test root required}"/*) ;; *) exit 91 ;; esac
 python3 - "$ST" <<'PY'
 import json, sys
 try:
