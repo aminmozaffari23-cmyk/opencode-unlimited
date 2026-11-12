@@ -345,6 +345,16 @@ class Config:
                                                 int(disk.get("net_retry_window", 600))))
         self.net_retry_every = max(5, env_int("OUC_NET_RETRY_EVERY",
                                               int(disk.get("net_retry_every", 30))))
+        # Transport recovery: three ADDITIONAL primary attempts, one isolated
+        # secondary-model diagnosis, then a primary retry / verified rotation.
+        self.transport_retries = max(0, env_int("OUC_TRANSPORT_RETRIES",
+                                               int(disk.get("transport_retries", 3))))
+        self.transport_retry_delay = max(0, env_int("OUC_TRANSPORT_RETRY_DELAY",
+                                                   int(disk.get("transport_retry_delay", 2))))
+        self.transport_diagnostic_model = (os.environ.get("OUC_TRANSPORT_DIAGNOSTIC_MODEL")
+            or disk.get("transport_diagnostic_model") or self.test_model)
+        self.transport_diagnostic_timeout = max(1, env_int("OUC_TRANSPORT_DIAGNOSTIC_TIMEOUT",
+            int(disk.get("transport_diagnostic_timeout", 25))))
         # conversation recycling: a session that runs for hours degrades
         self.recycle_hours = max(1, env_int("OUC_RECYCLE_HOURS",
                                             int(disk.get("recycle_hours", 3))))
@@ -497,6 +507,10 @@ class Config:
             "max_rotate_per_hour": self.max_rotate_per_hour,
             "resume_max": self.resume_max,
             "stall_seconds": self.stall_seconds,
+            "transport_retries": self.transport_retries,
+            "transport_retry_delay": self.transport_retry_delay,
+            "transport_diagnostic_model": self.transport_diagnostic_model,
+            "transport_diagnostic_timeout": self.transport_diagnostic_timeout,
             "recycle_hours": self.recycle_hours,
             "recycle_turns": self.recycle_turns,
             "agent_root": self.agent_root,
@@ -866,7 +880,7 @@ class Pinner:
 
     # -- install / remove --------------------------------------------------
     def install(self, addresses: list[str] | None = None) -> bool:
-        if not self.cfg.pin:
+        if self.cfg.proxy_mode or not self.cfg.pin:
             return False
         addrs = addresses or self.resolve_aaaa()
         if not addrs:
@@ -897,6 +911,8 @@ class Pinner:
         return True
 
     def remove(self) -> bool:
+        if self.cfg.proxy_mode:
+            return False  # proxy lifecycle never edits the host's resolver
         text = self._read()
         if PIN_BEGIN not in text:
             return False
@@ -1031,7 +1047,8 @@ def verify_request(cfg: Config, log: Log, *, model: str = "", cwd: str = "") -> 
     out['ran'] = True
     argv = opencode_run_argv(cfg, ['-m', selected_model, VERIFY_PROMPT])
     result = run_child(cfg, argv, env, follower, log, cwd=cwd,
-                       deadline=time.monotonic()+cfg.verify_timeout,
+                       deadline=min(time.monotonic()+cfg.verify_timeout,
+                                    getattr(cfg, 'recovery_deadline', float('inf'))),
                        emit=False, preexec_fn=preexec)
     failure = result.get('failure')
     out['rc'] = result['rc']
@@ -1079,8 +1096,12 @@ class Warp:
         cmds = ([self.cfg.warp_bin, "--accept-tos", *args], [self.cfg.warp_bin, *args])
         last = (1, "")
         for cmd in cmds:
+            remaining = (getattr(self.cfg, 'recovery_deadline', float('inf'))-time.monotonic()
+                         if hasattr(self.cfg, 'recovery_deadline') else float('inf'))
+            if remaining <= 0:
+                return 124, 'foreground recovery time budget expired'
             try:
-                p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+                p = subprocess.run(cmd, capture_output=True, text=True, timeout=min(timeout, remaining))
             except (OSError, subprocess.TimeoutExpired) as exc:
                 last = (1, str(exc))
                 continue
@@ -1189,6 +1210,11 @@ def _socks5_connect(socks_host: str, socks_port: int, host: str, port: int,
     else:
         n = sock.recv(1)
         sock.recv((n[0] if n else 0) + 2)
+    # create_connection's timeout bounds the SOCKS handshake, not an entire
+    # provider stream. Keeping 20s here made a long model think/pause close
+    # both directions as ECONNRESET. Managed call deadlines/stall detection
+    # remain the owners of task liveness and cancellation.
+    sock.settimeout(None)
     return sock
 
 
@@ -1401,6 +1427,8 @@ class Firewall:
 
     # -- availability ------------------------------------------------------
     def available(self) -> tuple[bool, str]:
+        if self.cfg.proxy_mode:
+            return False, "proxy mode does not manage a firewall"
         if not self.cfg.kill_switch:
             return False, self.cfg.kill_switch_reason
         if not self.cfg.iptables or not self.cfg.ip6tables:
@@ -1410,6 +1438,10 @@ class Firewall:
         return True, "ok"
 
     def _ipt(self, v6: bool, *args, timeout: int = 10) -> tuple[int, str]:
+        # Includes shutdown/rescue/teardown, not only install/installed(). A
+        # proxy-mode process must never even execute a firewall binary.
+        if self.cfg.proxy_mode:
+            return 1, "not applicable in proxy mode"
         exe = self.cfg.ip6tables if v6 else self.cfg.iptables
         if not exe:
             return 127, "missing"
@@ -1472,6 +1504,8 @@ class Firewall:
 
     def lift(self) -> None:
         """Remove the OUTPUT jumps. The (empty-ish) chain is kept."""
+        if self.cfg.proxy_mode:
+            return
         self._record(False)
         for v6 in (False, True):
             for _ in range(5):  # tolerate duplicates left by older versions
@@ -1481,6 +1515,8 @@ class Firewall:
         self.log("kill-switch lifted (traffic goes out on the real interface)")
 
     def teardown(self) -> None:
+        if self.cfg.proxy_mode:
+            return
         for v6 in (False, True):
             for _ in range(5):
                 rc, _ = self._ipt(v6, "-D", "OUTPUT", "-j", CHAIN)
@@ -1523,8 +1559,11 @@ def _wait_for_egress(cfg: Config, warp: "Warp", old64: str, t0: float) -> str:
     """Wait for the tunnel to come back with an IPv6 egress that differs."""
     deadline = time.monotonic() + min(cfg.connect_wait + cfg.egress_wait,
                                       max(8, cfg.rotation_timeout - (time.monotonic() - t0)))
+    deadline = min(deadline, getattr(cfg, 'recovery_deadline', float('inf')))
     while time.monotonic() < deadline:
-        time.sleep(1.5)
+        time.sleep(min(1.5, max(0, deadline-time.monotonic())))
+        if time.monotonic() >= deadline:
+            break
         if not warp.connected():
             continue
         for _ in range(2):
@@ -1549,6 +1588,20 @@ def _rotate_gap(cfg: Config) -> int:
     return base + (random.randint(0, jitter) if jitter > 0 else 0)
 
 
+def _recovery_sleep(cfg: Config, seconds: float) -> None:
+    """Persisted rotation pacing, bounded by a foreground recovery deadline."""
+    deadline = getattr(cfg, 'recovery_deadline', None)
+    if deadline is None:
+        time.sleep(max(0, seconds))
+        return
+    left = deadline-time.monotonic()
+    if left <= 0:
+        raise RotationError('foreground recovery time budget expired')
+    time.sleep(min(max(0, seconds), left))
+    if time.monotonic() >= deadline:
+        raise RotationError('foreground recovery time budget expired')
+
+
 def _wait_rotation_spacing(cfg: Config, log: "Log", state: State) -> None:
     gap = _rotate_gap(cfg)
     try:
@@ -1564,14 +1617,14 @@ def _wait_rotation_spacing(cfg: Config, log: "Log", state: State) -> None:
         if wait > 0:
             log(f"rotation ceiling reached ({cfg.max_rotate_per_hour}/h) — "
                 f"waiting {wait}s", "WARN")
-            time.sleep(wait)
+            _recovery_sleep(cfg, wait)
     if gap and last:
         wait = gap - (now() - last)
         if wait > 0:
             log(f"rotation spacing: waiting {wait}s "
                 f"(minimum {cfg.min_rotate_gap}-"
                 f"{cfg.min_rotate_gap + cfg.rotate_gap_jitter}s between rotations)")
-            time.sleep(wait)
+            _recovery_sleep(cfg, wait)
 
 
 def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
@@ -1603,15 +1656,6 @@ def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
         result["error"] = ("rotation already in progress" if isinstance(exc, BlockingIOError)
                            else str(exc))
         return result
-
-    _wait_rotation_spacing(cfg, log, state)
-    try:
-        st = state.load()
-        stamps = [int(x) for x in (st.get("rotate_stamps") or []) if str(x).isdigit()]
-        stamps = [t for t in stamps if now() - t < 3600] + [now()]
-        state.update(last_rotate_ts=now(), rotate_stamps=stamps[-200:])
-    except Exception:
-        pass
 
     def try_candidate(how: str, cand: str, old64: str, spent: set[str]) -> bool:
         cand64 = norm64(cand)
@@ -1655,6 +1699,16 @@ def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
         return True
 
     try:
+        _wait_rotation_spacing(cfg, log, state)
+        if getattr(cfg, 'recovery_deadline', None) is not None and time.monotonic() >= cfg.recovery_deadline:
+            raise RotationError('foreground recovery time budget expired before rotation')
+        try:
+            st = state.load()
+            stamps = [int(x) for x in (st.get("rotate_stamps") or []) if str(x).isdigit()]
+            stamps = [t for t in stamps if now() - t < 3600] + [now()]
+            state.update(last_rotate_ts=now(), rotate_stamps=stamps[-200:])
+        except Exception:
+            pass
         if cfg.proxy_mode:
             warp.mode_warp()               # proxy mode must be the active one
             Bridge(cfg, log).ensure()      # a rotation is invisible without it
@@ -1708,7 +1762,7 @@ def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
                 warp.disconnect()
                 warp.registration_delete()
                 log(f"waiting {cfg.settle}s for the old registration to clear")
-                time.sleep(cfg.settle)
+                _recovery_sleep(cfg, cfg.settle)
                 reg_ok = False
                 for attempt in range(1, cfg.reg_retries + 1):
                     ok, out = warp.registration_new()
@@ -1719,7 +1773,7 @@ def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
                     if attempt < cfg.reg_retries:
                         delay = cfg.reg_backoff * (2 ** (attempt - 1))
                         log(f"registration new failed: {out[:120]!r} — retry in {delay}s", "WARN")
-                        time.sleep(delay)
+                        _recovery_sleep(cfg, delay)
                 if not reg_ok:
                     log("could not register a new device", "ERROR")
                     continue
@@ -1742,10 +1796,12 @@ def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
         blacklist = [norm64(b) for b in st.get("blacklist", []) if norm64(b)]
         ts_map = {norm64(k): int(v) for k, v in (st.get("blacklist_ts") or {}).items()
                   if norm64(k)}
-        if old64:
+        if old64 and getattr(cfg, 'rotation_quota_evidence', True):
             if old64 not in blacklist:
                 blacklist.append(old64)
             ts_map[old64] = now()
+        # An unresolved transport error is not evidence of exhausted quota.
+        result['quota_evidence'] = getattr(cfg, 'rotation_quota_evidence', True)
         blacklist = blacklist[-200:]
         result["duration"] = round(time.monotonic() - t0, 2)
         state.update(blacklist=blacklist, blacklist_ts=ts_map,
@@ -2774,7 +2830,7 @@ def cmd_doctor(args, cfg: Config, log: Log) -> int:
         if egress and ":" in egress:
             print(f"    current block        : {norm64(egress)}")
         print(f"    opencode must run with HTTPS_PROXY={cfg.http_proxy}")
-        print(f"    or simply            : ouc lane <your opencode args>")
+        print("    or simply            : ouc lane <your opencode args>")
         if not port_open("127.0.0.1", cfg.proxy_http_port):
             problems.append("HTTP bridge is down: run 'sudo ouc start' or 'ouc hop'")
         if egress and ":" not in egress:
@@ -3113,7 +3169,7 @@ def opencode_run_argv(cfg: Config, args: list, *, auto: bool = False) -> list:
 
 
 def resume_argv(cfg: Config, session: str = "", model: str = "",
-                prompt: str = "", *, auto: bool = False) -> list:
+                prompt: str = "", *, auto: bool = False, exact: bool = False) -> list:
     """Resume a known native v2 session exactly; preserve model on every path.
 
     Legacy scraped IDs remain opt-in. Never silently fall back from a known
@@ -3121,7 +3177,7 @@ def resume_argv(cfg: Config, session: str = "", model: str = "",
     """
     explicit = ("OUC_RESUME_USE_SESSION_ID" in os.environ or
                 getattr(cfg, "resume_use_session_explicit", False))
-    use_session = bool(session) and (cfg.resume_use_session or
+    use_session = bool(session) and (exact or cfg.resume_use_session or
                                     (opencode_is_v2(cfg) and not explicit))
     args = (["-s", session] if use_session else ["-c"])
     m = model or cfg.agent_model or cfg.resume_model
@@ -3240,7 +3296,8 @@ def _sleep_quietly(log: "Log", seconds: int, why: str) -> None:
 
 def rotate_until_healthy(cfg: Config, log: "Log", state: "State",
                          deadline: float, why: str = "auto-resume", *,
-                         model: str = "", cwd: str = "") -> dict:
+                         model: str = "", cwd: str = "", quota_evidence: bool = True,
+                         require_verified: bool = False, max_attempts: int = 0) -> dict:
     """Rotate until a real request succeeds, or the deadline passes.
 
     This *is* the "wait and check the next WARP station" step: the rotate()
@@ -3252,16 +3309,22 @@ def rotate_until_healthy(cfg: Config, log: "Log", state: "State",
     if not model and opencode_is_v2(cfg):
         out.update(failure_class='fatal', detail='interrupted model is unknown; select -m/--model before recovery; no rotation')
         return out
-    if model or cwd:
-        cfg = copy.copy(cfg)  # invocation context, not a saved default change
-        cfg.test_model = model or cfg.test_model
-        cfg.verify_cwd = os.path.realpath(cwd or os.getcwd())
+    cfg = copy.copy(cfg)  # invocation context, never saved defaults
+    cfg.test_model = model or cfg.test_model
+    cfg.verify_cwd = os.path.realpath(cwd or os.getcwd())
+    cfg.rotation_quota_evidence = quota_evidence
+    if require_verified:
+        cfg.verify = True
+    cfg.recovery_deadline = deadline
     while time.monotonic() < deadline:
+        if max_attempts and out['attempts'] >= max_attempts:
+            break
         out["attempts"] += 1
+        cfg.verify_timeout = min(cfg.verify_timeout, max(.01, deadline-time.monotonic()))
         rot = rotate(cfg, log, state, why=why)
         ok = bool(rot.get("ok"))
         verified = bool(rot.get("verified"))
-        if ok and (verified or not cfg.verify):
+        if ok and (verified or (not cfg.verify and not require_verified)) and time.monotonic() < deadline:
             out.update(ok=True, verified=verified,
                        block=norm64(rot.get("new")) or ipv6_egress(cfg),
                        detail="verified with a real request" if verified
@@ -3277,42 +3340,231 @@ def rotate_until_healthy(cfg: Config, log: "Log", state: "State",
         log(f"{why}: attempt {out['attempts']} did not produce a working "
             f"block ({out['detail']})", "WARN")
         remaining = deadline - time.monotonic()
-        if remaining <= 1:
+        if (max_attempts and out["attempts"] >= max_attempts) or remaining <= 1:
             break
         _sleep_quietly(log, min(cfg.resume_backoff or 3, int(remaining)),
                        f"{why}: retrying")
     return out
 
 
-@managed_command
-def cmd_run(args, cfg: Config, log: Log) -> int:
-    """Headless native run with one recovery owner and v2 event-based errors."""
-    extra = list(getattr(args, 'args', []) or [])
-    if extra and extra[0] == '--':
-        extra = extra[1:]
-    if not (cfg.oc_bin and os.access(cfg.oc_bin, os.X_OK)):
-        print('opencode binary not found (set OUC_OC_BIN)', file=sys.stderr)
-        return 2
-    if not require_state_write(cfg):
-        return 1
-    state = State(cfg)
-    follower = LogFollower(cfg, state)
-    follower.skip_history()
-    model = cfg.resume_model
-    for i, arg in enumerate(extra):
-        if arg in ('-m', '--model') and i+1 < len(extra):
-            model = extra[i+1]
-        elif arg.startswith('--model='):
-            model = arg.split('=', 1)[1]
-    argv = opencode_run_argv(cfg, extra)
-    cwd = os.getcwd()
+# ---- bounded provider-transport recovery ---------------------------------
+DIAGNOSTIC_PROMPT = 'Reply with exactly: OUC-DIAGNOSTIC-OK. Do not use tools.'
+
+
+def transport_diagnostic(cfg: Config, log: Log, *, model: str,
+                         deadline: float, on_tick=None) -> dict:
+    """A secondary-model health check, NOT a fallback task execution.
+
+    Native v2 policies deny tools/MCP/plugins/skills/web search; permissions
+    also deny every tool action. A private HOME, XDG profile and empty cwd receive
+    only a fixed marker prompt, never the task, session, credentials or config.
+    stdout is captured; a tool event, partial stream or marker+error is failure.
+    """
+    selected = cfg.transport_diagnostic_model
+    if selected == model:
+        selected = ('opencode/flint-40b-free' if model == 'opencode/beam-free'
+                    else 'opencode/beam-free')
+    out = dict(ran=False, ok=False, model=selected, primary_model=model,
+               failure_class='', detail='', rc=None, tool_events=0)
+    if time.monotonic() >= deadline:
+        out.update(failure_class='timeout', detail='diagnostic time budget exhausted')
+        return out
+    if not model or not selected or selected == model:
+        out.update(failure_class='fatal', detail='a distinct explicit diagnostic model is required')
+        return out
+    if not opencode_is_v2(cfg):
+        out.update(failure_class='unsupported', detail='no-tools diagnostic requires native v2')
+        return out
+    with tempfile.TemporaryDirectory(prefix='ouc-diagnostic-') as root:
+        dirs = {n: os.path.join(root, n) for n in
+                ('home', 'config', 'data', 'state', 'cache', 'tmp', 'project')}
+        for path in dirs.values():
+            os.mkdir(path, 0o700)
+        config_dir = os.path.join(dirs['config'], 'opencode')
+        os.mkdir(config_dir, 0o700)
+        deny = [dict(action='*', resource='*', effect='deny')]
+        config = dict(update='disable', share='disabled', snapshots=False,
+            permissions=deny, policies=[dict(action='provider.use', resource='*', effect='allow')]+[
+                dict(action=a, resource='*', effect='deny')
+                for a in ('tool.use', 'mcp.use', 'skill.use', 'plugin.use', 'websearch.use')],
+            agents={'ouc-diagnostic': dict(mode='primary', steps=1,
+                description='Isolated transport health check; no task context',
+                system='Reply with the requested marker. Do not use tools.', permissions=deny)})
+        # Do not deny integration.use/connect: native v2 resolves even its
+        # anonymous free-provider route through that layer. Tool policies and
+        # permissions still deny ALL tool execution; the empty profile and
+        # environment allowlist contain no existing integration credentials.
+        config_path = os.path.join(config_dir, 'opencode.json')
+        atomic_write_json(config_path, config, mode=0o600)
+        # Allowlist, not a copy of the task's provider credentials / config
+        # overrides. Proxy variables are scoped to this subprocess tree only.
+        source_env = opencode_env(cfg, dirs['project'])
+        keys = ('PATH', 'LANG', 'LANGUAGE', 'LC_ALL', 'LC_CTYPE', 'SSL_CERT_FILE',
+                'SSL_CERT_DIR', 'NODE_EXTRA_CA_CERTS', 'HTTP_PROXY', 'HTTPS_PROXY',
+                'http_proxy', 'https_proxy', 'NO_PROXY', 'no_proxy')
+        env = {k: source_env[k] for k in keys if k in source_env}
+        env.update(HOME=dirs['home'], XDG_CONFIG_HOME=dirs['config'],
+                   XDG_DATA_HOME=dirs['data'], XDG_STATE_HOME=dirs['state'],
+                   XDG_CACHE_HOME=dirs['cache'], TMPDIR=dirs['tmp'], PWD=dirs['project'])
+        demoted = _demote(cfg)
+        preexec = None
+        if demoted:
+            preexec, uid, name = demoted
+            gid = os.stat(cfg.target_home).st_gid
+            for base, _subdirs, files in os.walk(root):
+                os.chown(base, uid, gid)
+                for name_file in files:
+                    os.chown(os.path.join(base, name_file), uid, gid)
+            env.update(USER=name, LOGNAME=name)
+        # No follower can observe the task's shared log, even on a legacy
+        # compatibility branch. Version selection was already checked above.
+        isolated = copy.copy(cfg)
+        isolated.state_dir = dirs['state']
+        isolated.state_file = os.path.join(dirs['state'], 'controller.json')
+        isolated.state_lock = os.path.join(dirs['state'], 'controller.lock')
+        isolated.opencode_log = os.path.join(dirs['state'], 'native.log')
+        follower = LogFollower(isolated, State(isolated))
+        argv = opencode_run_argv(cfg, ['--agent', 'ouc-diagnostic', '--archived',
+                                      '-m', selected, DIAGNOSTIC_PROMPT])
+        out['ran'] = True
+        result = run_child(isolated, argv, env, follower, log, cwd=dirs['project'],
+            deadline=min(deadline, time.monotonic()+cfg.transport_diagnostic_timeout),
+            on_tick=on_tick, emit=False, preexec_fn=preexec)
+        out.update(rc=result['rc'], tool_events=result.get('tool_events', 0),
+                   seconds=round(result.get('duration', 0), 3))
+        failure = result.get('failure')
+        if out['tool_events']:
+            out.update(failure_class='diagnostic-tools', detail='unexpected tool event; diagnosis rejected')
+        elif failure:
+            out.update(failure_class=failure['class'], detail=failure['hit'])
+        elif result.get('deadline_expired') or result.get('stalled'):
+            out.update(failure_class='timeout', detail='diagnostic did not finish within its time budget')
+        elif (result['rc'] == 0 and result.get('completed') and
+              'OUC-DIAGNOSTIC-OK' in [line.strip() for line in result.get('text', '').splitlines()]):
+            out.update(ok=True, detail='secondary model answered; primary task is NOT yet recovered')
+        else:
+            out.update(failure_class='unknown', detail='no completed diagnostic marker reply')
+        return out
+
+
+class TransportRecovery:
+    """Shared escalation policy for agent, run and explicit resume.
+
+    after_failure() is called ONLY after an actual primary transport failure.
+    Three additional primary calls -> separate diagnosis -> one more primary
+    call if the secondary works, otherwise one same-model-verified rotation.
+    A diagnosis, an egress probe or rotation never clears primary failures.
+    """
+    def __init__(self, cfg: Config, log: Log, state: State, *, deadline: float,
+                 phase: str, budget=None, journal=None, status=None):
+        self.cfg, self.log, self.state = cfg, log, state
+        self.deadline, self.phase = deadline, phase
+        self.budget, self.journal, self.status = budget, journal, status
+        self.failures = 0
+        self.primary_check = False
+        self.reason = ''
+        self.events = []
+
+    def reset_episode(self):
+        self.failures = 0
+        self.primary_check = False
+
+    def record(self, kind: str, model: str, **fields):
+        item = dict(ts=now(), phase=self.phase, kind=kind, primary_model=model, **fields)
+        self.events = (self.events + [item])[-200:]
+        if self.journal:
+            self.journal.data['transport_events'] = (
+                self.journal.data.get('transport_events', []) + [item])[-200:]
+            self.journal.save()
+        else:
+            mkdirp(self.cfg.user_state_dir)
+            atomic_write_json(os.path.join(self.cfg.user_state_dir, 'transport-recovery.json'),
+                              dict(events=self.events), mode=0o600)
+        self.log(f'transport {self.phase}: {kind}; primary={model or "unknown"}')
+        if self.status:
+            self.status.update('waiting', f'transport: {kind}')
+
+    def bump(self, key: str):
+        if self.budget:
+            self.budget._bump(key)
+
+    def allowed(self) -> bool:
+        reason = self.budget.stop_reason() if self.budget else ''
+        if reason or time.monotonic() >= self.deadline:
+            self.reason = reason or 'max-hours'
+            return False
+        return True
+
+    def after_failure(self, *, model: str, cwd: str) -> bool:
+        self.failures += 1
+        if not self.allowed():
+            return False
+        if self.failures <= self.cfg.transport_retries:
+            self.bump('transport_retries')
+            self.record('retry', model, retry=self.failures, limit=self.cfg.transport_retries)
+            delay = min(30, self.cfg.transport_retry_delay * (2 ** min(self.failures-1, 10)))
+            _sleep_quietly(self.log, min(delay, max(0, self.deadline-time.monotonic())),
+                           f'transport: primary retry {self.failures}/{self.cfg.transport_retries}')
+            return self.allowed()
+        if not model:
+            self.reason = 'fatal'
+            self.record('stopped', model, detail='primary model is unknown; no diagnostic or rotation')
+            return False
+        if not self.primary_check:
+            self.bump('diagnostics')
+            self.record('diagnostic-start', model)
+            diagnostic = transport_diagnostic(self.cfg, self.log, model=model,
+                deadline=self.deadline,
+                on_tick=(lambda: self.status.update('waiting', 'transport: isolated diagnosis')) if self.status else None)
+            self.record('diagnostic-result', model, diagnostic=diagnostic)
+            if not self.allowed():
+                return False
+            if diagnostic.get('ok'):
+                self.primary_check = True
+                self.bump('transport_primary_checks')
+                self.record('primary-check', model,
+                            detail='secondary is healthy; retry primary before considering a rotation')
+                return True
+        if not self.allowed():
+            return False
+        if self.cfg.resume_max and self.budget and self.budget.used('resumes') >= self.cfg.resume_max:
+            self.reason = 'max-resumes'
+            return False
+        self.bump('transport_rotations')
+        self.record('rotation-start', model, quota_evidence=False)
+        before = int(self.state.load().get('hops') or 0)
+        try:
+            health = rotate_until_healthy(self.cfg, self.log, self.state,
+                deadline=min(self.deadline, time.monotonic()+max(30, min(self.cfg.resume_budget or 300, 300))),
+                why='transport-recovery', model=model, cwd=cwd,
+                quota_evidence=False, require_verified=True, max_attempts=1)
+        finally:
+            if self.budget:
+                self.budget.note_rotations(int(self.state.load().get('hops') or 0)-before)
+        self.record('rotation-result', model, health=health)
+        if not health.get('ok') or not health.get('verified'):
+            self.reason = 'no-block'
+            return False
+        if not self.allowed():
+            return False
+        if self.budget:
+            self.budget.note_resume()
+        self.reset_episode()
+        self.record('resume-primary', model,
+                    detail='same model verified on the new route; task completion still required')
+        return True
+
+
+def _managed_native_loop(cfg: Config, log: Log, state: State, follower: LogFollower,
+                         argv: list, *, model: str, cwd: str, deadline: float,
+                         session: str = '') -> int:
+    """One shared run/resume execution loop; diagnostics cannot replace argv."""
     env = opencode_env(cfg, cwd)
+    original_argv = list(argv)
     started = time.monotonic()
-    deadline = started + cfg.max_hours*3600
     resumes = 0
     failures = 0
-    session = ''
-    print('  ouc run — native event supervision; quota auto-resume enabled', flush=True)
+    transport = TransportRecovery(cfg, log, state, deadline=deadline, phase='native-run')
     while time.monotonic() < deadline:
         result = run_child(cfg, argv, env, follower, log, cwd=cwd, deadline=deadline)
         failure = result.get('failure')
@@ -3333,6 +3585,8 @@ def cmd_run(args, cfg: Config, log: Log) -> int:
             print(f"native run failed (exit {result['rc']}); quota cause unknown", file=sys.stderr)
             return result['rc'] if result['rc'] > 0 else 1
         cls = failure['class']
+        if cls != 'network':
+            transport.reset_episode()
         if cls in ('fatal', 'unknown'):
             print(f"native {cls}: {failure['hit']}", file=sys.stderr)
             return result['rc'] if result['rc'] > 0 else 1
@@ -3353,66 +3607,109 @@ def cmd_run(args, cfg: Config, log: Log) -> int:
                 print('no verified working block; stopping without a reset-time guess', file=sys.stderr)
                 return 1
             resumes += 1
-            failures = 0
             print(f"  ↻ continuing the same session on {health['block']} (resume {resumes})", flush=True)
         elif cls == 'rate':
             wait = cfg.rate_backoff[min(failures-1, len(cfg.rate_backoff)-1)]
             _sleep_quietly(log, min(wait, max(0, deadline-time.monotonic())), 'rate limit; no rotation')
         else:
-            # A connectivity retry, never a rotation or quota-reset probe.
-            end = min(deadline, time.monotonic()+cfg.net_retry_window)
-            while time.monotonic() < end:
-                if ipv6_egress(cfg):
-                    break
-                _sleep_quietly(log, min(cfg.net_retry_every, max(0, end-time.monotonic())), 'network retry; no rotation')
-            else:
+            if cfg.resume_max and resumes >= cfg.resume_max:
+                print('stopping: resume budget exhausted', file=sys.stderr)
                 return 1
-        argv = resume_argv(cfg, session=session, model=model)
+            before = int(state.load().get('hops') or 0)
+            if not transport.after_failure(model=model, cwd=cwd):
+                print(f'transport recovery stopped: {transport.reason}', file=sys.stderr)
+                return 1
+            if int(state.load().get('hops') or 0) > before:
+                resumes += 1
+        # No known session is not permission to pick an unrelated "latest".
+        # A transport retry uses the exact observed v2 session when available.
+        argv = (resume_argv(cfg, session=session, model=model, exact=(cls == 'network'))
+                if session else list(original_argv))
     return 1
 
 
 @managed_command
+def cmd_run(args, cfg: Config, log: Log) -> int:
+    """Headless native run with bounded recovery and no silent model switch."""
+    extra = list(getattr(args, 'args', []) or [])
+    if extra and extra[0] == '--':
+        extra = extra[1:]
+    if not (cfg.oc_bin and os.access(cfg.oc_bin, os.X_OK)):
+        print('opencode binary not found (set OUC_OC_BIN)', file=sys.stderr)
+        return 2
+    if not require_state_write(cfg):
+        return 1
+    state = State(cfg)
+    follower = LogFollower(cfg, state)
+    follower.skip_history()
+    model = cfg.resume_model
+    session = ''
+    for i, arg in enumerate(extra):
+        if arg in ('-m', '--model') and i+1 < len(extra):
+            model = extra[i+1]
+        elif arg.startswith('--model='):
+            model = arg.split('=', 1)[1]
+        elif arg in ('-s', '--session') and i+1 < len(extra):
+            session = extra[i+1]
+    argv = opencode_run_argv(cfg, extra)
+    print('  ouc run — native event supervision; bounded transport recovery enabled', flush=True)
+    return _managed_native_loop(cfg, log, state, follower, argv, model=model,
+        cwd=os.getcwd(), deadline=time.monotonic()+cfg.max_hours*3600, session=session)
+
+
+@managed_command
 def cmd_resume(args, cfg: Config, log: Log) -> int:
-    """Continue the last opencode session once the quota really works."""
+    """Verify and continue the requested session with the shared retry policy."""
     if not (cfg.oc_bin and os.access(cfg.oc_bin, os.X_OK)):
         print("  ✗ opencode binary not found (set OUC_OC_BIN)", file=sys.stderr)
         return 2
     if not require_state_write(cfg):
         return 1
     state = State(cfg)
-    session = getattr(args, "session", "") or ""
-    model = getattr(args, "model", "") or cfg.resume_model or cfg.agent_model or ""
-    prompt = getattr(args, "prompt", "") or cfg.resume_prompt
+    session = getattr(args, 'session', '') or ''
+    model = getattr(args, 'model', '') or cfg.resume_model or cfg.agent_model or ''
+    prompt = getattr(args, 'prompt', '') or cfg.resume_prompt
+    cwd = os.getcwd()
+    deadline = time.monotonic()+cfg.max_hours*3600
     if not model and opencode_is_v2(cfg):
-        print("cannot verify an unspecified interrupted model; pass resume -m PROVIDER/MODEL", file=sys.stderr)
+        print('cannot verify an unspecified interrupted model; pass resume -m PROVIDER/MODEL', file=sys.stderr)
         return 2
-
-    v = verify_request(cfg, log, model=model, cwd=os.getcwd())
-    if not v.get("ok") and not v.get("walled"):
-        print(f"verification failed without a confirmed quota wall: {v.get('detail')}", file=sys.stderr)
-        return 1
-    if not v.get("ok"):
-        log(f"resume: current block is not usable ({v.get('detail')}) — "
-            f"looking for another one", "WARN")
-        health = rotate_until_healthy(cfg, log, state,
-                                      deadline=time.monotonic() + max(60, cfg.resume_budget), model=model, cwd=os.getcwd())
-        if not health["ok"]:
-            print("  ✗ no working WARP block right now — nothing was sent",
-                  file=sys.stderr)
+    transport = TransportRecovery(cfg, log, state, deadline=deadline, phase='resume-preflight')
+    failures = 0
+    while time.monotonic() < deadline:
+        invocation_cfg = copy.copy(cfg)
+        invocation_cfg.verify_timeout = min(cfg.verify_timeout, max(.01, deadline-time.monotonic()))
+        v = verify_request(invocation_cfg, log, model=model, cwd=cwd)
+        if v.get('ok'):
+            break
+        failures += 1
+        if failures >= cfg.max_consec_fail:
+            print('verification consecutive-failure budget exhausted', file=sys.stderr)
             return 1
-
-    argv = resume_argv(cfg, session=session, model=model, prompt=prompt)
-    log(f"resume: continuing {session or 'the last session'} on "
-        f"{ipv6_egress(cfg) or 'unknown block'}")
+        if v.get('walled'):
+            health = rotate_until_healthy(cfg, log, state,
+                deadline=min(deadline, time.monotonic()+max(60, cfg.resume_budget)), model=model, cwd=cwd)
+            if not health.get('ok'):
+                print('no working verified block — task was not sent', file=sys.stderr)
+                return 1
+            break
+        if v.get('failure_class') != 'network':
+            print(f"verification failed without a confirmed quota wall: {v.get('detail')}", file=sys.stderr)
+            return 1
+        if not transport.after_failure(model=model, cwd=cwd):
+            print(f'verification transport recovery stopped: {transport.reason}', file=sys.stderr)
+            return 1
+    else:
+        return 1
+    argv = resume_argv(cfg, session=session, model=model, prompt=prompt, exact=bool(session))
     follower = LogFollower(cfg, state)
     follower.skip_history()
-    result = run_child(cfg, argv, opencode_env(cfg), follower, log)
-    rc = result["rc"] if not result.get("failure") and not result.get("stalled") else 1
+    rc = _managed_native_loop(cfg, log, state, follower, argv, model=model, cwd=cwd,
+                              deadline=deadline, session=session)
     if rc == 0:
         with StateLock(cfg.state_lock):
             s = state.load()
-            state.save({**s, "resumes": int(s.get("resumes") or 0) + 1,
-                        "auto_resume_last": now()})
+            state.save({**s, 'resumes': int(s.get('resumes') or 0)+1, 'auto_resume_last': now()})
     return rc
 
 
@@ -3450,8 +3747,11 @@ def supervisor_auto_resume(cfg: Config, state: "State", log: "Log") -> bool:
             kwargs["preexec_fn"] = apply
             env["HOME"] = cfg.target_home
             env["USER"] = env["LOGNAME"] = name
-        proc = subprocess.Popen([sys.executable, os.path.abspath(__file__),
-                                 "resume", "--reason", "auto"], **kwargs)
+        try:
+            proc = subprocess.Popen([sys.executable, os.path.abspath(__file__),
+                                     "resume", "--reason", "auto"], **kwargs)
+        finally:
+            kwargs['stdout'].close()
         state.update(auto_resume_last=last, auto_resume_pid=proc.pid)
         log(f"auto-resume: continuing the last session (pid {proc.pid})")
         return True
@@ -3501,7 +3801,8 @@ def _failure_record(message: str, *, status=None, code: str = "",
     elif str(status) == "429" or re.search(r"\b429\b", message) or any(
             p.decode().lower() in lower for p in RATE_PATTERNS if p != b"429"):
         cls = "rate"
-    elif any(p.decode().lower() in lower for p in NETWORK_PATTERNS):
+    elif code_lower == "provider.transport" or any(
+            p.decode().lower() in lower for p in NETWORK_PATTERNS):
         cls = "network"
     else:
         cls = "unknown"
@@ -3591,6 +3892,7 @@ class NativeEvents:
         self.text = ""
         self.completed = False
         self.events = 0
+        self.tool_events = 0
 
     def feed(self, chunk: bytes, final: bool = False) -> bool:
         self.pending += chunk
@@ -3612,6 +3914,8 @@ class NativeEvents:
             if not isinstance(ev, dict):
                 continue
             typ = ev.get("type")
+            if typ == "tool_use":
+                self.tool_events += 1
             if typ in ("step_start", "step_finish", "text", "reasoning", "tool_use"):
                 progress = True
                 self.events += 1
@@ -3669,7 +3973,9 @@ class Journal:
                 "steps": steps, "current_step": 0, "next_action": "",
                 "budgets_used": {"walls": 0, "rotations": 0, "resumes": 0,
                                  "recycles": 0, "stalls": 0, "consec_fail": 0,
-                                 "attempts": 0, "seconds": 0},
+                                 "attempts": 0, "seconds": 0, "transport_retries": 0,
+                                 "diagnostics": 0, "transport_primary_checks": 0,
+                                 "transport_rotations": 0},
                 "checkpoints": [], "errors": [], "state": "running",
                 "reason": "", "started": now()}
 
@@ -3842,7 +4148,8 @@ class Budget:
         self._mono_started = time.monotonic() - max(0, time.time() - self.started)
         used = journal.data.setdefault("budgets_used", {})
         for k in ("walls", "rotations", "resumes", "recycles", "stalls",
-                  "consec_fail", "attempts"):
+                  "consec_fail", "attempts", "transport_retries", "diagnostics",
+                  "transport_primary_checks", "transport_rotations"):
             used.setdefault(k, 0)
 
     # ---- notes -----------------------------------------------------------
@@ -3939,6 +4246,9 @@ class RunStatus:
             "recycles": self.budget.used("recycles"),
             "stalls": self.budget.used("stalls"),
             "consec_fail": self.budget.used("consec_fail"),
+            "transport_retries": self.budget.used("transport_retries"),
+            "diagnostics": self.budget.used("diagnostics"),
+            "transport_rotations": self.budget.used("transport_rotations"),
             "steps_done": self.journal.done_count(),
             "steps_total": len(self.journal.steps()),
             "last_error": (d.get("errors") or [{}])[-1].get("detail", ""),
@@ -4152,8 +4462,9 @@ def run_child(cfg: Config, argv: list, env: dict, follower: "LogFollower",
     tree = None
     last_change = t0
     last_tick = t0
+    error_seen_at = None
     def consume(key):
-        nonlocal last_change
+        nonlocal last_change, error_seen_at
         try:
             chunk = os.read(key.fd, 65536)
         except BlockingIOError:
@@ -4175,6 +4486,8 @@ def run_child(cfg: Config, argv: list, env: dict, follower: "LogFollower",
             if structured:
                 if events.feed(chunk):
                     last_change = time.monotonic()
+                if events.failure and error_seen_at is None:
+                    error_seen_at = time.monotonic()
             else:
                 last_change = time.monotonic()
         if len(legacy) > MAX_LOG_READ:
@@ -4212,6 +4525,14 @@ def run_child(cfg: Config, argv: list, env: dict, follower: "LogFollower",
                         consume(key)
                 break
             now_mono = time.monotonic()
+            if error_seen_at is not None and now_mono-error_seen_at >= 1:
+                # A terminal native ERROR is not a successful generating call.
+                # Stop only this owned invocation, then let the recovery policy
+                # retry it; do not cancel the entire managed task externally.
+                out['cleaned_pids'] = tree.stop(cfg.stall_kill_grace)
+                out['rc'] = proc.returncode if proc.returncode is not None else 1
+                out['native_error_terminated'] = True
+                break
             if on_tick and now_mono - last_tick >= 2:
                 on_tick()
                 last_tick = now_mono
@@ -4231,7 +4552,8 @@ def run_child(cfg: Config, argv: list, env: dict, follower: "LogFollower",
             if out['rc'] == 0 and not events.completed and not events.failure and not out['stalled'] and not out['deadline_expired']:
                 events.failure = _failure_record('native stream ended without a completed step')
             out.update(failure=events.failure, session=events.session,
-                       model=events.model, text=events.text, completed=events.completed)
+                       model=events.model, text=events.text, completed=events.completed,
+                       tool_events=events.tool_events)
         else:
             legacy.extend(follower.poll())
             failure = classify_failure(bytes(legacy))
@@ -4340,7 +4662,11 @@ def write_run_report(cfg: Config, journal: Journal, reason: str,
              f"- steps: {len(done)} done · {len(pending)} pending · {len(failed)} failed",
              f"- quota walls: {b.get('walls', 0)} · rotations: {b.get('rotations', 0)} · "
              f"resumes: {b.get('resumes', 0)} · recycles: {b.get('recycles', 0)} · "
-             f"stalls: {b.get('stalls', 0)}", "", "## finished", ""]
+             f"stalls: {b.get('stalls', 0)}",
+             f"- transport retries: {b.get('transport_retries', 0)} · "
+             f"secondary diagnoses: {b.get('diagnostics', 0)} · "
+             f"transport rotation attempts: {b.get('transport_rotations', 0)}",
+             "", "## finished", ""]
     lines += [f"- {s['id']}. {s['title']}" for s in done] or ["- (nothing)"]
     lines += ["", "## unfinished", ""]
     lines += [f"- {s['id']}. {s['title']} ({s['state']})" for s in pending] or ["- (nothing)"]
@@ -4426,8 +4752,8 @@ def cmd_agent(args, cfg: Config, log: Log) -> int:
           f"{cfg.max_hours}h, {budget.used('consec_fail')} consecutive failure(s) "
           f"so far", flush=True)
     print(f"  work dir: {cfg.agent_root}", flush=True)
-    print(f"  guardrails on: force-push, /etc/hosts, firewall, SSH keys, "
-          f"package removal are refused", flush=True)
+    print("  guardrails on: force-push, /etc/hosts, firewall, SSH keys, "
+          "package removal are refused", flush=True)
 
     reason = ""
     session_started = time.monotonic()
@@ -4504,6 +4830,9 @@ def _run_one_step(cfg: Config, log: Log, state: State, journal: Journal,
     session = step.get('session', '')
     argv = opencode_run_argv(cfg, (["-m", model] if model else [])+[step['title']], auto=True)
     env = opencode_env(cfg, cfg.agent_root)
+    original_argv = list(argv)
+    transport = TransportRecovery(cfg, log, state, deadline=budget.deadline(),
+        phase=f"agent-step-{step['id']}", budget=budget, journal=journal, status=status)
     while True:
         stop_reason = budget.stop_reason()
         if stop_reason:
@@ -4515,6 +4844,8 @@ def _run_one_step(cfg: Config, log: Log, state: State, journal: Journal,
                         on_tick=lambda: status.update('running', f"step {step['id']} in progress"))
         budget.note_attempt()
         kind = res.get('failure')
+        if (kind or {}).get('class') != 'network':
+            transport.reset_episode()
         session = res.get('session') or (kind or {}).get('session') or session
         model = model or res.get('model') or (kind or {}).get('model') or ''
         step.update(session=session, model=model, attempts=attempts)
@@ -4558,6 +4889,10 @@ def _run_one_step(cfg: Config, log: Log, state: State, journal: Journal,
             journal.note_error(cls, f"{kind['hit']} (attempt {attempts})")
             status.update('waiting', cls)
             log(f"agent: step {step['id']} hit a {cls} event ({kind['hit']})", 'WARN')
+            if cls != 'fatal' and budget.stop_reason():
+                step['state'] = 'interrupted'
+                journal.save()
+                return False, budget.stop_reason()
             if cls == 'fatal':
                 journal.mark_failed(step, f"fatal: {kind['hit']}")
                 print(f"  ✗ unrecoverable ({kind['hit']}) — stopping", file=sys.stderr)
@@ -4574,7 +4909,6 @@ def _run_one_step(cfg: Config, log: Log, state: State, journal: Journal,
                     journal.mark_failed(step, 'no working block')
                     return False, 'no-block'
                 budget.note_resume()
-                budget.note_ok()
                 print(f"  ↻ continuing the same session on {health['block']} "
                       f"(wall {budget.used('walls')}, resume {budget.used('resumes')})", flush=True)
             elif cls == 'rate':
@@ -4582,14 +4916,20 @@ def _run_one_step(cfg: Config, log: Log, state: State, journal: Journal,
                 print(f'  … rate limited: waiting {int(wait)}s (no rotation, no new block)', flush=True)
                 _sleep_quietly(log, wait, 'agent: rate limit')
             else:
-                print(f'  … network problem: connectivity retries, no rotation', flush=True)
-                if not wait_for_network(cfg, log, budget):
-                    journal.mark_failed(step, 'network stayed down')
-                    return False, 'network'
-                budget.note_ok()
+                print('  … network problem: bounded same-model transport recovery', flush=True)
+                if not transport.after_failure(model=model, cwd=cfg.agent_root):
+                    why = transport.reason or 'network'
+                    if budget.stop_reason():
+                        step['state'] = 'interrupted'
+                        journal.save()
+                    else:
+                        journal.mark_failed(step, f'transport recovery stopped: {why}')
+                    return False, why
         attempts += 1
-        argv = resume_argv(cfg, session=session, model=model,
-                           prompt=cfg.resume_prompt, auto=True)
+        argv = (resume_argv(cfg, session=session, model=model,
+                           prompt=cfg.resume_prompt, auto=True,
+                           exact=(kind or {}).get('class') == 'network')
+                if session else list(original_argv))
         env = opencode_env(cfg, cfg.agent_root)
 
 

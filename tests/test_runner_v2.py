@@ -25,7 +25,7 @@ o = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = o
 spec.loader.exec_module(o)
 sys.path.insert(0, str(ROOT / 'tests/helpers'))
-from sandbox_scope import assert_config_scope, checked_path
+from sandbox_scope import assert_config_scope
 
 
 def event(error=None, kind='error', session='ses_fixture', text=None):
