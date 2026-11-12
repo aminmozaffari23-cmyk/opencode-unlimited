@@ -1,4 +1,4 @@
-# opencode-unlimited 2.3.0
+# opencode-unlimited 2.3.1
 
 Keeps your Cloudflare WARP tunnel up, and when opencode's free tier says
 **“Free usage limit reached”**, quietly moves the machine to a fresh IPv6

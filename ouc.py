@@ -61,7 +61,7 @@ import time
 import urllib.request
 import uuid
 
-VERSION = "2.3.0"
+VERSION = "2.3.1"
 BRAND = "opencode-unlimited"
 DEFAULT_STATE_DIR = "/var/lib/opencode-unlimited"
 UNIT_NAME = "opencode-unlimited.service"
@@ -449,6 +449,37 @@ _LOCK_REGISTRY: dict[str, list] = {}
 _LOCK_REGISTRY_GUARD = threading.RLock()
 
 
+class StateLockError(RuntimeError):
+    """The state lock could not be opened (usually a permissions problem)."""
+
+
+def state_writable(cfg: "Config") -> bool:
+    """True when this user can actually write into the state directory.
+
+    atomic_write_json() creates a temp file next to state.json and renames it,
+    so directory write permission — not file ownership — is what matters.
+    """
+    try:
+        fd, tmp = tempfile.mkstemp(dir=cfg.state_dir, prefix=".wtest-")
+        os.close(fd)
+        os.unlink(tmp)
+        return True
+    except OSError:
+        return False
+
+
+def require_state_write(cfg: "Config") -> bool:
+    """Guard for the interactive commands; prints the fix instead of a traceback."""
+    if state_writable(cfg):
+        return True
+    print(f"  \u2717 {cfg.state_dir} is not writable by this user "
+          f"(uid {os.geteuid()}).\n"
+          f"    `ouc run` / `ouc resume` must run as your own user, not as root.\n"
+          f"    fix: sudo bash install.sh      (re-applies ownership of the state dir)\n"
+          f"    then: ouc run -- \"your message\"", file=sys.stderr)
+    return False
+
+
 class StateLock:
     """flock-based mutex that is re-entrant *within this process*.
 
@@ -472,7 +503,23 @@ class StateLock:
                 self.reentered = True
                 return self
             mkdirp(os.path.dirname(self.path) or ".")
-            fh = open(self.path, "a+")
+            # The lock is shared by root (the supervisor) and the user (the
+            # daily commands).  Whoever creates it must leave it openable by
+            # the other side, or `ouc run` dies with EACCES on state.lock.
+            try:
+                fd = os.open(self.path, os.O_CREAT | os.O_RDWR, 0o666)
+                try:
+                    os.chmod(self.path, 0o666)
+                except OSError:
+                    pass
+                fh = os.fdopen(fd, "a+")
+            except PermissionError:
+                raise StateLockError(
+                    f"cannot open {self.path} — the state directory belongs to "
+                    f"another user.  Re-run the installer as root "
+                    f"(it re-applies ownership), or run this command with sudo.")
+            except OSError as exc:
+                raise StateLockError(f"cannot open {self.path}: {exc}")
             flags = fcntl.LOCK_EX if self.blocking else (fcntl.LOCK_EX | fcntl.LOCK_NB)
             fcntl.flock(fh.fileno(), flags)
             _LOCK_REGISTRY[self.path] = [fh, 1]
@@ -3047,6 +3094,8 @@ def cmd_run(args, cfg: Config, log: Log) -> int:
     if not (cfg.oc_bin and os.access(cfg.oc_bin, os.X_OK)):
         print("  ✗ opencode binary not found (set OUC_OC_BIN)", file=sys.stderr)
         return 2
+    if not require_state_write(cfg):
+        return 1
 
     state = State(cfg)
     follower = LogFollower(cfg, state)
@@ -3157,6 +3206,8 @@ def cmd_resume(args, cfg: Config, log: Log) -> int:
     if not (cfg.oc_bin and os.access(cfg.oc_bin, os.X_OK)):
         print("  ✗ opencode binary not found (set OUC_OC_BIN)", file=sys.stderr)
         return 2
+    if not require_state_write(cfg):
+        return 1
     state = State(cfg)
     session = getattr(args, "session", "") or ""
     model = getattr(args, "model", "") or cfg.resume_model or ""
@@ -3315,6 +3366,9 @@ def main(argv: list[str]) -> int:
         return args.func(args, cfg, log)
     except KeyboardInterrupt:
         return 130
+    except StateLockError as exc:
+        print(f"  ✗ {exc}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

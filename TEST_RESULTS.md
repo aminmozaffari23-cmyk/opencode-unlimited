@@ -1,7 +1,101 @@
-# TEST_RESULTS.md — opencode-unlimited 2.2.0
+# TEST_RESULTS.md — opencode-unlimited 2.3.1
 
 Everything below was **executed on a real machine**, not reviewed on paper.
 The 2.0.1/2.1.0 tunnel-mode results are kept further down as history.
+
+## 2.3.1 — fresh GitHub Codespace, full install, real requests
+
+This section answers one question: **does a person who clones the private repo
+into a brand-new cloud machine get a working install?** Not "does it look
+right" — the suite was executed there, and opencode really answered through
+the tunnel.
+
+| Item | Value |
+|---|---|
+| Date of the run | 2026-11-12 |
+| Machine | GitHub Codespace `basicLinux32gb` (2 vCPU / 8 GB), Ubuntu 24.04.5, user `codespace` |
+| Code | `github.com/aminmozaffari23-cmyk/opencode-unlimited` @ `main` (private) |
+| Cloudflare WARP | `cloudflare-warp` 2026.8.2115.0, `warp-svc` from apt, `mode proxy`, `proxy port 40000` |
+| opencode | 1.19.5 (`~/.opencode/bin/opencode`, installed inside the Codespace) |
+| Install command | `sudo bash install.sh --proxy --portable` |
+| Offline suite | **39 passed, 0 failed, 0 skipped** |
+| Real requests | `ouc hop` (rotation), `ouc verify` (verification), `ouc run` (end-to-end answer) |
+| Harness fix included | `OUC_WARP_MODE=warp` forced in the test sandbox, `install.sh --systemd` |
+
+```
+results: 39 passed  0 failed  0 skipped        # bash tests/run_tests.sh --offline
+```
+
+### The honest story of this run (including the two failures)
+
+1. **First attempt: 33 passed / 5 failed** (t10, t11, t15, t19, t27). Diagnosis:
+   every test runs inside `sb()`, which inherited the Codespace's own
+   `CODESPACES=true`. `Config._resolve_warp_mode()` therefore chose proxy mode,
+   so the pin / kill-switch / repair assertions tested a code path that is
+   deliberately disabled in proxy mode and silently did nothing (t27 reported
+   `"enabled": false` and wrote no `27-pin.log`). Running the suite with `sudo`
+   changed nothing — `CODESPACES` is still set. **Harness artifact, not a product
+   bug.** Fix: `sb()` exports `OUC_WARP_MODE=warp`; `install.sh` grew a
+   `--systemd` flag so t19 can force a unit on a machine that normally would use
+   portable mode.
+2. **Then `ouc run` crashed** with
+   `PermissionError: [Errno 13] /var/lib/opencode-unlimited/state.lock`. That one
+   was **real**: the installer runs as root and left the state directory
+   root-owned, while `ouc run` runs as you. Fixed in this version (installer
+   hands the state dir to `SUDO_UID`, lock file is created 0666, and the failure
+   is now one readable line instead of a traceback — test `t51`).
+3. **After both fixes, in the Codespace:** 39/0/0, and the real request answered.
+
+### Live evidence (Codespace, 2026-11-12 ~07:35–07:45 UTC)
+
+Installer:
+
+```
+✓ state dir owned by codespace — daily commands work without sudo
+✓ warp mode: proxy (no TUN) — SOCKS5 127.0.0.1:40000
+✓ http bridge: http://127.0.0.1:8080 (opencode uses it)
+✓ supervisor: running
+```
+
+One real rotation, then a verification that is a real model request — not a
+`curl` probe:
+
+```
+$ ouc hop
+  old block: 2a09:bac5:cbbd:1d37
+  new block: 2a09:bac5:cbbc:154b
+  ✓ rotated in 11.29s — resend your message
+
+$ ouc verify
+{"ran": true, "ok": true, "walled": false,
+ "detail": "opencode answered on the new block",
+ "model": "opencode/flint-40b-free",
+ "ipv6_egress": "2a09:bac5:cbbc:154b::21f:6d"}
+```
+
+The end-to-end path a user actually takes (`ouc run` = opencode + supervision,
+traffic through the local bridge to WARP):
+
+```
+$ ouc run -- "Reply with exactly: CSPACE-OK"
+  ouc run — opencode under supervision (auto-resume x3)
+> build · big-pickle
+CSPACE-OK
+```
+
+Blocks used in this session (all fresh, all real): `2a09:bac5:cbbd:1d37` →
+`2a09:bac5:cbbc:154b` → (supervisor rotation) `2a09:bac5:cbb9:3228`.
+
+### What this run does *not* claim
+
+- The wall was never hit in the Codespace, so the auto-resume path there ran
+  only through the fake-opencode tests (`t46`–`t50`), not against a real quota
+  wall. The real wall → resume evidence is the 2.3.0 live run below.
+- TUN mode, the kill-switch and the IPv6 pin are **not** exercised in a
+  Codespace by design: there is no usable TUN and no `CAP_NET_ADMIN` there.
+  They are covered by the offline tests with forced `OUC_WARP_MODE=warp`.
+- Rotation latency in a Codespace (11.3 s for `ouc hop`) includes the proxy
+  re-connect wait; the sandbox measured 0.7–1.0 s for the same operation.
 
 ## 2.2.0 — proxy mode (no TUN), verified live
 

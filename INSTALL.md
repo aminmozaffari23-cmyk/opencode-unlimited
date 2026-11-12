@@ -1,4 +1,4 @@
-# INSTALL.md — opencode-unlimited **2.3.0**
+# INSTALL.md — opencode-unlimited **2.3.1**
 
 A step-by-step install guide that assumes nothing. Every command in the
 Linux and Codespaces sections was **run for real** during the test session

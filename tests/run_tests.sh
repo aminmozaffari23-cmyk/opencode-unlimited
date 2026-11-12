@@ -1242,7 +1242,48 @@ t50_run_can_resume_by_session_id(){
   finish "50-run-session-id.log"
 }
 
-ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id"
+t51_state_lock_shared_by_root_and_user(){
+  begin "state lock/dir work for the non-root user, not just root (regression)"
+  local T; T=$(mktemp -d); chmod 0755 "$T"
+  # the unprivileged half of this test needs readable copies: $ROOT may sit in a
+  # directory that "nobody" cannot traverse
+  cp "$HELPER/state_perms_probe.py" "$T/probe.py"; chmod 0755 "$T/probe.py"
+  cp "$ROOT/ouc.py" "$T/ouc.py"; chmod 0755 "$T/ouc.py"
+  # 1) whoever creates the lock, it must stay openable by the other side.
+  #    (the supervisor creates it as root; `ouc run` opens it as the user)
+  local got
+  got=$( cd "$T" && umask 077 && python3 "$T/probe.py" "$T/ouc.py" lock-mode "$T/rw/state.lock" 2>&1 )
+  echo "lock mode under umask 077: $got" >> "$LOGDIR/51.raw"
+  assert_eq "$got" "0o666"
+
+  # 2) an unprivileged user must be able to lock a root-created lock file, and
+  #    must get a readable hint — not a PermissionError traceback — when the
+  #    state directory itself is not writable.
+  if ! id nobody >/dev/null 2>&1 || ! command -v su >/dev/null 2>&1; then
+    skip "no 'nobody' user / su available"
+    rm -rf "$T"; finish "51-state-perms.log"; return
+  fi
+  mkdir -p "$T/ro"; chmod 0755 "$T" "$T/ro"
+  python3 "$T/probe.py" "$T/ouc.py" lock-mode "$T/ro/state.lock" >/dev/null 2>&1
+  chmod 0555 "$T/ro"
+  local u_out
+  u_out=$(su -s /bin/sh nobody -c "OUC_STATE_DIR='$T/ro' OUC_TARGET_HOME='$T/ro' python3 '$T/probe.py' '$T/ouc.py' as-user" 2>&1)
+  echo "$u_out" >> "$LOGDIR/51.raw"
+  assert_contains "$u_out" "writable=False"
+  assert_contains "$u_out" "lock=ok"
+
+  # 3) and with no lock file at all, the failure is honest, not a traceback
+  rm -f "$T/ro/state.lock"
+  local u2
+  u2=$(su -s /bin/sh nobody -c "OUC_STATE_DIR='$T/ro' OUC_TARGET_HOME='$T/ro' python3 '$T/probe.py' '$T/ouc.py' as-user" 2>&1)
+  echo "$u2" >> "$LOGDIR/51.raw"
+  assert_contains "$u2" "lock=clean-error"
+  assert_contains "$u2" "Re-run the installer"
+  chmod 0755 "$T/ro"; rm -rf "$T"
+  finish "51-state-perms.log"
+}
+
+ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user"
 REAL_TESTS="t30_real_install t31_real_auto_rotation t32_real_no_deadlock t33_real_hop t34_real_uninstall t45_real_proxy_rotation"
 TEST_TIMEOUT="${TEST_TIMEOUT:-240}"
 

@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## 2.3.1 — 2026-11-12
+
+Fix found by a real install in a fresh Codespace: `ouc run` / `ouc resume` hit
+`PermissionError: /var/lib/opencode-unlimited/state.lock` whenever the install
+was done with `sudo` (as the docs say) and the command was then run as the
+normal user.
+
+  * `install.sh` now hands the state directory to the user who invoked `sudo`
+    (`SUDO_UID`/`SUDO_GID`), so the daily commands work without `sudo` while the
+    root supervisor keeps full access. Re-running the installer repairs an
+    already-broken ownership.
+  * `StateLock` creates the lock file mode 0666, so it does not matter whether
+    root or the user created it first.
+  * A non-writable state directory now produces one readable line with the fix
+    instead of a Python traceback (`ouc run` / `ouc resume` guard).
+  * New test `t51` covers exactly this: lock mode under `umask 077`, an
+    unprivileged user locking a root-owned lock file, and the honest error path.
+  * Suite: 39 offline tests, 0 failures.
+
 ## 2.3.0 — 2026-11-12
 
 ### Auto-resume: hit the free limit, wait for a working block, continue the work

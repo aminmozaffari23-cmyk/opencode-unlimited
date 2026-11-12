@@ -9,7 +9,7 @@
 set -u
 
 BRAND="opencode-unlimited"
-VERSION="2.3.0"
+VERSION="2.3.1"
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" && pwd)"
 
 PREFIX="${OUC_PREFIX:-/usr/local}"
@@ -224,6 +224,26 @@ done
 
 # ---------------------------------------------------------------- install files
 mkdir -p "$LIB_DIR" "$(dirname "$BIN_PATH")" "$STATE_DIR"
+
+# The daily commands (ouc run / resume / hop / status) run as the *user*, while
+# the supervisor runs as root.  The state directory therefore has to stay
+# writable by the invoking user: atomic_write_json() creates a temp file next to
+# state.json and renames it, so directory ownership — not file ownership — is
+# what decides whether `ouc run` works without sudo.  Root keeps full access.
+if [ "$(id -u)" = 0 ]; then
+  _OWNER="${SUDO_UID:-}"
+  _GROUP="${SUDO_GID:-${SUDO_UID:-}}"
+  if [ -n "$_OWNER" ] && [ "$_OWNER" != 0 ] && id -un "$_OWNER" >/dev/null 2>&1; then
+    chown "$_OWNER:$_GROUP" "$STATE_DIR" 2>/dev/null || true
+    chown -R "$_OWNER:$_GROUP" "$STATE_DIR" 2>/dev/null || true
+    chmod 0755 "$STATE_DIR" 2>/dev/null || true
+    ok "state dir owned by $(id -un "$_OWNER") — daily commands work without sudo"
+  else
+    # installed as real root (not via sudo): keep it usable by everyone who can
+    # already read the state, and never leave a lock only root can open.
+    chmod 0755 "$STATE_DIR" 2>/dev/null || true
+  fi
+fi
 install -m 0755 "$SRC/ouc.py" "$LIB_DIR/ouc.py" || die "could not copy ouc.py"
 cat > "$BIN_PATH" <<EOF
 #!/bin/sh
