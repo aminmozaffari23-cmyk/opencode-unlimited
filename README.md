@@ -10,7 +10,7 @@ script. Every claim in this README was verified by the tests in
 [`TEST_RESULTS.md`](TEST_RESULTS.md); the raw logs are in `tests/logs/`.
 
 ```
-33 passed, 0 failed, 0 skipped     (offline suite, incl. 5 new proxy tests)
+39 passed, 0 failed, 0 skipped     (offline suite, 2.3.1)
 6 passed                           (live: 5 tunnel-mode + 1 proxy-mode)
 ```
 
