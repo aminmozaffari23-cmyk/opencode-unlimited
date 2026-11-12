@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.log
+tests/logs/
+state.json
+state.lock
+rotation.lock
+bridge.pid
+supervisor.pid
+supervisor.lock
+*.tmp

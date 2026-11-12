@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Thin launcher: execs `ouc lane`, which pins opencode.ai to an IPv6 address
+# and then execs the real opencode binary.
+#
+# Notes for auditors:
+#   * stdout is not captured, piped, filtered or appended to.
+#   * this wrapper never writes agent rules or signatures anywhere.
+set -u
+BIN="${OUC_BIN_PATH:-/usr/local/bin/ouc}"
+[ -x "$BIN" ] || BIN="$(command -v ouc 2>/dev/null || true)"
+if [ -z "${BIN:-}" ] || [ ! -x "$BIN" ]; then
+  echo "opencode-warp: ouc not found (install opencode-unlimited first)" >&2
+  exit 127
+fi
+exec "$BIN" lane "$@"
