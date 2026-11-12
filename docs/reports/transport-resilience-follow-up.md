@@ -176,12 +176,14 @@ The installed bridge now runs the qualified source from its permanent path. The 
 
 Two actual installed-source smoke phases passed:
 
-1. **Installed `ouc agent`: 13.613 s, one native invocation.** The model executed a real shell `pwd`, created only the requested smoke file in the private smoke project, and completed its journal. The observed tool output confirmed the physical work directory.
-2. **Ordinary `opencode` shortcut: 6.124 s, one native invocation.** A fresh interactive Bash shell executed `opencode run` with a harmless no-tools marker request. The native reply completed, used the proxy, and did not receive `--auto`.
+1. **Installed `ouc agent`: 15.622 s, one native invocation.** The model executed a real shell `pwd`, created only the requested smoke file in the private smoke project, and completed its journal. The observed tool output confirmed the physical work directory.
+2. **Ordinary `opencode` shortcut: 11.482 s, one native invocation.** A fresh interactive Bash shell executed `opencode run` with a harmless no-tools marker request. The native reply completed, used the proxy, and did not receive `--auto`.
 
 Both smoke traces had zero non-loopback connect attempts and zero firewall/route commands.
 
-The pre-existing `.bashrc` already sourced `.bash_aliases`, but `.bash_aliases` did not exist. A new, reversible file now contains `alias opencode='ouc lane'`. **The original `.bashrc` and native OpenCode binary were not changed.** No proxy variables were globally exported. New terminals use the ordinary daily command:
+The first installed smoke passed in 13.613 s / 6.124 s. A subsequent delivery check found that the initial `opencode='ouc lane'` alias rejected a leading native `--version` flag in ouc's argparse layer. Its failure was preserved. Only the newly created Bash integration was corrected: it now defines an `opencode` function that invokes the same installed `cmd_lane` execution path directly, forwarding native arguments unchanged. It uses Python `-c`, not an stdin heredoc, so terminal input is preserved. The qualified controller source/hash did not change. The exact installed Bash integration is retained in `docs/examples/codespace-opencode-entry.bash`, hash `73a5c5f4c14c13b224886faafd54391f031c9c9baff4ce43de920757527430f5`. The repeated smoke timings above are for this final integration; actual `--version` and `--help` forwarding were also verified.
+
+The pre-existing `.bashrc` already sourced `.bash_aliases`, but `.bash_aliases` did not exist before deployment. That new, reversible file holds the function. **The original `.bashrc` and native OpenCode binary were not changed.** No proxy variables were globally exported. New terminals use the ordinary daily command:
 
 ```bash
 opencode
@@ -206,7 +208,7 @@ Standing defaults remain **15–20-second rotation spacing, unlimited rotation/r
 
 Original installation/state archives and the backed-up installed source are private in `/workspaces/ouc-v2-resilience/`. A compressed follow-up evidence archive was retained remotely and copied to the private local evidence directory. Raw archives containing configuration/state are not public Git artifacts.
 
-Rollback was not used. A rollback must first coordinate active tasks, use the current proxy-safe shutdown path, restore only the backed-up source with its metadata, and remove only the newly created alias file if its recorded hash still matches. Do **not** blindly restore an old whole-state/WARP archive over current history. The previous source also contains the bridge timeout and proxy-shutdown hazards; rollback is not a routine troubleshooting recommendation.
+Rollback was not used. A rollback must first coordinate active tasks, use the current proxy-safe shutdown path, restore only the backed-up source with its metadata, and remove only the newly created Bash integration file if its recorded hash still matches. Do **not** blindly restore an old whole-state/WARP archive over current history. The previous source also contains the bridge timeout and proxy-shutdown hazards; rollback is not a routine troubleshooting recommendation.
 
 ## 10. Practical use and remaining limits
 

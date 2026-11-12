@@ -24,8 +24,10 @@ qualification does not introduce another version bump or publish a release.
   read-only adjudication confirmed completion and no successful direct
   connection. No zero-attempt or blanket privacy guarantee is claimed.
 - Actual Codespace installation updated from the fetched commit with config,
-  native binary, Git dirty tree and registration intact. Installed task smoke
-  13.613 s; ordinary `opencode` alias smoke 6.124 s, without added `--auto`.
+  native binary, Git dirty tree and registration intact. Final installed task smoke
+  15.622 s; ordinary `opencode` entry smoke 11.482 s, without added `--auto`.
+  The new Bash function also forwards leading native version/help flags; the
+  earlier alias/argparse delivery failure is retained. Controller hash unchanged.
 - The final task needed no transport recovery. Full escalation is simulated;
   two intermediate-build real retries are not completed-recovery proof.
   Genuine successful quota recovery/ten-hour live soak remain unqualified.

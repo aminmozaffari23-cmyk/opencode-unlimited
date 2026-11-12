@@ -29,7 +29,7 @@ trace included 86 failed IPv6 probes, not zero attempted direct connections;
 the original observer failure and separate read-only audit are disclosed.
 
 `lane` remains transparent native execution with scoped proxies; the ordinary
-daily Codespace command is still `opencode`. The installed alias does not turn
+daily Codespace command is still `opencode`. The installed Bash function does not turn
 the interactive TUI into a managed headless task. There is no advertising or
 planted agent-rules file. Original configuration, native CLI, SSH files,
 notebooks, Git history/dirty tree, and WARP registration were preserved.

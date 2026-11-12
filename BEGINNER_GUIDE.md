@@ -14,13 +14,13 @@ opencode
 
 That remains the ordinary interactive command. You do not need to export proxy settings or paste a long command each day.
 
-The approved update added one previously absent file, `~/.bash_aliases`, containing `alias opencode='ouc lane'`. The existing `.bashrc` already loads that file. Neither `.bashrc` nor the real OpenCode binary was replaced. If you must keep an already-open Bash terminal, load the new alias once:
+The approved update added one previously absent file, `~/.bash_aliases`, defining an `opencode` Bash function. It forwards all native arguments to the installed `lane` execution path, including leading `--version` and `--help` flags, and preserves terminal input. The existing `.bashrc` already loads that file. Neither `.bashrc` nor the real OpenCode binary was replaced. If you must keep an already-open Bash terminal, load the new entry once:
 
 ```bash
 source ~/.bash_aliases
 ```
 
-Other shells and non-interactive scripts do not necessarily load Bash aliases. They can use `ouc lane` explicitly. Do not rename the native binary or stack another wrapper on top of it.
+Other shells and non-interactive scripts do not necessarily load this Bash function. Managed automation can use `ouc run`; a manual `ouc lane run ...` also accepts a positional native subcommand. The direct `ouc lane --version` spelling still has the old leading-option parser limitation; the daily function avoids it without changing the qualified controller. Do not rename the native binary or stack another wrapper on top of it. The exact already-installed integration can be reviewed in [the Bash entry example](docs/examples/codespace-opencode-entry.bash); it is not an instruction to overwrite an existing user aliases file.
 
 **Important distinction:** the daily shortcut provides transparent native execution through the process-scoped proxy. It does not turn the interactive screen into a headless managed task. The new controller retry state machine is used by `ouc agent`, `ouc run`, and `ouc resume`.
 
@@ -171,6 +171,8 @@ Meaningful progress uses native events, not unrelated CPU activity. Status expos
 
 Cleanup tracks owned Linux process identities/start times; it does not kill every process with a matching name. A managed call holds the physical rotation lock so an older/competing supervisor cannot rotate behind it. Copying controller state without sharing that physical lock would defeat the coordination.
 
+The final entry-point check also verified actual native `opencode --version` and `opencode --help`. The original alias-only smoke and its later leading-flag failure remain recorded separately.
+
 `OUC_USER_STATE_DIR` scopes journals **and fallback requests**, not just display files. Neither it nor `OUC_STATE_DIR` is a security sandbox. A previous qualification fixture leaked through an unscoped global fallback channel; current fixtures fail closed without explicit private paths. Do not restore that quarantined fixture or roll back current hop history from an old archive.
 
 ## 9. What actually passed—and what did not get proven
@@ -182,7 +184,7 @@ Executed final-source evidence:
 - **128 local** and **96 remote** randomized subprocess cases, 4,000 randomly chunked event streams per environment, and 16 lease contenders per environment. Those use fakes; no real quota was deliberately exhausted.
 - A real bridge test received a response after **22 seconds** of upstream silence, longer than its former 20-second timeout.
 - The unchanged MiniMax task completed **4/4** on the final source in **1,192.031 seconds**, with zero final-run transport failures, quota walls, rotations, resumes, or stalls.
-- The actual installed controller performed a real `pwd`/file-creation smoke task in **13.613 seconds**. The ordinary `opencode` alias completed a separate proxy-routed native marker call in **6.124 seconds**, without added `--auto`.
+- The actual installed controller performed a real `pwd`/file-creation smoke task in **15.622 seconds**. The ordinary `opencode` entry completed a separate proxy-routed native marker call in **11.482 seconds**, without added `--auto`.
 - Installed `doctor` passed; ports stayed 40000/8080; hop count stayed 94. Original configuration/SSH files and notebooks matched saved hashes/modes.
 
 The website's independent browser checks passed eight render cases, but incomplete contrast/link checks and two HTML entity warnings remain disclosed in the report. It is not an accessibility certificate.
@@ -197,6 +199,6 @@ Backups, original metadata, and private evidence remain under `/workspaces/ouc-v
 
 If something is wrong, inspect `ouc status`, `ouc doctor`, the recorded model/session/directory, and the run journal before changing anything. Do not immediately reinstall WARP, delete registration, flush iptables, edit hosts, or restore an entire old state archive. The current proxy-safe code prevents firewall/hosts mutations on proxy shutdown.
 
-A rollback should coordinate active work and restore only the backed-up installed source with its metadata; the new alias file can be removed only if unchanged. Old state archives must not overwrite newer history/counters. The old source loses these fixes, so rollback is a controlled maintenance action, not the first everyday command.
+A rollback should coordinate active work and restore only the backed-up installed source with its metadata; the new Bash integration file can be removed only if unchanged. Old state archives must not overwrite newer history/counters. The old source loses these fixes, so rollback is a controlled maintenance action, not the first everyday command.
 
 For reproducible test commands and explicit simulation boundaries, see [transport testing](tests/TRANSPORT_TESTING.md). For exact hashes, successful and unsuccessful phases, deployment evidence, and limitations, see [public results](tests/qualification/transport-results.json) and the [execution report](docs/reports/transport-resilience-follow-up.md).

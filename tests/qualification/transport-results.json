@@ -394,11 +394,14 @@
     "daily_opencode_passed": true,
     "daily_opencode_proxy_verified": true,
     "daily_auto_added": false,
+    "entry_type": "Bash function",
+    "native_leading_flags_verified": true,
+    "terminal_stdin_preserved": true,
     "phases": [
       {
         "name": "installed-agent",
         "rc": 0,
-        "seconds": 13.613,
+        "seconds": 15.622,
         "installed_source_sha256": "e4b1b802a2697b7cc26f985fc1549549efbc24d40523f2ff9b52c101a1f0bfe2",
         "native_calls": 1,
         "routes_model_pwd_approval_valid": true,
@@ -409,7 +412,7 @@
       {
         "name": "daily-opencode",
         "rc": 0,
-        "seconds": 6.124,
+        "seconds": 11.482,
         "installed_source_sha256": "e4b1b802a2697b7cc26f985fc1549549efbc24d40523f2ff9b52c101a1f0bfe2",
         "native_calls": 1,
         "routes_model_pwd_approval_valid": true,
@@ -457,7 +460,9 @@
     "transport_retries": 3,
     "transport_diagnostic_model": "opencode/flint-40b-free",
     "firewall_hosts_routes_changes": false,
-    "counters_rolled_back": false
+    "counters_rolled_back": false,
+    "entry_type": "Bash function",
+    "native_leading_version_help_flags_verified": true
   },
   "limitations": {
     "genuine_final_source_automatic_transport_recovery_observed": false,
@@ -495,5 +500,67 @@
     "rc": 1,
     "tool_events": 0,
     "seconds": 10.259
+  },
+  "initial_installed_smoke": {
+    "installed_source_sha256": "e4b1b802a2697b7cc26f985fc1549549efbc24d40523f2ff9b52c101a1f0bfe2",
+    "installed_agent_passed": true,
+    "actual_tool_pwd_verified": true,
+    "daily_opencode_passed": true,
+    "daily_opencode_proxy_verified": true,
+    "daily_auto_added": false,
+    "phases": [
+      {
+        "name": "installed-agent",
+        "rc": 0,
+        "seconds": 13.613,
+        "installed_source_sha256": "e4b1b802a2697b7cc26f985fc1549549efbc24d40523f2ff9b52c101a1f0bfe2",
+        "native_calls": 1,
+        "routes_model_pwd_approval_valid": true,
+        "nonloopback_connect_attempts": 0,
+        "firewall_route_commands": 0,
+        "external_stop": ""
+      },
+      {
+        "name": "daily-opencode",
+        "rc": 0,
+        "seconds": 6.124,
+        "installed_source_sha256": "e4b1b802a2697b7cc26f985fc1549549efbc24d40523f2ff9b52c101a1f0bfe2",
+        "native_calls": 1,
+        "routes_model_pwd_approval_valid": true,
+        "nonloopback_connect_attempts": 0,
+        "firewall_route_commands": 0,
+        "external_stop": ""
+      }
+    ],
+    "original_notebook_files_preserved": 17,
+    "config_and_native_binary_preserved": true,
+    "original_bashrc_preserved": true,
+    "new_shell_alias_file": "/home/codespace/.bash_aliases",
+    "supervisor_alive": true,
+    "ports": [
+      40000,
+      8080
+    ],
+    "hops_after": 94
+  },
+  "shell_integration_final": {
+    "path": "/home/codespace/.bash_aliases",
+    "previously_absent_before_deployment": true,
+    "entry_type": "Bash function",
+    "sha256": "73a5c5f4c14c13b224886faafd54391f031c9c9baff4ce43de920757527430f5",
+    "previous_alias_sha256": "77047a8b452170503f9bf8daea15e5a3adfd7dfe917e61e11643b66abc9ecfa8",
+    "native_arguments_forwarded_unchanged": true,
+    "terminal_stdin_preserved": true,
+    "qualified_controller_unchanged": true,
+    "global_proxy_exports_added": false,
+    "original_bashrc_unchanged": true,
+    "reason": "Alias through argparse rejected leading --version; call the same installed cmd_lane exec path directly"
+  },
+  "late_delivery_correction": {
+    "qualified_controller_changed": false,
+    "initial_alias_run_smoke_passed": true,
+    "initial_alias_leading_version_failed": true,
+    "final_Bash_function_passed": true,
+    "initial_evidence_preserved": true
   }
 }
