@@ -1,4 +1,4 @@
-# REAL-OPENCODE-TEST.md — opencode-unlimited 2.3.1
+# REAL-OPENCODE-TEST.md — opencode-unlimited 2.4.0
 
 A real test against **opencode 1.19.5 itself**, not a simulation: the free-tier
 limit was hit with real prompts and the tool had to deal with it.

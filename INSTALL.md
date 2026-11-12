@@ -1,4 +1,4 @@
-# INSTALL.md — opencode-unlimited 2.3.1
+# INSTALL.md — opencode-unlimited 2.4.0
 
 A step-by-step install guide that assumes nothing. Every command in the
 Linux and Codespaces sections was **run for real** during the test session
@@ -400,3 +400,52 @@ Then: `unzip` → `sudo bash install.sh --proxy --portable` (containers) or
 If they only want to read what it does before running it: `README.md` first,
 then `SECURITY.md`, then this file. The test evidence — including a genuine
 free-tier wall detected and recovered in 7 s — is in `TEST_RESULTS.md`.
+
+## Running it unattended for hours
+
+Two pieces, both already installed by `install.sh`:
+
+1. **A watchdog** — `systemd` restarts the supervisor (`Restart=always`,
+   `RestartSec=5`, no start limit). Without systemd, the installer adds a cron
+   entry: `*/2 * * * * … ouc watchdog`. Check it with `crontab -l | grep ouc`.
+
+   No `cron` on the machine (a Codespace, a slim container)? The installer says
+   so instead of pretending. Use your own loop:
+
+   ```bash
+   setsid sh -c 'while :; do ouc watchdog; sleep 120; done' >/dev/null 2>&1 &
+   ```
+2. **The agent** — `ouc agent` works through a task list, writes a journal after
+   every step, checkpoints the work in git and stops only for a reason:
+
+```bash
+mkdir -p ~/work/my-project && cd ~/work/my-project
+cat > task.txt <<'EOF'
+- read the README and list the three most broken things
+- fix the first one and add a test
+- fix the second one and add a test
+EOF
+ouc agent --task task.txt --max-hours 10
+```
+
+Watch it from another terminal:
+
+```bash
+cat ~/.local/state/opencode-unlimited/run.json    # live status, refreshed every step
+tail -f /var/lib/opencode-unlimited/ouc.log        # decisions, rotations, waits
+```
+
+Adjust the brakes (defaults in brackets):
+
+| Variable | Meaning |
+|---|---|
+| `OUC_MAX_HOURS` [10] | wall-clock limit of one run |
+| `OUC_MAX_CONSEC_FAIL` [60] | consecutive failures before it stops |
+| `OUC_MIN_ROTATE_GAP` [15] + `OUC_ROTATE_GAP_JITTER` [5] | 15–20 s between rotations |
+| `OUC_STALL_SECONDS` [600] | silence before a model call is killed |
+| `OUC_RECYCLE_HOURS` [3] / `OUC_RECYCLE_TURNS` [40] | when a fresh session starts |
+| `OUC_MAX_WALLS` / `OUC_MAX_ROTATIONS` / `OUC_ROTATE_PER_HOUR` / `OUC_RESUME_MAX` [0 = no limit] | optional ceilings, off by default |
+| `OUC_AGENT_ROOT` [current dir] | the only place the agent is allowed to write |
+
+When it stops, read `~/.local/state/opencode-unlimited/run-report-*.md`: what
+finished, what is still pending, why it stopped, and the next action.

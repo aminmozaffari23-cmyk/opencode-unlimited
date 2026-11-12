@@ -1,4 +1,4 @@
-# SECURITY.md — opencode-unlimited 2.3.1
+# SECURITY.md — opencode-unlimited 2.4.0
 
 This file states exactly what this tool does to your machine, what it can
 expose, and how it fails. It is written so you can decide whether the

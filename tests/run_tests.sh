@@ -147,6 +147,14 @@ sb(){ # fresh sandbox for one test
   export OUC_CONNECT_WAIT=6 OUC_EGRESS_WAIT=6
   # v2.1: pinning and request-verification are tested explicitly, never by accident
   export OUC_PIN=0 OUC_VERIFY=0 OUC_ROTATION_MODE=auto
+  # rotation spacing is 15-20 s in production (v2.4.0); the suite switches it
+  # off so a test never waits for it, and t61 turns it back on to prove it works
+  export OUC_MIN_ROTATE_GAP=0 OUC_ROTATE_GAP_JITTER=0
+  # never let a test install a cron job on the machine running the suite
+  export OUC_WATCHDOG=0
+  unset OUC_MAX_HOURS OUC_MAX_CONSEC_FAIL OUC_MAX_WALLS OUC_MAX_ROTATIONS \
+        OUC_RECYCLE_TURNS OUC_STALL_SECONDS OUC_AGENT_ROOT OUC_RESUME_MAX \
+        OUC_RATE_LIMIT_BACKOFF OUC_AGENT_LOCK 2>/dev/null || true
   # Tunnel-mode behaviour (pin, kill-switch, supervisor repair) must be testable
   # on any host — including a Codespace, where CODESPACES=true would otherwise
   # select proxy mode and turn those tests into false failures. Proxy tests
@@ -171,6 +179,29 @@ sb_cleanup(){
   [ -n "${T:-}" ] && rm -rf "$T" 2>/dev/null
   T=""
 }
+
+agent_setup(){ # $1 = JSON array of outcomes for the fake opencode
+  export OUC_OC_BIN="$HELPER/fake_agent.py"
+  export FAKE_AGENT_STATE="$T/agent.json"
+  export FAKE_OC_ARGS="$T/agent-args.txt"
+  export OUC_AGENT_ROOT="$T/work"
+  mkdir -p "$OUC_AGENT_ROOT"
+  export OUC_RESUME_BACKOFF=1 OUC_RESUME_BUDGET=120 OUC_PROBE_URL=https://example.invalid
+  unset OUC_TEST_MODEL 2>/dev/null || true
+  printf '{"calls":0,"script":%s,"log":"%s","session":"ses_agent1","model":"opencode/flint-40b-free"}\n' \
+    "$1" "$LOG" > "$FAKE_AGENT_STATE"
+  printf -- "- first step\n- second step\n" > "$T/task.txt"
+  export AGENT_JOURNAL_DIR="$OUC_TARGET_HOME/.local/state/opencode-unlimited"
+  mkdir -p "$AGENT_JOURNAL_DIR"
+}
+
+agent_run(){ # extra args after the task file
+  python3 "$ROOT/ouc.py" agent --task "$T/task.txt" "$@" 2>&1
+}
+
+agent_calls(){ python3 -c "import json,sys;print(json.load(open(sys.argv[1])).get('calls',0))" "$FAKE_AGENT_STATE" 2>/dev/null || echo 0; }
+jp(){ jq_file "$AGENT_JOURNAL_DIR/journal.json" "$1"; }
+rs(){ jq_file "$AGENT_JOURNAL_DIR/run.json" "$1"; }
 
 warp_state(){ jq_file "$FAKE_WARP_STATE" "$1"; }
 ipt_jumped(){ jq_file "$FAKE_IPT_STATE" "d.get('jumped',False)"; }
@@ -1283,7 +1314,314 @@ t51_state_lock_shared_by_root_and_user(){
   finish "51-state-perms.log"
 }
 
-ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user"
+# ---------------------------------------------------------------- v2.4.0
+t52_watchdog_restarts_a_dead_supervisor(){
+  begin "watchdog brings the supervisor back after kill -9"
+  sb
+  export OUC_TICK_SECONDS=60
+  ouc start --portable >/dev/null 2>&1
+  local pid1 pid2 out
+  pid1=$(cat "$OUC_STATE_DIR/supervisor.pid" 2>/dev/null)
+  assert_ne "$pid1" ""
+  kill -9 "$pid1" 2>/dev/null
+  sleep 1
+  out=$(ouc watchdog 2>&1); echo "$out" >> "$LOGDIR/52.raw"
+  pid2=$(cat "$OUC_STATE_DIR/supervisor.pid" 2>/dev/null)
+  assert_ne "$pid2" "$pid1"
+  assert_eq "$(kill -0 "$pid2" 2>/dev/null && echo alive)" "alive"
+  assert_contains "$(cat "$OUC_STATE_DIR/watchdog.log" 2>/dev/null)" "not running"
+  sb_cleanup
+  finish "52-watchdog-restart.log"
+}
+
+t53_watchdog_notices_a_silent_supervisor(){
+  begin "watchdog restarts a supervisor that is alive but has stopped breathing"
+  sb
+  export OUC_TICK_SECONDS=300
+  ouc start --portable >/dev/null 2>&1
+  local pid1 pid2
+  pid1=$(cat "$OUC_STATE_DIR/supervisor.pid" 2>/dev/null)
+  python3 - "$OUC_STATE_DIR/heartbeat" "$pid1" <<'PY'
+import json, sys, time
+json.dump({"pid": int(sys.argv[2] or 0), "ts": int(time.time()) - 400,
+           "note": "silent"}, open(sys.argv[1], "w"))
+PY
+  ouc watchdog --verbose >> "$LOGDIR/53.raw" 2>&1
+  pid2=$(cat "$OUC_STATE_DIR/supervisor.pid" 2>/dev/null)
+  assert_ne "$pid2" "$pid1"
+  assert_contains "$(cat "$OUC_STATE_DIR/watchdog.log" 2>/dev/null)" "silent"
+  sb_cleanup
+  finish "53-watchdog-silent.log"
+}
+
+t54_only_one_supervisor_ever(){
+  begin "a second start is refused and the watchdog leaves a healthy one alone"
+  sb
+  export OUC_TICK_SECONDS=60
+  ouc start --portable >/dev/null 2>&1
+  local out pid1 pid2
+  pid1=$(cat "$OUC_STATE_DIR/supervisor.pid" 2>/dev/null)
+  out=$(ouc start --portable 2>&1)
+  assert_contains "$out" "already running"
+  out=$(ouc watchdog --verbose 2>&1); echo "$out" >> "$LOGDIR/54.raw"
+  assert_contains "$out" "healthy"
+  pid2=$(cat "$OUC_STATE_DIR/supervisor.pid" 2>/dev/null)
+  assert_eq "$pid2" "$pid1"
+  sb_cleanup
+  finish "54-single-supervisor.log"
+}
+
+t55_journal_reconciles_an_interrupted_step(){
+  begin "a step left running by a crash is retried, not lost or duplicated"
+  sb
+  agent_setup '["ok","ok"]'
+  python3 - "$AGENT_JOURNAL_DIR/journal.json" <<'PY'
+import json, sys
+json.dump({"schema": 3, "task_id": "crashed", "goal": "survive",
+           "steps": [{"id": 1, "title": "the step that was in flight",
+                      "state": "running", "attempts": 1, "started": 1,
+                      "ended": 0, "note": ""},
+                     {"id": 2, "title": "the step after it", "state": "pending",
+                      "attempts": 0, "started": 0, "ended": 0, "note": ""}],
+           "budgets_used": {}, "errors": [], "state": "running",
+           "started": 1}, open(sys.argv[1], "w"))
+PY
+  local out; out=$(agent_run); echo "$out" >> "$LOGDIR/55.raw"
+  assert_contains "$out" "steps: 2/2 done"
+  assert_eq "$(jp "d['steps'][0]['state']")" "done"
+  assert_contains "$(jp "json.dumps(d.get('errors',[]))")" "interrupted"
+  assert_eq "$(agent_calls)" "2"
+  sb_cleanup
+  finish "55-journal-reconcile.log"
+}
+
+t56_journal_survives_corruption(){
+  begin "a corrupted journal is replaced, never fatal"
+  sb
+  agent_setup '["ok"]'
+  printf 'this is not json {{{' > "$AGENT_JOURNAL_DIR/journal.json"
+  local out rc=0
+  out=$(agent_run) || rc=$?
+  echo "$out" >> "$LOGDIR/56.raw"
+  assert_eq "$rc" "0"
+  assert_contains "$out" "steps: 2/2 done"
+  assert_contains "$(jp "str(d.get('task_id'))")" "" || true
+  python3 -c "import json,sys;json.load(open(sys.argv[1]));print('valid')" \
+    "$AGENT_JOURNAL_DIR/journal.json" > "$T/56.valid" 2>&1
+  assert_contains "$(cat "$T/56.valid")" "valid"
+  sb_cleanup
+  finish "56-journal-corruption.log"
+}
+
+t57_conversation_is_recycled(){
+  begin "the conversation is recycled on schedule and the journal carries the work"
+  sb
+  agent_setup '["ok","ok"]'
+  export OUC_RECYCLE_TURNS=1
+  local out; out=$(agent_run); echo "$out" >> "$LOGDIR/57.raw"
+  assert_contains "$out" "fresh session"
+  assert_ge "$(jp "int(d['budgets_used'].get('recycles',0))")" "1"
+  assert_eq "$(sed -n '2p' "$FAKE_OC_ARGS" | grep -c '\-c')" "0"
+  assert_contains "$(cat "$AGENT_JOURNAL_DIR/journal.md")" "## steps"
+  sb_cleanup
+  finish "57-recycle.log"
+}
+
+t58_second_agent_is_refused(){
+  begin "only one agent run at a time"
+  sb
+  agent_setup '["ok"]'
+  ( python3 "$HELPER/agent_probe.py" hold-lock "$ROOT/ouc.py" 25 > "$T/lock.out" 2>&1 & ) 
+  for _ in $(seq 1 30); do grep -q locked "$T/lock.out" 2>/dev/null && break; sleep 0.2; done
+  local out rc=0
+  out=$(agent_run) || rc=$?
+  echo "$out" >> "$LOGDIR/58.raw"
+  assert_eq "$rc" "1"
+  assert_contains "$out" "another agent run"
+  sleep 1
+  sb_cleanup
+  finish "58-agent-lock.log"
+}
+
+t59_rate_limit_never_rotates(){
+  begin "a rate limit is waited out — no rotation, no spent block"
+  sb
+  agent_setup '["rate","ok"]'
+  export OUC_RATE_LIMIT_BACKOFF=1
+  local out; out=$(agent_run); echo "$out" >> "$LOGDIR/59.raw"
+  assert_contains "$out" "rate limited"
+  assert_eq "$(state_of "int(d.get('hops') or 0)")" "0"
+  assert_eq "$(jp "int(d['budgets_used'].get('walls',0))")" "0"
+  assert_contains "$out" "steps: 2/2 done"
+  sb_cleanup
+  finish "59-rate-limit.log"
+}
+
+t60_network_problem_never_rotates(){
+  begin "a network problem keeps still: no rotation, no burned block"
+  sb
+  agent_setup '["network","ok"]'
+  export OUC_NET_RETRY_EVERY=1 OUC_NET_RETRY_WINDOW=10
+  local out; out=$(agent_run); echo "$out" >> "$LOGDIR/60.raw"
+  assert_contains "$out" "network problem"
+  assert_eq "$(state_of "int(d.get('hops') or 0)")" "0"
+  assert_eq "$(state_of "bool(d.get('degraded'))")" "False"
+  assert_contains "$out" "steps: 2/2 done"
+  sb_cleanup
+  finish "60-network.log"
+}
+
+t61_rotation_spacing_is_15_to_20_seconds(){
+  begin "two rotations are spaced 15-20 s apart (production default)"
+  sb
+  export OUC_MIN_ROTATE_GAP=15 OUC_ROTATE_GAP_JITTER=5
+  ouc hop >/dev/null 2>&1
+  local t0 dt
+  t0=$(date +%s)
+  ouc hop > "$T/hop2.out" 2>&1
+  dt=$(( $(date +%s) - t0 ))
+  echo "second hop took ${dt}s" >> "$LOGDIR/61.raw"
+  assert_contains "$(cat "$T/hop2.out")" "rotated"
+  assert_ge "$dt" "10"
+  assert_lt "$dt" "60"
+  assert_contains "$(cat "$OUC_STATE_DIR/ouc.log")" "rotation spacing"
+  sb_cleanup
+  finish "61-rotation-spacing.log"
+}
+
+t62_no_caps_on_walls_or_rotations(){
+  begin "walls/rotations/resumes are unlimited by default (4 walls in one step)"
+  sb
+  agent_setup '["wall","wall","wall","ok","ok"]'
+  export OUC_RESUME_MAX=0 OUC_MAX_WALLS=0 OUC_MAX_ROTATIONS=0
+  local out; out=$(agent_run); echo "$out" >> "$LOGDIR/62.raw"
+  assert_contains "$out" "steps: 2/2 done"
+  assert_ge "$(jp "int(d['budgets_used'].get('walls',0))")" "3"
+  assert_eq "$(jp "d['state']")" "finished"
+  sb_cleanup
+  finish "62-unlimited.log"
+}
+
+t63_consecutive_failures_stop_the_run(){
+  begin "the run stops after OUC_MAX_CONSEC_FAIL consecutive failures"
+  sb
+  agent_setup '["exit","exit","exit"]'
+  export OUC_MAX_CONSEC_FAIL=1 OUC_MAX_STEP_ATTEMPTS=1
+  local out; out=$(agent_run); echo "$out" >> "$LOGDIR/63.raw"
+  assert_contains "$out" "consecutive-failures"
+  assert_eq "$(jp "d['state']")" "stopped"
+  sb_cleanup
+  finish "63-consecutive-failures.log"
+}
+
+t64_default_budgets_are_ten_hours_and_sixty_failures(){
+  begin "defaults: 10 h, 60 consecutive failures, everything else unlimited"
+  sb
+  local out
+  out=$(python3 "$HELPER/agent_probe.py" budget-stop "$ROOT/ouc.py" 0 3 2>&1)
+  echo "$out" >> "$LOGDIR/64.raw"
+  assert_contains "$out" "reason=none"
+  assert_contains "$out" "max_hours=10"
+  assert_contains "$out" "max_consec_fail=60"
+  assert_contains "$out" "max_walls=0"
+  assert_contains "$out" "max_rotations=0"
+  assert_contains "$out" "resume_max=0"
+  out=$(python3 "$HELPER/agent_probe.py" budget-stop "$ROOT/ouc.py" 36100 0 2>&1)
+  assert_contains "$out" "max-hours (10h)"
+  out=$(python3 "$HELPER/agent_probe.py" budget-stop "$ROOT/ouc.py" 0 60 2>&1)
+  assert_contains "$out" "consecutive-failures (60)"
+  sb_cleanup
+  finish "64-budgets.log"
+}
+
+t65_a_stalled_step_is_killed_and_retried(){
+  begin "a silent model call is killed, then retried once"
+  sb
+  agent_setup '["stall","ok","ok"]'
+  export OUC_STALL_SECONDS=2
+  python3 - "$FAKE_AGENT_STATE" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1])); d["stall_seconds"] = 30
+json.dump(d, open(sys.argv[1], "w"))
+PY
+  local out; out=$(agent_run); echo "$out" >> "$LOGDIR/65.raw"
+  assert_contains "$(cat "$OUC_STATE_DIR/ouc.log")" "no progress for 2s"
+  assert_ge "$(jp "int(d['budgets_used'].get('stalls',0))")" "1"
+  assert_contains "$out" "steps: 2/2 done"
+  sb_cleanup
+  finish "65-stall.log"
+}
+
+t66_live_status_file_stays_fresh(){
+  begin "run.json is written and fresh (a monitor can trust it)"
+  sb
+  agent_setup '["ok","ok"]'
+  agent_run > /dev/null 2>&1
+  assert_file "$AGENT_JOURNAL_DIR/run.json"
+  local age
+  age=$(python3 - "$AGENT_JOURNAL_DIR/run.json" <<'PY'
+import json, sys, time
+d = json.load(open(sys.argv[1]))
+print(int(time.time()) - int(d.get("updated") or 0))
+PY
+)
+  echo "status age: ${age}s" >> "$LOGDIR/66.raw"
+  assert_lt "${age:-999999}" "60"
+  assert_eq "$(rs "d['state']")" "stopped"
+  assert_eq "$(rs "int(d['steps_done'])")" "2"
+  assert_eq "$(rs "int(d['max_hours'])")" "10"
+  sb_cleanup
+  finish "66-run-status.log"
+}
+
+t67_final_report_is_honest(){
+  begin "the run report says what finished, what did not, and why it stopped"
+  sb
+  agent_setup '["fatal","ok"]'
+  local out; out=$(agent_run); echo "$out" >> "$LOGDIR/67.raw"
+  local rep; rep=$(ls "$AGENT_JOURNAL_DIR"/run-report-*.md 2>/dev/null | tail -1)
+  assert_file "$rep"
+  assert_contains "$(cat "$rep")" "stopped because"
+  assert_contains "$(cat "$rep")" "## unfinished"
+  assert_contains "$(cat "$rep")" "## finished"
+  assert_contains "$(cat "$rep")" "fatal"
+  assert_contains "$out" "unrecoverable"
+  sb_cleanup
+  finish "67-report.log"
+}
+
+t68_guardrails_refuse_irreversible_tasks(){
+  begin "a task that asks for something irreversible is refused before it runs"
+  sb
+  agent_setup '["ok"]'
+  printf -- "- wipe the machine: rm -rf /\n" > "$T/task.txt"
+  local out rc=0
+  out=$(agent_run) || rc=$?
+  echo "$out" >> "$LOGDIR/68.raw"
+  assert_eq "$rc" "3"
+  assert_contains "$out" "must never do"
+  assert_eq "$(agent_calls)" "0"
+  printf -- "- force-push to main\n" > "$T/task.txt"
+  out=$(agent_run 2>&1) || rc=$?
+  assert_contains "$out" "force-push"
+  assert_eq "$(agent_calls)" "0"
+  sb_cleanup
+  finish "68-guardrails.log"
+}
+
+t69_no_reset_wait_anywhere(){
+  begin "the 'sleep until the quota window reopens' behaviour is gone"
+  sb
+  local hits
+  hits=$(grep -c "OUC_RESUME_WAIT_RESET\|waiting for the quota window" "$ROOT/ouc.py")
+  echo "hits: $hits" >> "$LOGDIR/69.raw"
+  assert_eq "$hits" "0"
+  assert_contains "$(python3 "$ROOT/ouc.py" config)" "\"max_hours\": 10"
+  sb_cleanup
+  finish "69-no-reset-wait.log"
+}
+
+ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere"
 REAL_TESTS="t30_real_install t31_real_auto_rotation t32_real_no_deadlock t33_real_hop t34_real_uninstall t45_real_proxy_rotation"
 TEST_TIMEOUT="${TEST_TIMEOUT:-240}"
 

@@ -9,7 +9,7 @@
 set -u
 
 BRAND="opencode-unlimited"
-VERSION="2.3.1"
+VERSION="2.4.0"
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" && pwd)"
 
 PREFIX="${OUC_PREFIX:-/usr/local}"
@@ -299,6 +299,8 @@ if [ "$MODE" = "systemd" ]; then
 Description=opencode-unlimited supervisor (WARP keepalive, quota rotation, leak guard)
 After=network-online.target warp-svc.service
 Wants=network-online.target
+# never stop trying: a run that must survive hours cannot hit a start limit
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -309,7 +311,8 @@ Environment=OUC_WARP_MODE=$WARP_MODE
 Environment=OUC_PROXY_SOCKS_PORT=${OUC_PROXY_SOCKS_PORT:-40000}
 Environment=OUC_PROXY_HTTP_PORT=${OUC_PROXY_HTTP_PORT:-8080}
 Restart=always
-RestartSec=10
+RestartSec=5
+TimeoutStopSec=20
 ExecStopPost=-$BIN_PATH killswitch off
 
 [Install]
@@ -333,11 +336,20 @@ if [ "$MODE" = "portable" ]; then
   fi
   OUC_STATE_DIR="$STATE_DIR" OUC_TARGET_HOME="$TARGET_HOME" \
     "$BIN_PATH" start --portable || die "could not start the portable supervisor"
-  # survive a reboot without systemd: optional crontab hook
-  if [ "$ASSUME_YES" = 1 ] && command -v crontab >/dev/null 2>&1; then
-    ( crontab -l 2>/dev/null | grep -v "ouc start" ; \
-      echo "@reboot OUC_STATE_DIR=$STATE_DIR OUC_TARGET_HOME=$TARGET_HOME $BIN_PATH start --portable" \
-    ) | crontab - 2>/dev/null || true
+  # Without systemd nobody restarts the supervisor, so install the watchdog:
+  # every 2 minutes it checks the heartbeat and starts it back up if it died.
+  # (idempotent: `ouc start` refuses a second copy, and `--if-dead` is a no-op
+  # when the heartbeat is fresh)
+  if [ "${OUC_WATCHDOG:-1}" = 1 ] && command -v crontab >/dev/null 2>&1; then
+    ( crontab -l 2>/dev/null | grep -v "opencode-unlimited" ; \
+      echo "@reboot OUC_STATE_DIR=$STATE_DIR OUC_TARGET_HOME=$TARGET_HOME OUC_WARP_MODE=$WARP_MODE $BIN_PATH start --portable --if-dead" ; \
+      echo "*/2 * * * * OUC_STATE_DIR=$STATE_DIR OUC_TARGET_HOME=$TARGET_HOME OUC_WARP_MODE=$WARP_MODE $BIN_PATH watchdog" \
+    ) | crontab - 2>/dev/null && ok "watchdog installed (cron, every 2 minutes)" \
+      || warn "could not install the cron watchdog — start it by hand if the supervisor dies"
+  elif [ "${OUC_WATCHDOG:-1}" = 1 ]; then
+    warn "no crontab: no watchdog. Run 'ouc watchdog' from your own scheduler."
+  else
+    say "watchdog skipped (OUC_WATCHDOG=0)"
   fi
 fi
 

@@ -47,6 +47,7 @@ import fcntl
 import hashlib
 import json
 import os
+import random
 import re
 import shutil
 import signal
@@ -61,7 +62,7 @@ import time
 import urllib.request
 import uuid
 
-VERSION = "2.3.1"
+VERSION = "2.4.0"
 BRAND = "opencode-unlimited"
 DEFAULT_STATE_DIR = "/var/lib/opencode-unlimited"
 UNIT_NAME = "opencode-unlimited.service"
@@ -289,8 +290,10 @@ class Config:
                                     bool(disk.get("auto_resume", False)))
         self.resume_prompt = (os.environ.get("OUC_RESUME_PROMPT")
                               or disk.get("resume_prompt") or DEFAULT_RESUME_PROMPT)
-        self.resume_max = max(1, env_int("OUC_RESUME_MAX",
-                                         int(disk.get("resume_max", 3))))
+        # 0 = unlimited: a long unattended run resumes as often as it must.
+        # The honest exit is the consecutive-failure limit, not a resume count.
+        self.resume_max = max(0, env_int("OUC_RESUME_MAX",
+                                         int(disk.get("resume_max", 0))))
         self.resume_backoff = max(0, env_int("OUC_RESUME_BACKOFF",
                                              int(disk.get("resume_backoff", 5))))
         self.resume_budget = env_int("OUC_RESUME_BUDGET",
@@ -303,10 +306,66 @@ class Config:
         # and keep -s as an opt-in that falls back automatically.
         self.resume_use_session = env_bool(
             "OUC_RESUME_USE_SESSION_ID", bool(disk.get("resume_use_session", False)))
-        self.resume_wait_reset = env_bool(
-            "OUC_RESUME_WAIT_RESET", bool(disk.get("resume_wait_reset", False)))
-        self.resume_max_wait = env_int("OUC_RESUME_MAX_WAIT",
-                                       int(disk.get("resume_max_wait", 0)))
+        # The old "sleep until the quota window reopens" option is gone: a long
+        # run keeps working by rotating, never by idling until a fixed hour.
+        self.resume_wait_reset = False
+        self.resume_max_wait = 0
+
+        # ---- long-run agent (2.4.0) ----
+        # Rotation spacing: 15-20 s (measured: one rotation costs 0.7-11 s, so
+        # 15 s + jitter keeps the tunnel honest without looking mechanical).
+        self.min_rotate_gap = max(0, env_int("OUC_MIN_ROTATE_GAP",
+                                             int(disk.get("min_rotate_gap", 15))))
+        self.rotate_gap_jitter = max(0, env_int("OUC_ROTATE_GAP_JITTER",
+                                                int(disk.get("rotate_gap_jitter", 5))))
+        # 0 = no limit. These stay in the code so a run can be capped on purpose,
+        # but the shipped defaults are unlimited, as asked.
+        self.max_rotate_per_hour = max(0, env_int("OUC_ROTATE_PER_HOUR",
+                                                  int(disk.get("rotate_per_hour", 0))))
+        self.max_rotations = max(0, env_int("OUC_MAX_ROTATIONS",
+                                            int(disk.get("max_rotations", 0))))
+        self.max_walls = max(0, env_int("OUC_MAX_WALLS", int(disk.get("max_walls", 0))))
+        self.max_hours = max(1, env_int("OUC_MAX_HOURS", int(disk.get("max_hours", 10))))
+        self.max_consec_fail = max(1, env_int("OUC_MAX_CONSEC_FAIL",
+                                              int(disk.get("max_consec_fail", 60))))
+        self.stall_seconds = max(1, env_int("OUC_STALL_SECONDS",
+                                            int(disk.get("stall_seconds", 600))))
+        self.stall_kill_grace = max(1, env_int("OUC_STALL_KILL_GRACE",
+                                               int(disk.get("stall_kill_grace", 20))))
+        self.rate_backoff = [int(x) for x in os.environ.get(
+            "OUC_RATE_LIMIT_BACKOFF",
+            disk.get("rate_limit_backoff", "60,120,240,480,900")).split(",")
+            if x.strip().isdigit()] or [60, 120, 240, 480, 900]
+        self.net_retry_window = max(30, env_int("OUC_NET_RETRY_WINDOW",
+                                                int(disk.get("net_retry_window", 600))))
+        self.net_retry_every = max(5, env_int("OUC_NET_RETRY_EVERY",
+                                              int(disk.get("net_retry_every", 30))))
+        # conversation recycling: a session that runs for hours degrades
+        self.recycle_hours = max(1, env_int("OUC_RECYCLE_HOURS",
+                                            int(disk.get("recycle_hours", 3))))
+        self.recycle_log_bytes = max(100000, env_int("OUC_RECYCLE_LOG_BYTES",
+                                                     int(disk.get("recycle_log_bytes", 2000000))))
+        self.recycle_turns = max(1, env_int("OUC_RECYCLE_TURNS",
+                                            int(disk.get("recycle_turns", 40))))
+        self.max_recycles = max(0, env_int("OUC_MAX_RECYCLES",
+                                           int(disk.get("max_recycles", 8))))
+        self.checkpoint_seconds = max(30, env_int("OUC_CHECKPOINT_SECONDS",
+                                                  int(disk.get("checkpoint_seconds", 600))))
+        self.max_step_attempts = max(1, env_int("OUC_MAX_STEP_ATTEMPTS",
+                                                int(disk.get("max_step_attempts", 3))))
+        self.watchdog_stale = max(20, env_int("OUC_WATCHDOG_STALE",
+                                              int(disk.get("watchdog_stale", 90))))
+        # where the agent is allowed to write
+        self.agent_root = os.path.abspath(
+            os.environ.get("OUC_AGENT_ROOT") or disk.get("agent_root") or os.getcwd())
+        # agent files live next to the user's own state, not root's
+        # (user_state_dir is defined below, so build the same path here)
+        _ustate = os.path.join(self.target_home, ".local", "state", BRAND)
+        self.journal_file = os.path.join(_ustate, "journal.json")
+        self.journal_md = os.path.join(_ustate, "journal.md")
+        self.run_status_file = os.path.join(_ustate, "run.json")
+        self.agent_lock_file = os.path.join(_ustate, "agent.lock")
+        self.watchdog_log = os.path.join(self.state_dir, "watchdog.log")
 
         # ---- WARP mode: "warp" (TUN + kill-switch) or "proxy" (no TUN) ----
         # Containers (Codespaces, Docker, CI, unprivileged pods) have no TUN
@@ -418,6 +477,21 @@ class Config:
             "keys_attempts": self.keys_attempts,
             "rotation_mode": self.rotation_mode,
             "blacklist_ttl": self.blacklist_ttl,
+            # long-run agent (2.4.0): 0 means "no limit"
+            "min_rotate_gap": self.min_rotate_gap,
+            "rotate_gap_jitter": self.rotate_gap_jitter,
+            "max_hours": self.max_hours,
+            "max_consec_fail": self.max_consec_fail,
+            "max_walls": self.max_walls,
+            "max_rotations": self.max_rotations,
+            "max_rotate_per_hour": self.max_rotate_per_hour,
+            "resume_max": self.resume_max,
+            "stall_seconds": self.stall_seconds,
+            "recycle_hours": self.recycle_hours,
+            "recycle_turns": self.recycle_turns,
+            "agent_root": self.agent_root,
+            "journal": self.journal_file,
+            "run_status": self.run_status_file,
         }
 
 
@@ -1505,6 +1579,45 @@ def _wait_for_egress(cfg: Config, warp: "Warp", old64: str, t0: float) -> str:
     return ""
 
 
+def _rotate_gap(cfg: Config) -> int:
+    """Seconds to leave between two rotations: 15-20 s by default.
+
+    A rotation costs 0.7-11 s on its own, so this is a deliberate pause, not a
+    cooldown gate: back-to-back rotations look mechanical to the other side.
+    OUC_MIN_ROTATE_GAP=0 disables it (the test suite runs that way).
+    """
+    base = int(getattr(cfg, "min_rotate_gap", 15) or 0)
+    if base <= 0:
+        return 0
+    jitter = int(getattr(cfg, "rotate_gap_jitter", 5) or 0)
+    return base + (random.randint(0, jitter) if jitter > 0 else 0)
+
+
+def _wait_rotation_spacing(cfg: Config, log: "Log", state: State) -> None:
+    gap = _rotate_gap(cfg)
+    try:
+        st = state.load()
+        last = int(st.get("last_rotate_ts") or 0)
+        stamps = [int(x) for x in (st.get("rotate_stamps") or []) if str(x).isdigit()]
+    except Exception:
+        last, stamps = 0, []
+    stamps = [t for t in stamps if now() - t < 3600]
+    # optional hourly ceiling (default: none)
+    if cfg.max_rotate_per_hour and len(stamps) >= cfg.max_rotate_per_hour:
+        wait = 3600 - (now() - min(stamps))
+        if wait > 0:
+            log(f"rotation ceiling reached ({cfg.max_rotate_per_hour}/h) — "
+                f"waiting {wait}s", "WARN")
+            time.sleep(wait)
+    if gap and last:
+        wait = gap - (now() - last)
+        if wait > 0:
+            log(f"rotation spacing: waiting {wait}s "
+                f"(minimum {cfg.min_rotate_gap}-"
+                f"{cfg.min_rotate_gap + cfg.rotate_gap_jitter}s between rotations)")
+            time.sleep(wait)
+
+
 def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
     """Get a fresh IPv6 /64 that actually works, and prove it.
 
@@ -1537,6 +1650,15 @@ def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
         lock_fh.close()
         result["error"] = "rotation already in progress"
         return result
+
+    _wait_rotation_spacing(cfg, log, state)
+    try:
+        st = state.load()
+        stamps = [int(x) for x in (st.get("rotate_stamps") or []) if str(x).isdigit()]
+        stamps = [t for t in stamps if now() - t < 3600] + [now()]
+        state.update(last_rotate_ts=now(), rotate_stamps=stamps[-200:])
+    except Exception:
+        pass
 
     def try_candidate(how: str, cand: str, old64: str, spent: set[str]) -> bool:
         cand64 = norm64(cand)
@@ -2449,6 +2571,13 @@ def cmd_status(args, cfg: Config, log: Log) -> int:
 
     print(f"  ✓ resumes: {int(state.get('resumes') or 0)}   "
           f"walls seen: {int(state.get('walls_seen') or 0)}")
+    run = read_json(cfg.run_status_file, None)
+    if isinstance(run, dict) and run.get("task_id"):
+        h, m = divmod(int(run.get("elapsed_s") or 0) // 60, 60)
+        print(f"  » agent run: {run.get('state')} · {h}h{m:02d}m · "
+              f"steps {run.get('steps_done')}/{run.get('steps_total')} · "
+              f"walls {run.get('walls')} · rotations {run.get('rotations')}"
+              + (f" · {run.get('detail')}" if run.get("detail") else ""))
     px = info["proxy"]
     if px["enabled"]:
         print(f"  {'✓' if px['socks_open'] else '!'} warp mode: proxy (no TUN) "
@@ -3108,7 +3237,8 @@ def cmd_run(args, cfg: Config, log: Log) -> int:
     wall_model = ""
 
     print(f"  ouc run — opencode under supervision "
-          f"(auto-resume x{cfg.resume_max})", flush=True)
+          f"(auto-resume {'x' + str(cfg.resume_max) if cfg.resume_max else 'unlimited'})",
+          flush=True)
     resumed_with_session = False
     fallback_tried = False
     while True:
@@ -3158,7 +3288,7 @@ def cmd_run(args, cfg: Config, log: Log) -> int:
         log(f"run: quota wall hit (session {wall['session'] or 'unknown'}, "
             f"model {wall['model'] or 'unknown'})", "WARN")
 
-        if resumes >= cfg.resume_max:
+        if cfg.resume_max and resumes >= cfg.resume_max:
             print(f"  ✗ the free limit came back after {resumes} resume(s); "
                   f"stopping (OUC_RESUME_MAX={cfg.resume_max})", file=sys.stderr)
             return 1
@@ -3178,14 +3308,6 @@ def cmd_run(args, cfg: Config, log: Log) -> int:
             if hint:
                 print(f"  ! no working block right now; the free window reopens "
                       f"in about {hint // 60} min", file=sys.stderr)
-            if hint and cfg.resume_wait_reset:
-                wait = hint if not cfg.resume_max_wait else min(hint, cfg.resume_max_wait)
-                print(f"  … waiting {wait // 60} min for the window, as "
-                      f"OUC_RESUME_WAIT_RESET=1 asks", flush=True)
-                _sleep_quietly(log, wait, "run: waiting for the quota window")
-                health = rotate_until_healthy(cfg, log, state,
-                                             deadline=time.time() + 300,
-                                             why="after-window-wait")
             if not health["ok"]:
                 print("  ✗ could not find a working block; nothing was sent. "
                       "Re-run `ouc run` later or `ouc hop` by hand.",
@@ -3198,7 +3320,8 @@ def cmd_run(args, cfg: Config, log: Log) -> int:
                            model=wall.get("model", ""))
         env = opencode_env(cfg)
         print(f"  ↻ continuing the same session on {health['block']} "
-              f"(resume {resumes}/{cfg.resume_max})", flush=True)
+              f"(resume {resumes}"
+              f"{'/' + str(cfg.resume_max) if cfg.resume_max else ''})", flush=True)
 
 
 def cmd_resume(args, cfg: Config, log: Log) -> int:
@@ -3284,6 +3407,841 @@ def supervisor_auto_resume(cfg: Config, state: "State", log: "Log") -> bool:
 
 
 
+# --------------------------------------------------------------------------
+# long-run agent (v2.4.0)
+#
+# The interactive `ouc run` assumes a human is watching. An agent that works
+# for hours needs four things that command does not: a durable notebook, a
+# failure taxonomy, hard budgets with an honest exit, and guardrails that catch
+# an irreversible mistake before it happens.
+# --------------------------------------------------------------------------
+
+# Four kinds of "no" — they must not be treated alike.
+RATE_PATTERNS = [b"429", b"Too Many Requests", b"rate limit", b"rate_limit",
+                 b"slow down", b"requests per minute"]
+NETWORK_PATTERNS = [b"ENOTFOUND", b"EAI_AGAIN", b"ECONNREFUSED", b"ECONNRESET",
+                    b"ETIMEDOUT", b"network error", b"fetch failed",
+                    b"socket hang up", b"proxy error", b"could not resolve"]
+FATAL_PATTERNS = [b"401 Unauthorized", b"403 Forbidden", b"invalid api key",
+                  b"Invalid API key", b"not logged in", b"model not found",
+                  b"Unknown model", b"unsupported model", b"configuration error"]
+
+def classify_failure(chunk: bytes) -> "dict | None":
+    """Name what went wrong, so the caller can respond correctly.
+
+    Order matters: a quota wall is the *good* case (rotate and carry on); an
+    auth/model error is terminal; a rate limit means wait, never rotate; a
+    network error means keep still and retry, never burn a block.
+    """
+    if not chunk:
+        return None
+    text = chunk.decode("utf-8", "replace")
+    session = ""
+    model = ""
+    for line in text.splitlines():
+        m = SESSION_RE.search(line)
+        if m:
+            session = m.group(1)
+        m2 = MODEL_RE.search(line)
+        if m2:
+            model = f"{m2.group(1)}/{m2.group(2)}"
+    for p in WALL_PATTERNS:
+        if p.decode() in text:
+            return {"class": "quota", "hit": p.decode(), "session": session,
+                    "model": model}
+    for pats, cls in ((FATAL_PATTERNS, "fatal"), (RATE_PATTERNS, "rate"),
+                      (NETWORK_PATTERNS, "network")):
+        for p in pats:
+            if p.decode() in text:
+                return {"class": cls, "hit": p.decode(), "session": session,
+                        "model": model}
+    return None
+
+
+class Journal:
+    """The notebook that makes an hours-long run survive a crash.
+
+    Everything the run needs to continue lives here: which step is done, which
+    one was in flight, how much of the budget is spent, and the reason for every
+    failure. It is written atomically after each change, and mirrored to plain
+    markdown so a human (or a fresh session) can read it without tooling.
+    """
+
+    SCHEMA = 3
+
+    def __init__(self, cfg: Config):
+        self.cfg = cfg
+        self.path = cfg.journal_file
+        self.data: dict = {}
+
+    # ---- load / save ------------------------------------------------------
+    def fresh(self, task_text: str, goal: str = "") -> dict:
+        steps = []
+        for line in task_text.splitlines():
+            m = re.match(r"^\s*(?:[-*+]|\d+[.)])\s+(.{3,})$", line)
+            if m:
+                steps.append({"id": len(steps) + 1, "title": m.group(1).strip(),
+                              "state": "pending", "attempts": 0, "started": 0,
+                              "ended": 0, "note": ""})
+        if not steps:
+            body = task_text.strip()
+            steps = [{"id": 1, "title": (body.splitlines()[0] if body else "the task")[:400],
+                      "state": "pending", "attempts": 0, "started": 0, "ended": 0,
+                      "note": body[:2000]}]
+        return {"schema": self.SCHEMA, "version": VERSION, "task_id": uuid.uuid4().hex[:12],
+                "goal": goal or "", "created": now(), "updated": now(),
+                "steps": steps, "current_step": 0, "next_action": "",
+                "budgets_used": {"walls": 0, "rotations": 0, "resumes": 0,
+                                 "recycles": 0, "stalls": 0, "consec_fail": 0,
+                                 "attempts": 0, "seconds": 0},
+                "checkpoints": [], "errors": [], "state": "running",
+                "reason": "", "started": now()}
+
+    def open(self, task_text: str = "", goal: str = "", resume: bool = True) -> dict:
+        data = read_json(self.path, None)
+        if resume and isinstance(data, dict) and data.get("steps"):
+            self.data = data
+            self.reconcile()
+            return self.data
+        self.data = self.fresh(task_text, goal)
+        self.save()
+        return self.data
+
+    def reconcile(self) -> list:
+        """A step left `running` belongs to a process that is gone."""
+        touched = []
+        for st in self.data.get("steps", []):
+            if st.get("state") == "running":
+                st["state"] = "interrupted"
+                st["note"] = (st.get("note", "") + " | interrupted by a crash").strip(" |")
+                touched.append(st["id"])
+        if touched:
+            self.data["errors"].append(
+                {"ts": now(), "class": "interrupted",
+                 "detail": f"steps {touched} were in flight when the last run ended"})
+            self.data["state"] = "running"
+            self.save()
+        return touched
+
+    def save(self) -> None:
+        self.data["updated"] = now()
+        mkdirp(os.path.dirname(self.path) or ".")
+        atomic_write_json(self.path, self.data)
+        try:
+            tmp = self.cfg.journal_md + ".tmp"
+            with open(tmp, "w") as fh:
+                fh.write(self.markdown())
+            os.replace(tmp, self.cfg.journal_md)
+        except OSError:
+            pass
+
+    def markdown(self) -> str:
+        d = self.data
+        b = d.get("budgets_used", {})
+        out = [f"# agent journal — {d.get('task_id', '?')}", "",
+               f"goal: {d.get('goal') or '(none)'}",
+               f"state: **{d.get('state')}**  reason: `{d.get('reason') or '-'}`",
+               f"started: {d.get('started')}  updated: {d.get('updated')}",
+               f"budget: walls {b.get('walls', 0)} · rotations {b.get('rotations', 0)} · "
+               f"resumes {b.get('resumes', 0)} · recycles {b.get('recycles', 0)} · "
+               f"consecutive failures {b.get('consec_fail', 0)}", "", "## steps", ""]
+        for st in d.get("steps", []):
+            out.append(f"- [{'x' if st['state'] == 'done' else ('!' if st['state'] == 'failed' else ' ')}] "
+                       f"**{st['id']}. {st['title']}** — state: {st['state']}, "
+                       f"attempts: {st.get('attempts', 0)}"
+                       + (f", note: {st['note']}" if st.get("note") else ""))
+        if d.get("next_action"):
+            out += ["", "## next action", "", d["next_action"]]
+        if d.get("checkpoints"):
+            out += ["", "## checkpoints", ""]
+            for c in d["checkpoints"][-10:]:
+                out.append(f"- {time.strftime('%H:%M:%S', time.localtime(c['ts']))} "
+                           f"step {c.get('step')} → {c.get('commit', 'n/a')}")
+        if d.get("errors"):
+            out += ["", "## recent errors", ""]
+            for e in d["errors"][-10:]:
+                out.append(f"- [{e.get('class')}] {e.get('detail')}")
+        return "\n".join(out) + "\n"
+
+    # ---- queries / transitions -------------------------------------------
+    def steps(self) -> list:
+        return self.data.get("steps", [])
+
+    def next_pending(self) -> "dict | None":
+        for st in self.steps():
+            if st.get("state") in ("pending", "interrupted"):
+                return st
+        return None
+
+    def done_count(self) -> int:
+        return sum(1 for st in self.steps() if st.get("state") == "done")
+
+    def mark_running(self, step: dict) -> None:
+        step["state"] = "running"
+        step["started"] = now()
+        step["attempts"] = int(step.get("attempts", 0)) + 1
+        self.data["current_step"] = step["id"]
+        self.data["next_action"] = step["title"]
+        self.save()
+
+    def mark_done(self, step: dict, note: str = "") -> None:
+        step["state"] = "done"
+        step["ended"] = now()
+        if note:
+            step["note"] = note
+        self.data["current_step"] = 0
+        self.data["next_action"] = ""
+        self.save()
+
+    def mark_failed(self, step: dict, note: str) -> None:
+        step["state"] = "failed"
+        step["ended"] = now()
+        step["note"] = note
+        self.data["errors"].append({"ts": now(), "class": "step-failed", "detail": note})
+        self.save()
+
+    def note_error(self, cls: str, detail: str) -> None:
+        self.data.setdefault("errors", []).append(
+            {"ts": now(), "class": cls, "detail": str(detail)[:500]})
+        self.data["errors"] = self.data["errors"][-200:]
+        self.save()
+
+    def note_checkpoint(self, step_id: int, commit: str) -> None:
+        self.data.setdefault("checkpoints", []).append(
+            {"ts": now(), "step": step_id, "commit": commit})
+        self.save()
+
+    def finish(self, reason: str) -> None:
+        self.data["state"] = "stopped" if reason not in ("done",) else "finished"
+        self.data["reason"] = reason
+        self.data["ended"] = now()
+        self.save()
+
+
+class Budget:
+    """Counters with an honest exit.
+
+    Rotation, wall and resume counts are unlimited by default (0 = no cap); the
+    brakes that remain are the ones that must exist — a consecutive-failure
+    limit and the wall-clock limit of the run.
+    """
+
+    def __init__(self, cfg: Config, journal: Journal, started: float = 0.0):
+        self.cfg = cfg
+        self.journal = journal
+        self.started = started or float(journal.data.get("started") or now())
+        used = journal.data.setdefault("budgets_used", {})
+        for k in ("walls", "rotations", "resumes", "recycles", "stalls",
+                  "consec_fail", "attempts"):
+            used.setdefault(k, 0)
+
+    # ---- notes -----------------------------------------------------------
+    def _bump(self, key: str, n: int = 1) -> int:
+        used = self.journal.data.setdefault("budgets_used", {})
+        used[key] = int(used.get(key, 0)) + n
+        return used[key]
+
+    def note_wall(self) -> int:
+        return self._bump("walls")
+
+    def note_rotations(self, n: int) -> int:
+        return self._bump("rotations", max(0, n))
+
+    def note_resume(self) -> int:
+        return self._bump("resumes")
+
+    def note_recycle(self) -> int:
+        return self._bump("recycles")
+
+    def note_stall(self) -> int:
+        return self._bump("stalls")
+
+    def note_attempt(self) -> int:
+        return self._bump("attempts")
+
+    def note_fail(self, transient: bool = True) -> int:
+        return self._bump("consec_fail")
+
+    def note_ok(self) -> None:
+        self.journal.data["budgets_used"]["consec_fail"] = 0
+
+    def used(self, key: str) -> int:
+        return int(self.journal.data.get("budgets_used", {}).get(key, 0))
+
+    def elapsed(self) -> float:
+        return max(0.0, time.time() - self.started)
+
+    # ---- the only three ways a run ends by itself ------------------------
+    def stop_reason(self) -> str:
+        if self.elapsed() >= self.cfg.max_hours * 3600:
+            return f"max-hours ({self.cfg.max_hours}h)"
+        if self.used("consec_fail") >= self.cfg.max_consec_fail:
+            return f"consecutive-failures ({self.cfg.max_consec_fail})"
+        if self.cfg.max_walls and self.used("walls") >= self.cfg.max_walls:
+            return f"max-walls ({self.cfg.max_walls})"
+        if self.cfg.max_rotations and self.used("rotations") >= self.cfg.max_rotations:
+            return f"max-rotations ({self.cfg.max_rotations})"
+        if self.cfg.max_recycles and self.used("recycles") > self.cfg.max_recycles:
+            return f"max-recycles ({self.cfg.max_recycles})"
+        return ""
+
+    def rate_backoff(self) -> int:
+        """60 → 120 → 240 → 480 → 900 s, capped. Never a rotation."""
+        seq = self.cfg.rate_backoff or [60]
+        idx = min(self.used("consec_fail"), len(seq) - 1)
+        return int(seq[idx])
+
+
+class RunStatus:
+    """One small file a human (or a monitor) can read at any moment."""
+
+    def __init__(self, cfg: Config, journal: Journal, budget: Budget):
+        self.cfg = cfg
+        self.journal = journal
+        self.budget = budget
+        self.state = "running"
+        self.detail = ""
+
+    def update(self, state: str = "", detail: str = "") -> None:
+        if state:
+            self.state = state
+        if detail:
+            self.detail = detail
+        d = self.journal.data
+        payload = {
+            "version": VERSION, "task_id": d.get("task_id"), "state": self.state,
+            "detail": self.detail, "started": int(self.budget.started),
+            "elapsed_s": int(self.budget.elapsed()),
+            "max_hours": self.cfg.max_hours,
+            "walls": self.budget.used("walls"),
+            "rotations": self.budget.used("rotations"),
+            "resumes": self.budget.used("resumes"),
+            "recycles": self.budget.used("recycles"),
+            "stalls": self.budget.used("stalls"),
+            "consec_fail": self.budget.used("consec_fail"),
+            "steps_done": self.journal.done_count(),
+            "steps_total": len(self.journal.steps()),
+            "last_error": (d.get("errors") or [{}])[-1].get("detail", ""),
+            "updated": now(),
+        }
+        try:
+            mkdirp(os.path.dirname(self.cfg.run_status_file) or ".")
+            atomic_write_json(self.cfg.run_status_file, payload)
+        except OSError:
+            pass
+
+
+# ---- guardrails ----------------------------------------------------------
+FORBIDDEN_ACTIONS = [
+    (r"\brm\s+-rf?\s+/(?:\s|$|\*)", "delete the filesystem root"),
+    (r"~?/?\.ssh\b", "touch SSH keys"),
+    (r"\b(?:force[- ]push|push\s+--force|push\s+-f)\b", "force-push a repository"),
+    (r"\bfilter-branch\b|\bfilter-repo\b", "rewrite git history"),
+    (r"/etc/hosts", "edit /etc/hosts"),
+    (r"\bip6?tables\b|\bnft\b", "change the firewall"),
+    (r"\bapt(?:-get)?\s+(?:remove|purge|autoremove)\b|\bdnf\s+remove\b",
+     "remove system packages"),
+    (r"\b(?:curl|wget)\b[^\n|]*\|\s*(?:sudo\s+)?(?:ba)?sh\b", "pipe a download into a shell"),
+    (r"\bmkfs\b|\bdd\s+if=", "overwrite a device"),
+    (r"\bsystemctl\s+(?:disable|mask)\s+opencode-unlimited", "disable the supervisor"),
+]
+
+
+def guardrail_preflight(cfg: Config, task_text: str) -> list:
+    """Refuse, up front, a task that asks for something irreversible."""
+    hits = []
+    for pattern, why in FORBIDDEN_ACTIONS:
+        m = re.search(pattern, task_text, re.IGNORECASE)
+        if m:
+            hits.append(f"{why} (matched: {m.group(0).strip()[:60]})")
+    return hits
+
+
+def _protected_paths(cfg: Config) -> list:
+    home = os.path.expanduser("~")
+    return [cfg.hosts_file, os.path.join(home, ".ssh"), os.path.join(home, ".gitconfig"),
+            os.path.join(home, ".ssh", "authorized_keys"), cfg.config_file]
+
+
+def protected_snapshot(cfg: Config) -> dict:
+    snap = {}
+    for p in _protected_paths(cfg):
+        try:
+            st = os.stat(p)
+            snap[p] = (int(st.st_mtime), int(st.st_size))
+        except OSError:
+            snap[p] = None
+    return snap
+
+
+def audit_step(cfg: Config, before: dict) -> list:
+    """Did this step touch something it had no business touching?"""
+    after = protected_snapshot(cfg)
+    return [f"{p} changed" for p, v in after.items() if before.get(p, "missing") != v]
+
+
+# ---- running one child with stall detection ------------------------------
+def _child_cpu(proc) -> float:
+    try:
+        with open(f"/proc/{proc.pid}/stat") as fh:
+            parts = fh.read().split()
+        return float(parts[13]) + float(parts[14])
+    except Exception:
+        return 0.0
+
+
+def run_child(cfg: Config, argv: list, env: dict, follower: "LogFollower",
+              log: Log, cwd: "str | None" = None) -> dict:
+    """Start the agent's command and watch it like a hawk.
+
+    A model call that goes quiet is the most common way an unattended run wastes
+    an hour: nothing crashed, nothing answers. `stall_seconds` of silence (no new
+    log bytes, no CPU time) means: stop it, retry once, then move on.
+    """
+    out = {"rc": 0, "chunk": b"", "stalled": False, "duration": 0.0}
+    t0 = time.time()
+    try:
+        with open(cfg.opencode_log, "rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+    except OSError:
+        size = 0
+    try:
+        proc = subprocess.Popen(argv, env=env, cwd=cwd)
+    except OSError as exc:
+        out.update(rc=126, chunk=str(exc).encode())
+        return out
+    last_change = time.time()
+    cpu_last = _child_cpu(proc)
+    while True:
+        rc = proc.poll()
+        if rc is not None:
+            out["rc"] = rc
+            break
+        time.sleep(1)
+        try:
+            cur = os.stat(cfg.opencode_log).st_size
+        except OSError:
+            cur = size
+        cpu = _child_cpu(proc)
+        if cur != size or cpu > cpu_last + 0.05:
+            size, cpu_last, last_change = cur, cpu, time.time()
+        if cfg.stall_seconds and time.time() - last_change > cfg.stall_seconds:
+            out["stalled"] = True
+            log(f"agent: no progress for {cfg.stall_seconds}s — stopping the child",
+                "WARN")
+            try:
+                proc.terminate()
+                for _ in range(cfg.stall_kill_grace * 10):
+                    if proc.poll() is not None:
+                        break
+                    time.sleep(0.1)
+                if proc.poll() is None:
+                    proc.kill()
+            except OSError:
+                pass
+            out["rc"] = proc.wait() if proc.poll() is not None else (proc.returncode or -9)
+            break
+    out["chunk"] = follower.poll()
+    out["duration"] = time.time() - t0
+    return out
+
+
+# ---- network patience ----------------------------------------------------
+def wait_for_network(cfg: Config, log: Log, budget: Budget) -> bool:
+    """Network down is a 'do nothing' event: no rotation, no spent block."""
+    end = time.time() + cfg.net_retry_window
+    while time.time() < end:
+        if ipv6_egress(cfg):
+            log("agent: network is back")
+            return True
+        log(f"agent: network down — retrying in {cfg.net_retry_every}s "
+            f"(no rotation)", "WARN")
+        time.sleep(cfg.net_retry_every)
+        budget.note_attempt()
+    return bool(ipv6_egress(cfg))
+
+
+# ---- git checkpoints -----------------------------------------------------
+def git_checkpoint(cfg: Config, log: Log, journal: Journal, step_id: int) -> str:
+    """Commit the work so a crash costs minutes, not the whole night."""
+    root = cfg.agent_root
+    if not shutil.which("git"):
+        return ""
+    try:
+        probe = subprocess.run(["git", "-C", root, "rev-parse", "--is-inside-work-tree"],
+                               capture_output=True, text=True, timeout=20)
+    except Exception:
+        return ""
+    if probe.returncode != 0:
+        log("agent: work dir is not a git repo — checkpoint skipped")
+        return ""
+    try:
+        subprocess.run(["git", "-C", root, "add", "-A"], capture_output=True, timeout=60)
+        diff = subprocess.run(["git", "-C", root, "diff", "--cached", "--quiet"])
+        if diff.returncode == 0:
+            return ""
+        subprocess.run(["git", "-C", root, "-c", "user.name=opencode-unlimited",
+                        "-c", "user.email=noreply@users.noreply.github.com",
+                        "commit", "-qm", f"agent checkpoint: step {step_id} done"],
+                       capture_output=True, timeout=60)
+        sha = subprocess.run(["git", "-C", root, "rev-parse", "--short", "HEAD"],
+                             capture_output=True, text=True, timeout=20).stdout.strip()
+        journal.note_checkpoint(step_id, sha)
+        log(f"agent: checkpoint {sha} for step {step_id}")
+        return sha
+    except Exception as exc:
+        log(f"agent: checkpoint failed: {exc}", "WARN")
+        return ""
+
+
+# ---- the agent loop ------------------------------------------------------
+def _agent_lock(cfg: Config):
+    mkdirp(os.path.dirname(cfg.agent_lock_file) or ".")
+    try:
+        fh = open(cfg.agent_lock_file, "a+")
+    except OSError:
+        return None
+    try:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        fh.close()
+        return None
+    try:
+        fh.seek(0)
+        fh.truncate()
+        fh.write(json.dumps({"pid": os.getpid(), "ts": now()}))
+        fh.flush()
+    except OSError:
+        pass
+    return fh
+
+
+def write_run_report(cfg: Config, journal: Journal, reason: str,
+                     budget: "Budget | None" = None) -> str:
+    d = journal.data
+    b = d.get("budgets_used", {})
+    path = os.path.join(os.path.dirname(cfg.journal_file) or ".",
+                        f"run-report-{time.strftime('%Y%m%d-%H%M%S')}.md")
+    done = [s for s in journal.steps() if s.get("state") == "done"]
+    pending = [s for s in journal.steps() if s.get("state") in ("pending", "interrupted")]
+    failed = [s for s in journal.steps() if s.get("state") == "failed"]
+    lines = [f"# run report — {d.get('task_id', '?')}", "",
+             f"- goal: {d.get('goal') or '(none)'}",
+             f"- stopped because: **{reason}**",
+             f"- elapsed: {int(b.get('seconds') or (budget.elapsed() if budget else 0))}s",
+             f"- steps: {len(done)} done · {len(pending)} pending · {len(failed)} failed",
+             f"- quota walls: {b.get('walls', 0)} · rotations: {b.get('rotations', 0)} · "
+             f"resumes: {b.get('resumes', 0)} · recycles: {b.get('recycles', 0)} · "
+             f"stalls: {b.get('stalls', 0)}", "", "## finished", ""]
+    lines += [f"- {s['id']}. {s['title']}" for s in done] or ["- (nothing)"]
+    lines += ["", "## unfinished", ""]
+    lines += [f"- {s['id']}. {s['title']} ({s['state']})" for s in pending] or ["- (nothing)"]
+    if failed:
+        lines += ["", "## failed", ""]
+        lines += [f"- {s['id']}. {s['title']} — {s.get('note', '')}" for s in failed]
+    if d.get("errors"):
+        lines += ["", "## last errors", ""]
+        lines += [f"- [{e.get('class')}] {e.get('detail')}" for e in d["errors"][-5:]]
+    lines += ["", "## next action", "", d.get("next_action") or "(none)"]
+    try:
+        with open(path, "w") as fh:
+            fh.write("\n".join(lines) + "\n")
+    except OSError:
+        return ""
+    return path
+
+
+def cmd_agent(args, cfg: Config, log: Log) -> int:
+    """Work through a task list for hours, on its own, and say what happened."""
+    if not (cfg.oc_bin and os.access(cfg.oc_bin, os.X_OK)):
+        print("  ✗ opencode binary not found (set OUC_OC_BIN)", file=sys.stderr)
+        return 2
+    if not require_state_write(cfg):
+        return 1
+
+    task_text = ""
+    if getattr(args, "task", ""):
+        try:
+            with open(args.task) as fh:
+                task_text = fh.read()
+        except OSError as exc:
+            print(f"  ✗ cannot read {args.task}: {exc}", file=sys.stderr)
+            return 2
+    task_text = task_text or " ".join(getattr(args, "args", []) or [])
+    if not task_text.strip():
+        print("  ✗ nothing to do: pass --task FILE or a task on the command line",
+              file=sys.stderr)
+        return 2
+
+    if args.max_hours:
+        cfg.max_hours = int(args.max_hours)
+    if getattr(args, "dir", ""):
+        cfg.agent_root = os.path.abspath(args.dir)
+
+    lock = _agent_lock(cfg)
+    if lock is None:
+        print(f"  ✗ another agent run holds {cfg.agent_lock_file} — refusing to "
+              f"start a second one\n"
+              f"    (delete that file only if you are sure no run is alive)",
+              file=sys.stderr)
+        return 1
+
+    violations = guardrail_preflight(cfg, task_text)
+    if violations:
+        lock.close()
+        print("  ✗ this task asks for something the agent must never do:",
+              file=sys.stderr)
+        for v in violations:
+            print(f"      - {v}", file=sys.stderr)
+        return 3
+
+    journal = Journal(cfg)
+    journal.open(task_text, goal=getattr(args, "goal", "") or "",
+                 resume=not getattr(args, "fresh", False))
+    mkdirp(cfg.agent_root)
+    state = State(cfg)
+    budget = Budget(cfg, journal)
+    budget.started = time.time()
+    journal.data["started"] = int(budget.started)
+    journal.data["budgets_used"]["seconds"] = 0
+    journal.data["state"] = "running"
+    journal.save()
+    status = RunStatus(cfg, journal, budget)
+    status.update("running", "starting")
+    follower = LogFollower(cfg, state)
+    follower.skip_history()
+
+    print(f"  ouc agent — {len(journal.steps())} step(s), limit "
+          f"{cfg.max_hours}h, {budget.used('consec_fail')} consecutive failure(s) "
+          f"so far", flush=True)
+    print(f"  work dir: {cfg.agent_root}", flush=True)
+    print(f"  guardrails on: force-push, /etc/hosts, firewall, SSH keys, "
+          f"package removal are refused", flush=True)
+
+    reason = ""
+    session_started = time.time()
+    session_turns = 0
+    session_log_base = _log_size(cfg)
+    step = journal.next_pending()
+    while True:
+        reason = budget.stop_reason()
+        if reason:
+            break
+        step = journal.next_pending()
+        if step is None:
+            reason = ("done" if journal.done_count() == len(journal.steps())
+                      else "incomplete")
+            break
+        if session_turns >= cfg.recycle_turns or \
+                time.time() - session_started >= cfg.recycle_hours * 3600 or \
+                _log_size(cfg) - session_log_base >= cfg.recycle_log_bytes:
+            journal.data["next_action"] = step["title"]
+            journal.save()
+            budget.note_recycle()
+            session_started, session_turns = time.time(), 0
+            session_log_base = _log_size(cfg)
+            log(f"agent: recycling the conversation "
+                f"(recycle {budget.used('recycles')}) — a fresh session reads the journal")
+            print(f"  ↺ fresh session (recycle {budget.used('recycles')}); "
+                  f"the journal carries what matters", flush=True)
+
+        ok, why = _run_one_step(cfg, log, state, journal, budget, status,
+                                follower, step)
+        session_turns += 1
+        if not ok and why in ("fatal", "guardrail", "auth"):
+            reason = why
+            break
+        if not ok and why == "no-block":
+            reason = "no-working-block"
+            break
+        status.update("running", f"step {step['id']} {why or 'done'}")
+
+    journal.data["budgets_used"]["seconds"] = int(budget.elapsed())
+    journal.finish(reason)
+    status.update("stopped", reason)
+    report = write_run_report(cfg, journal, reason, budget)
+    try:
+        lock.close()
+    except OSError:
+        pass
+
+    print("", flush=True)
+    print(f"  stopped: {reason}", flush=True)
+    print(f"  steps: {journal.done_count()}/{len(journal.steps())} done · "
+          f"walls {budget.used('walls')} · rotations {budget.used('rotations')} · "
+          f"resumes {budget.used('resumes')}", flush=True)
+    if report:
+        print(f"  report: {report}", flush=True)
+    return 0 if reason == "done" else 1
+
+
+def _log_size(cfg: Config) -> int:
+    try:
+        return os.stat(cfg.opencode_log).st_size
+    except OSError:
+        return 0
+
+
+def _run_one_step(cfg: Config, log: Log, state: State, journal: Journal,
+                  budget: Budget, status: RunStatus, follower: "LogFollower",
+                  step: dict) -> tuple:
+    """One step, retried as the failure class demands. Returns (ok, why)."""
+    journal.mark_running(step)
+    before = protected_snapshot(cfg)
+    attempts = int(step.get("attempts", 0))
+    prompt = step["title"]
+    argv = [cfg.oc_bin, "run", prompt]
+    env = opencode_env(cfg)
+    wall = {"session": "", "model": ""}
+
+    while True:
+        if budget.stop_reason():
+            return False, budget.stop_reason()
+        res = run_child(cfg, argv, env, follower, log, cwd=cfg.agent_root)
+        chunk = res.get("chunk") or b""
+        budget.note_attempt()
+        violations = audit_step(cfg, before)
+        if violations:
+            detail = "guardrail violation: " + "; ".join(violations)
+            journal.note_error("guardrail", detail)
+            journal.mark_failed(step, detail)
+            print(f"  ✗ {detail}", file=sys.stderr)
+            return False, "guardrail"
+
+        kind = classify_failure(chunk)
+        if res.get("stalled"):
+            budget.note_stall()
+            journal.note_error("stall", f"no progress for {cfg.stall_seconds}s")
+            status.update("running", "stalled")
+            if attempts >= 2:
+                journal.mark_failed(step, "stalled twice")
+                return False, "stall"
+            attempts += 1
+            argv = resume_argv(cfg, prompt=cfg.resume_prompt)
+            env = opencode_env(cfg)
+            continue
+
+        if kind is None:
+            if res["rc"] == 0:
+                budget.note_ok()
+                journal.mark_done(step)
+                git_checkpoint(cfg, log, journal, step["id"])
+                print(f"  ✓ step {step['id']} done "
+                      f"({int(res['duration'])}s)", flush=True)
+                return True, ""
+            budget.note_fail()
+            journal.note_error("exit", f"opencode exited {res['rc']} with no known "
+                                       f"cause (attempt {attempts})")
+            if attempts >= cfg.max_step_attempts:
+                journal.mark_failed(step, f"exit {res['rc']} after {attempts} attempts")
+                return False, "exit"
+            attempts += 1
+            argv = resume_argv(cfg, prompt=cfg.resume_prompt)
+            continue
+
+        cls = kind.get("class")
+        budget.note_fail()
+        journal.note_error(cls, f"{kind.get('hit')} (attempt {attempts})")
+        status.update("waiting", cls)
+        log(f"agent: step {step['id']} hit a {cls} event ({kind.get('hit')})", "WARN")
+
+        if cls == "fatal":
+            journal.mark_failed(step, f"fatal: {kind.get('hit')}")
+            print(f"  ✗ unrecoverable ({kind.get('hit')}) — stopping, retrying "
+                  f"would not help", file=sys.stderr)
+            return False, "fatal"
+
+        if cls == "quota":
+            wall = kind
+            budget.note_wall()
+            before_rot = int(state.load().get("hops") or 0)
+            print("  … free limit reached: finding a block that really answers",
+                  flush=True)
+            deadline = time.time() + max(60, cfg.resume_budget)
+            health = rotate_until_healthy(cfg, log, state, deadline=deadline,
+                                          why="agent")
+            budget.note_rotations(int(state.load().get("hops") or 0) - before_rot)
+            if not health.get("ok"):
+                journal.mark_failed(step, "no working block")
+                print("  ✗ no working block right now — nothing was sent",
+                      file=sys.stderr)
+                return False, "no-block"
+            budget.note_resume()
+            budget.note_ok()
+            print(f"  ↻ continuing the same session on {health['block']} "
+                  f"(wall {budget.used('walls')}, resume {budget.used('resumes')})",
+                  flush=True)
+            argv = resume_argv(cfg, session=wall.get("session", ""),
+                               model=wall.get("model", ""), prompt=cfg.resume_prompt)
+            env = opencode_env(cfg)
+            attempts += 1
+            continue
+
+        if cls == "rate":
+            wait = budget.rate_backoff()
+            print(f"  … rate limited: waiting {wait}s (no rotation, no new block)",
+                  flush=True)
+            _sleep_quietly(log, wait, "agent: rate limit")
+            argv = resume_argv(cfg, session=wall.get("session", ""),
+                               prompt=cfg.resume_prompt)
+            env = opencode_env(cfg)
+            attempts += 1
+            continue
+
+        # network
+        print(f"  … network problem: waiting up to {cfg.net_retry_window}s "
+              f"before touching anything", flush=True)
+        if not wait_for_network(cfg, log, budget):
+            journal.mark_failed(step, "network stayed down")
+            return False, "network"
+        budget.note_ok()
+        argv = resume_argv(cfg, session=wall.get("session", ""),
+                           prompt=cfg.resume_prompt)
+        env = opencode_env(cfg)
+        attempts += 1
+        continue
+
+
+# ---- watchdog: restart the supervisor if it dies -------------------------
+def cmd_watchdog(args, cfg: Config, log: Log) -> int:
+    """Cron-friendly: bring the supervisor back if it is gone or silent.
+
+    The supervisor cannot watch itself, so this is the piece that makes a
+    portable install survive a crash, an OOM kill or a reboot without systemd.
+    """
+    wlog = Log(cfg.watchdog_log)
+    hb = read_json(cfg.heartbeat, {}) or {}
+    age = now() - int(hb.get("ts") or 0) if hb else 10 ** 9
+    alive, pid, why = supervisor_running(cfg)
+    if alive and age <= cfg.watchdog_stale:
+        if getattr(args, "verbose", False):
+            print(f"supervisor healthy (pid {pid}, heartbeat {age}s old)")
+        return 0
+    if alive:
+        wlog(f"supervisor pid {pid} is alive but silent for {age}s — restarting",
+             "WARN")
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+        for _ in range(40):
+            if not pid_alive(pid):
+                break
+            time.sleep(0.25)
+    else:
+        wlog(f"supervisor is not running ({why}) — starting it", "WARN")
+    if cfg.mode == "systemd" and systemd_available() and not getattr(args, "portable", False):
+        rc, out = systemctl("start", UNIT_NAME)
+        wlog(f"systemctl start → {rc} {out.strip()[:120]}")
+        return rc
+    rc = daemonize(cfg, ["supervise"])
+    wlog(f"portable start → {rc}")
+    print(f"supervisor restarted (rc={rc})")
+    return rc
+
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="ouc", description=f"{BRAND} {VERSION} controller")
     p.add_argument("--version", action="version", version=f"{VERSION}")
@@ -3306,6 +4264,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = add("start", cmd_start, "start the supervisor")
     s.add_argument("--portable", action="store_true")
+    s.add_argument("--if-dead", action="store_true",
+                   help="do nothing if a healthy supervisor is already running "
+                        "(safe for cron/watchdog)")
     add("stop", cmd_stop, "stop the supervisor and remove the kill-switch")
 
     s = add("status", cmd_status, "show status")
@@ -3341,6 +4302,22 @@ def build_parser() -> argparse.ArgumentParser:
             "run opencode; on a free-limit wall, wait for a working WARP block "
             "and continue the same session")
     s.add_argument("args", nargs=argparse.REMAINDER)
+    s = add("agent", cmd_agent,
+            "work through a task list for hours: journal, guardrails, budgets, "
+            "stall detection, honest stop and a report")
+    s.add_argument("--task", default="", help="file with one step per line (- or 1.)")
+    s.add_argument("--dir", default="", help="work directory (default: current)")
+    s.add_argument("--goal", default="", help="one line describing the goal")
+    s.add_argument("--max-hours", type=int, default=0,
+                   help="override OUC_MAX_HOURS (default 10)")
+    s.add_argument("--fresh", action="store_true", help="ignore an existing journal")
+    s.add_argument("args", nargs=argparse.REMAINDER)
+
+    s = add("watchdog", cmd_watchdog,
+            "cron-friendly: restart the supervisor if it died or went silent")
+    s.add_argument("--portable", action="store_true")
+    s.add_argument("--verbose", action="store_true")
+
     s = add("resume", cmd_resume,
             "continue the last (or --session) opencode session on a working block")
     s.add_argument("-s", "--session", default="", help="session id (ses_…)")

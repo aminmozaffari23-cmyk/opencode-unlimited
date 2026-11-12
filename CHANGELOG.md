@@ -1,4 +1,42 @@
-# CHANGELOG — opencode-unlimited 2.3.1
+# CHANGELOG — opencode-unlimited 2.4.0
+
+## 2.4.0 — 2026-11-12
+
+Built for one purpose: let an agent work for **10 hours without a human**, and
+be honest about what happened afterwards.
+
+**Resilience**
+  * `ouc agent --task FILE [--max-hours 10]`: a durable journal
+    (`journal.json` + readable `journal.md`), a step that was in flight when the
+    process died is retried instead of lost, git checkpoint after every step.
+  * `ouc watchdog`: restarts the supervisor if it died or stopped breathing
+    (heartbeat older than 90 s). Installed as a 2-minute cron entry in portable
+    mode; `systemd` mode gets `Restart=always`, `RestartSec=5`,
+    `StartLimitIntervalSec=0`.
+  * Failure taxonomy — four kinds of "no", four behaviours: quota wall (rotate +
+    resume), rate limit (wait 60→120→240→480→900 s, never rotate), network
+    (retry 30 s up to 10 min, never rotate), auth/model error (stop immediately).
+  * Stall detection: 600 s without a log byte or CPU time → kill, retry once,
+    then mark the step failed and move on.
+  * Conversation recycling every 3 h / 2 MB / 40 turns (max 8), so a long run
+    does not drown in its own context.
+  * Guardrails: force-push, git history rewrite, `/etc/hosts`, firewall edits,
+    SSH keys, package removal and `curl | sh` are refused before the run starts,
+    and protected paths are audited after every step.
+
+**Budgets, as configured for this release**
+  * rotation spacing **15–20 s** (15 s + 0–5 s jitter);
+  * **no limit** on walls, rotations per hour, rotations per run or resumes
+    (`OUC_MAX_WALLS=0`, `OUC_ROTATE_PER_HOUR=0`, `OUC_MAX_ROTATIONS=0`,
+    `OUC_RESUME_MAX=0`);
+  * **60** consecutive failures before it stops (`OUC_MAX_CONSEC_FAIL=60`);
+  * run length **10 h** (`OUC_MAX_HOURS=10`);
+  * the "sleep until the quota window reopens" option is **removed**
+    (`OUC_RESUME_WAIT_RESET` no longer exists).
+
+**Verification** — executed, not reviewed: 57 offline tests, 0 failures; a chaos
+run with 8 injected faults (all recovered, worst case 122 s) plus a 20-wall soak
+with production spacing (333 s); details in `TEST_RESULTS.md`.
 
 ## 2.3.1 — 2026-11-12
 

@@ -1,4 +1,4 @@
-# opencode-unlimited 2.3.1
+# opencode-unlimited 2.4.0
 
 Keeps your Cloudflare WARP tunnel up, and when opencode's free tier says
 **“Free usage limit reached”**, quietly moves the machine to a fresh IPv6
@@ -10,7 +10,7 @@ script. Every claim in this README was verified by the tests in
 [`TEST_RESULTS.md`](TEST_RESULTS.md); the raw logs are in `tests/logs/`.
 
 ```
-39 passed, 0 failed, 0 skipped     (offline suite, 2.3.1)
+57 passed, 0 failed, 0 skipped     (offline suite, 2.4.0)
 6 passed                           (live: 5 tunnel-mode + 1 proxy-mode)
 ```
 
@@ -48,6 +48,49 @@ ouc lane run "hello"       # opencode, routed through WARP
 
 See [`INSTALL.md`](INSTALL.md#proxy-mode-codespaces-devcontainers-ci) for the
 Codespaces walk-through.
+
+## Running unattended for hours — `ouc agent`
+
+`ouc run` assumes you are sitting in front of it. `ouc agent` is the version that
+survives the night:
+
+```bash
+cd ~/my-project
+cat > task.txt <<'EOF'
+- add the retry logic to the uploader and its test
+- run the test suite and fix what breaks
+- write a short summary of what changed
+EOF
+ouc agent --task task.txt --max-hours 10
+```
+
+What it does that a plain loop does not:
+
+| Problem | What the agent does |
+|---|---|
+| it crashes at 03:00 | every step is written to `~/.local/state/opencode-unlimited/journal.json`; a step left mid-flight is retried, never lost, never duplicated |
+| the work would be lost | `git` checkpoint after each step (branch-local commit, never a push) |
+| the free limit hits | rotates to a block that *answers*, then continues the same session — no limit on walls, rotations or resumes |
+| a rate limit hits | waits 60→120→240→480→900 s and **never** spends a block |
+| the network drops | keeps still, retries every 30 s for up to 10 min, **never** spends a block |
+| an auth/model error | stops immediately with the reason — retrying would only waste the night |
+| the model goes silent 10 min | kills the call, retries once, then marks the step failed and moves on |
+| the conversation grows stale | fresh session every 3 h / 2 MB / 40 turns; the journal carries the context |
+| the machine dies | `systemd` restarts the supervisor; without systemd a cron watchdog does it every 2 min |
+| it decides to do something stupid | force-push, `/etc/hosts`, firewall, SSH keys, package removal: refused before the run starts, and audited after every step |
+
+It stops for exactly three reasons, and always says which: 10 hours passed
+(`OUC_MAX_HOURS`), 60 consecutive failures (`OUC_MAX_CONSEC_FAIL`), or the task
+list is finished. Then it writes `run-report-<timestamp>.md`: what finished, what
+did not, why it stopped, and the next action.
+
+Live status while it runs: `~/.local/state/opencode-unlimited/run.json`
+(and `ouc status`).
+
+## What changed in 2.4.0
+
+See the section above; the numbers and the measured chaos results are in
+[`TEST_RESULTS.md`](TEST_RESULTS.md).
 
 ## What changed in 2.3.1
 

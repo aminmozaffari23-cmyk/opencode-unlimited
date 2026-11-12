@@ -1,7 +1,79 @@
-# TEST_RESULTS.md — opencode-unlimited 2.3.1
+# TEST_RESULTS.md — opencode-unlimited 2.4.0
 
 Everything below was **executed on a real machine**, not reviewed on paper.
 The 2.0.1/2.1.0 tunnel-mode results are kept further down as history.
+
+## 2.4.0 — unattended runs: what was actually executed
+
+Goal of this version: an agent that works for **10 hours** without a human.
+Everything below was run, on this machine or in the Codespace named; nothing is
+a paper review.
+
+| Item | Value |
+|---|---|
+| Offline suite (sandbox, this host) | **57 passed, 0 failed, 0 skipped** (242 s) |
+| Suite in a fresh GitHub Codespace | 7 representative new tests, **7/7 pass** |
+| Chaos run, 8 injected faults | **8/8 recovered** (worst case 122 s) |
+| Soak: 20 consecutive quota walls, production spacing | **PASS, 333 s**, step finished |
+| Real agent run in the Codespace (real opencode 1.19.5) | **3/3 steps in 30 s**, 3 git checkpoints |
+| Watchdog after `kill -9` in the Codespace | **restarted in 0.27 s** |
+
+### The chaos run (measured recovery times)
+
+```
+scenario                                  result   recovery
+three quota walls in a row                PASS     12s     (39s with production spacing)
+supervisor killed with -9                 PASS     0s      (1s with production spacing)
+state.json + journal corrupted            PASS     3s
+step abandoned mid-flight                 PASS     1s
+rate limit (no rotation)                  PASS     122s    (60s + 60s backoff, by design)
+network outage (no rotation)              PASS     3s
+model call goes silent                    PASS     7s
+auth error stops honestly                 PASS     1s
+20 consecutive walls (soak)               PASS     333s
+```
+
+Command: `bash tests/chaos.sh` and `OUC_CHAOS_GAP=1 bash tests/chaos.sh --soak 20`.
+
+### The real agent run (Codespace, 2026-11-12 08:39 UTC)
+
+```
+$ ouc agent --task task.txt --dir /workspaces/agent-demo --max-hours 1
+  ouc agent — 3 step(s), limit 1h, 0 consecutive failure(s) so far
+  ✓ step 1 done (7s)
+  ✓ step 2 done (8s)
+  ✓ step 3 done (6s)
+  stopped: done
+  steps: 3/3 done · walls 0 · rotations 0 · resumes 0
+  report: /home/codespace/.local/state/opencode-unlimited/run-report-20261112-083945.md
+
+$ git log --oneline
+cb81ab8 agent checkpoint: step 3 done
+05acd52 agent checkpoint: step 2 done
+fbd6b64 agent checkpoint: step 1 done
+f072746 seed
+```
+
+The three steps were real model work (writing `hello.py`, running it, writing
+`SUMMARY.md`), not echo commands. Zero quota walls in a 30-second run, as
+expected — the resume path was exercised by the tests, not by this run.
+
+### What this does **not** claim
+
+* **No 10-hour run has been executed yet.** The longest continuous run of the
+  agent so far is the 30-second, 3-step run above; the longest sustained
+  rotation sequence is the 20-wall soak (333 s). A real multi-hour soak is the
+  next step, not a finished result.
+* The Codespace has **no `cron`**, so the 2-minute watchdog could not be
+  installed there — the installer said so out loud ("no crontab: no watchdog").
+  On that machine the watchdog must be run from the user's own loop; on a normal
+  Linux host the cron entry is installed automatically.
+* Rate-limit and network behaviours are proven with simulated log lines, because
+  provoking a real 429 or dropping a real uplink is not something this session
+  could do safely.
+* `systemd` restart settings (`Restart=always`, `RestartSec=5`,
+  `StartLimitIntervalSec=0`) were installed and inspected, not tested by killing
+  a unit on a systemd host.
 
 ## 2.3.1 — fresh GitHub Codespace, full install, real requests
 
