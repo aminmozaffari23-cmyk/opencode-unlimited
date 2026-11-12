@@ -1,4 +1,25 @@
-# CHANGELOG — opencode-unlimited 2.4.0
+# CHANGELOG — opencode-unlimited 2.4.1
+
+## 2.4.1 — 2026-11-12
+
+Two fixes and one feature, all three found by handing a **real website task to
+DeepSeek** through `ouc agent` in a Codespace.
+
+  * **A new task no longer inherits the previous journal.** Before this fix,
+    starting a second, completely different task in the same account reported
+    "3/3 done" in 0.44 s without doing anything, because the journal of an
+    earlier run was resumed and all its steps were already marked done. The
+    journal is now bound to the task text (sha256) and the work directory; a
+    different pair archives the old notebook as `journal-<task_id>.json/.md`
+    and starts clean. Journals written before 2.4.1 have no hash, so they are
+    kept and stamped instead of being thrown away. Test: `t70`.
+  * **`ouc agent -m / --model`** — pick the model for every step
+    (`OUC_AGENT_MODEL` also works), instead of being stuck with the default.
+  * Suite is now **58 offline tests, 0 failures**.
+
+Measured in this release (see `TEST_RESULTS.md`): a 3-page Tailwind site built by
+`opencode/deepseek-v4.1-flash-free` through `ouc agent` — **4/4 steps, 11 m 29 s,
+0 quota walls**, three served files (HTTP 200), one git checkpoint.
 
 ## 2.4.0 — 2026-11-12
 

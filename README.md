@@ -1,4 +1,4 @@
-# opencode-unlimited 2.4.0
+# opencode-unlimited 2.4.1
 
 Keeps your Cloudflare WARP tunnel up, and when opencode's free tier says
 **“Free usage limit reached”**, quietly moves the machine to a fresh IPv6
@@ -62,6 +62,8 @@ cat > task.txt <<'EOF'
 - write a short summary of what changed
 EOF
 ouc agent --task task.txt --max-hours 10
+# pick the model for every step:
+ouc agent --task task.txt -m opencode/deepseek-v4.1-flash-free
 ```
 
 What it does that a plain loop does not:

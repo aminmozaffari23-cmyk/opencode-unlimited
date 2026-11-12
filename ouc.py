@@ -62,7 +62,7 @@ import time
 import urllib.request
 import uuid
 
-VERSION = "2.4.0"
+VERSION = "2.4.1"
 BRAND = "opencode-unlimited"
 DEFAULT_STATE_DIR = "/var/lib/opencode-unlimited"
 UNIT_NAME = "opencode-unlimited.service"
@@ -349,6 +349,8 @@ class Config:
                                             int(disk.get("recycle_turns", 40))))
         self.max_recycles = max(0, env_int("OUC_MAX_RECYCLES",
                                            int(disk.get("max_recycles", 8))))
+        self.agent_model = (os.environ.get("OUC_AGENT_MODEL")
+                            or disk.get("agent_model") or "")
         self.checkpoint_seconds = max(30, env_int("OUC_CHECKPOINT_SECONDS",
                                                   int(disk.get("checkpoint_seconds", 600))))
         self.max_step_attempts = max(1, env_int("OUC_MAX_STEP_ATTEMPTS",
@@ -490,6 +492,7 @@ class Config:
             "recycle_hours": self.recycle_hours,
             "recycle_turns": self.recycle_turns,
             "agent_root": self.agent_root,
+            "agent_model": self.agent_model,
             "journal": self.journal_file,
             "run_status": self.run_status_file,
         }
@@ -3458,6 +3461,10 @@ def classify_failure(chunk: bytes) -> "dict | None":
     return None
 
 
+def _task_sha(text: str) -> str:
+    return hashlib.sha256((text or "").strip().encode()).hexdigest()[:16]
+
+
 class Journal:
     """The notebook that makes an hours-long run survive a crash.
 
@@ -3489,6 +3496,7 @@ class Journal:
                       "state": "pending", "attempts": 0, "started": 0, "ended": 0,
                       "note": body[:2000]}]
         return {"schema": self.SCHEMA, "version": VERSION, "task_id": uuid.uuid4().hex[:12],
+                "task_sha": _task_sha(task_text), "agent_root": self.cfg.agent_root,
                 "goal": goal or "", "created": now(), "updated": now(),
                 "steps": steps, "current_step": 0, "next_action": "",
                 "budgets_used": {"walls": 0, "rotations": 0, "resumes": 0,
@@ -3500,12 +3508,45 @@ class Journal:
     def open(self, task_text: str = "", goal: str = "", resume: bool = True) -> dict:
         data = read_json(self.path, None)
         if resume and isinstance(data, dict) and data.get("steps"):
-            self.data = data
-            self.reconcile()
-            return self.data
+            # A journal written before 2.4.1 has no task_sha: it cannot be
+            # *proven* to be a different task, so keep it (never throw away work
+            # on a guess) and stamp it now.
+            sha = data.get("task_sha")
+            same_task = (sha is None or sha == _task_sha(task_text)) and (
+                data.get("agent_root") or self.cfg.agent_root) == self.cfg.agent_root
+            if same_task and sha is None:
+                data["task_sha"] = _task_sha(task_text)
+                data["agent_root"] = self.cfg.agent_root
+                self.data = data
+                self.save()
+            if same_task:
+                self.data = data
+                self.reconcile()
+                return self.data
+            # A different task (or a different directory) must never be answered
+            # with "already done": archive the old notebook and start clean.
+            self.archive("task changed")
         self.data = self.fresh(task_text, goal)
         self.save()
         return self.data
+
+    def archive(self, why: str) -> str:
+        """Keep the old journal as history instead of silently reusing it."""
+        old_id = str((self.data or {}).get("task_id") or read_json(self.path, {})
+                     .get("task_id") or "previous")
+        base = os.path.dirname(self.path) or "."
+        target = os.path.join(base, f"journal-{old_id}.json")
+        try:
+            if os.path.exists(self.path):
+                os.replace(self.path, target)
+                if os.path.exists(self.cfg.journal_md):
+                    os.replace(self.cfg.journal_md,
+                               os.path.join(base, f"journal-{old_id}.md"))
+            print(f"  ! previous journal ({old_id}) archived → "
+                  f"{os.path.basename(target)} ({why})", flush=True)
+        except OSError:
+            pass
+        return target
 
     def reconcile(self) -> list:
         """A step left `running` belongs to a process that is gone."""
@@ -3976,6 +4017,8 @@ def cmd_agent(args, cfg: Config, log: Log) -> int:
 
     if args.max_hours:
         cfg.max_hours = int(args.max_hours)
+    if getattr(args, "model", ""):
+        cfg.agent_model = args.model
     if getattr(args, "dir", ""):
         cfg.agent_root = os.path.abspath(args.dir)
 
@@ -4091,7 +4134,7 @@ def _run_one_step(cfg: Config, log: Log, state: State, journal: Journal,
     before = protected_snapshot(cfg)
     attempts = int(step.get("attempts", 0))
     prompt = step["title"]
-    argv = [cfg.oc_bin, "run", prompt]
+    argv = [cfg.oc_bin, "run"] + (["-m", cfg.agent_model] if cfg.agent_model else []) + [prompt]
     env = opencode_env(cfg)
     wall = {"session": "", "model": ""}
 
@@ -4308,6 +4351,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--task", default="", help="file with one step per line (- or 1.)")
     s.add_argument("--dir", default="", help="work directory (default: current)")
     s.add_argument("--goal", default="", help="one line describing the goal")
+    s.add_argument("-m", "--model", default="",
+                   help="model for every step (e.g. opencode/deepseek-v4.1-flash-free)")
     s.add_argument("--max-hours", type=int, default=0,
                    help="override OUC_MAX_HOURS (default 10)")
     s.add_argument("--fresh", action="store_true", help="ignore an existing journal")

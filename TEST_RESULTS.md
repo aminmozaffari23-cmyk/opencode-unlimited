@@ -1,7 +1,66 @@
-# TEST_RESULTS.md — opencode-unlimited 2.4.0
+# TEST_RESULTS.md — opencode-unlimited 2.4.1
 
 Everything below was **executed on a real machine**, not reviewed on paper.
 The 2.0.1/2.1.0 tunnel-mode results are kept further down as history.
+
+## 2.4.1 — a real website task given to DeepSeek through `ouc agent`
+
+The question this answers: **can the agent do a real, non-trivial job on a real
+machine with a real model?** Not a toy prompt — a full three-page site.
+
+| Item | Value |
+|---|---|
+| Machine | GitHub Codespace `laughing-space-guide-xrpxwxgxqwq6fqrp` (Ubuntu 24.04, 2 vCPU) |
+| Build | `opencode-unlimited 2.4.1`, proxy mode, WARP egress `2a09:bac1:76a0:830::57b:13` |
+| Model | `opencode/deepseek-v4.1-flash-free` (the only DeepSeek in `opencode models`) |
+| Command | `ouc agent --task task.txt --dir /workspaces/warpwave-site --max-hours 1 -m opencode/deepseek-v4.1-flash-free` |
+| Result | **4/4 steps done, 11 m 29 s**, 0 quota walls, 0 rotations, 0 resumes |
+| Product | `index.html` 32 419 B · `about.html` 32 248 B · `styles.css` 3 124 B |
+
+Step times (from the journal, milliseconds not rounded):
+
+```
+1  done  626s   build index.html (entire landing page)
+2  done   16s   add styles.css
+3  done   19s   add about.html
+4  done   28s   verify its own work
+```
+
+Everything was written during step 1; the later steps were small edits and the
+self-check. Served from the Codespace with `python3 -m http.server`:
+
+```
+index: 200 32419B
+about: 200 32248B
+css:   200 3124B
+```
+
+The model's own verification (its words, cut to the facts): Tailwind CDN at line
+20 of both pages, `styles.css` at line 26, 3 sections on each page, sticky navbar
+with 4 links + CTA, hero with 2 buttons and a gradient, 3 feature cards with
+inline SVG, 3 pricing tiers with the middle one highlighted, 4 footer columns,
+a 4-person team grid, a 6-item `<details>/<summary>` FAQ, dark-mode toggle,
+45 `aria-*` attributes, no external images. It also declared its own caveats:
+"verification was static (file inspection); I did not open the pages in a
+browser" and "the hero and mission sections lack explicit `id`s".
+
+### The bug this run found (and 2.4.1 fixes)
+
+The first attempt finished in **0.44 s** reporting `steps: 3/3 done`, having
+done nothing. Cause: the journal of an earlier run in the same account was
+resumed, and every step in it was already `done`, so the new task matched
+nothing to do. Fixed: the journal is now bound to `sha256(task text)` +
+work directory; a mismatch archives the old notebook (`journal-<id>.json/.md`)
+and starts clean. Regression test `t70`.
+
+### What this does not show
+
+* One task, one model, 11 minutes. It is not a 10-hour run, and it did not hit a
+  quota wall, so the rotation path stayed idle (it is covered by `t46`–`t62`
+  and the chaos run in the 2.4.0 section above).
+* Rendering was never checked in a browser by the model or by me; the pages were
+  validated structurally (HTTP 200, element counts, link targets) and then made
+  self-contained for a visual look in the workspace copy.
 
 ## 2.4.0 — unattended runs: what was actually executed
 

@@ -1,4 +1,4 @@
-# UNINSTALL.md — opencode-unlimited 2.4.0
+# UNINSTALL.md — opencode-unlimited 2.4.1
 
 Removal is designed to be complete **and** to leave your network working.
 The automated test `t21_uninstall_complete` checks every path below, and
