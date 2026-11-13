@@ -1,0 +1,10 @@
+{
+  "failed_nonloopback_connect_attempts": 86,
+  "successful_nonloopback_connects": 0,
+  "failed_probe_address": "2001:4860:4860::8888",
+  "all_failed_probe_errno": "ENETUNREACH",
+  "proxy_routes_pwd_models_verified": true,
+  "original_observer_failed": true,
+  "original_failure_preserved": true,
+  "correction": "Failed IPv6 reachability probes are not successful direct provider connections. Count and disclose them; retain original assertion failure."
+}

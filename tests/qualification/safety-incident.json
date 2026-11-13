@@ -1,0 +1,26 @@
+{
+  "kind": "preserved harness safety incident, NOT valid recovery qualification",
+  "cause": "New regression fixture used shared global fallback because OUC_USER_STATE_DIR was not set. Old installed supervisor alternated fallback_fixture with a historical request.",
+  "native_free_limit_errors_in_contaminated_candidate_run": 21,
+  "candidate_recorded_rotations": 20,
+  "candidate_hops": [
+    43,
+    63
+  ],
+  "installed_hops": [
+    43,
+    94
+  ],
+  "these_are_not_unique_ip_counts": true,
+  "exact_test_owned_fixture_quarantined": true,
+  "original_requests_not_deleted": true,
+  "counter_blacklist_registration_history_not_rolled_back": true,
+  "user_informed_and_explicit_safe_continuation_approved": true,
+  "corrected_run_installed_hops": [
+    94,
+    94
+  ],
+  "corrected_focused_inet_connect_attempts": 0,
+  "corrected_70_focused_tests_shared_channels_unchanged": true,
+  "original_bash_vs_shell_observer_failure_retained": true
+}

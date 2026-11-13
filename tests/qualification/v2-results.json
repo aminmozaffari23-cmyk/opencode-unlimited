@@ -1,0 +1,222 @@
+{
+  "source_sha256": "6be5f5d328911a5cb97c9bb5caac94eda03caff9b0d31b3e8dcf122021e09d57",
+  "version": "2.4.2 (existing unpublished working version retained)",
+  "native_cli_version": "2.2.7",
+  "mode": "proxy only",
+  "ports": [
+    40000,
+    8080
+  ],
+  "default_offline_suite": {
+    "passed_groups": 55,
+    "failed_groups": 0,
+    "skipped_groups": 11,
+    "skipped_detail": "5 legacy host-affecting installer groups + 6 destructive real-WARP groups",
+    "focused_tests_inside_one_group": 70
+  },
+  "earlier_full_disposable_local_suite": {
+    "passed_groups": 60,
+    "failed_groups": 0,
+    "excluded_real_warp_groups": 6,
+    "note": "Executed before the additional installer safety opt-in gate; same product source hash."
+  },
+  "focused_remote_traced_suite": {
+    "passed": 70,
+    "failed": 0,
+    "seconds": 9.834,
+    "inet_connect_attempts": 0,
+    "shared_channels_unchanged": true,
+    "installed_hops_before": 94,
+    "installed_hops_after": 94
+  },
+  "live_phases": [
+    {
+      "name": "minimax-preflight",
+      "command_rc": 0,
+      "seconds": 8.408,
+      "model": "opencode/minimax-m3.1-flash-free",
+      "native_calls": 1,
+      "routes_pwd_json_valid": true,
+      "all_models_match": true,
+      "native_exits": [
+        0
+      ],
+      "safety_stop": "",
+      "physical_rotation_fence_observed": null
+    },
+    {
+      "name": "minimax-website",
+      "command_rc": 143,
+      "seconds": 378.494,
+      "model": "opencode/minimax-m3.1-flash-free",
+      "native_calls": 1,
+      "routes_pwd_json_valid": true,
+      "all_models_match": true,
+      "native_exits": [
+        143
+      ],
+      "safety_stop": "SAFETY_STOP genuine native provider error; bounded qualification will not rotate for it",
+      "physical_rotation_fence_observed": true,
+      "observed_error": {
+        "type": "provider.transport",
+        "message_contains": "ECONNRESET",
+        "class": "network",
+        "external_observer_cancelled": true,
+        "quota_error": false
+      }
+    },
+    {
+      "name": "beam-website",
+      "command_rc": 0,
+      "seconds": 337.373,
+      "model": "opencode/beam-free",
+      "native_calls": 4,
+      "routes_pwd_json_valid": true,
+      "all_models_match": true,
+      "native_exits": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "safety_stop": "",
+      "physical_rotation_fence_observed": true
+    },
+    {
+      "name": "pwd-agent",
+      "command_rc": 0,
+      "seconds": 7.088,
+      "model": "opencode/flint-40b-free",
+      "native_calls": 1,
+      "routes_pwd_json_valid": true,
+      "all_models_match": true,
+      "native_exits": [
+        0
+      ],
+      "safety_stop": "",
+      "physical_rotation_fence_observed": true
+    },
+    {
+      "name": "start",
+      "command_rc": 0,
+      "seconds": 8.082,
+      "model": "opencode/flint-40b-free",
+      "native_calls": 1,
+      "routes_pwd_json_valid": true,
+      "all_models_match": true,
+      "native_exits": [
+        0
+      ],
+      "safety_stop": "",
+      "physical_rotation_fence_observed": true
+    },
+    {
+      "name": "resume",
+      "command_rc": 0,
+      "seconds": 11.155,
+      "model": "opencode/flint-40b-free",
+      "native_calls": 2,
+      "routes_pwd_json_valid": true,
+      "all_models_match": true,
+      "native_exits": [
+        0,
+        0
+      ],
+      "safety_stop": "",
+      "physical_rotation_fence_observed": true
+    },
+    {
+      "name": "lane",
+      "command_rc": 0,
+      "seconds": 5.077,
+      "model": "opencode/flint-40b-free",
+      "native_calls": 1,
+      "routes_pwd_json_valid": true,
+      "all_models_match": true,
+      "native_exits": [
+        0
+      ],
+      "safety_stop": "",
+      "physical_rotation_fence_observed": null
+    },
+    {
+      "name": "literal-429K",
+      "command_rc": 0,
+      "seconds": 5.938,
+      "model": "opencode/flint-40b-free",
+      "native_calls": 1,
+      "routes_pwd_json_valid": true,
+      "all_models_match": true,
+      "native_exits": [
+        0
+      ],
+      "safety_stop": "",
+      "physical_rotation_fence_observed": true
+    }
+  ],
+  "beam_files": {
+    "index.html": {
+      "bytes": 28286,
+      "sha256": "f0cae2b0f72272e67cb84dfa4372dbaa39fed75f6789659579dd221184b1c922"
+    },
+    "about.html": {
+      "bytes": 23948,
+      "sha256": "49e43aedc283c0a32b01eae2cf8811f3d0e916ab5c998d661720fd7d3b56082a"
+    },
+    "styles.css": {
+      "bytes": 3070,
+      "sha256": "09169097b7a7d742f35b1206369295fa8c407f1102a981f76fd5f4862cc4a68b"
+    }
+  },
+  "final_minimax_four_step_success": false,
+  "real_successful_quota_recovery_proven": false,
+  "ten_hour_live_soak_executed": false,
+  "historical_runs_are_not_final_source_qualification": true,
+  "health": {
+    "source_sha256": "6be5f5d328911a5cb97c9bb5caac94eda03caff9b0d31b3e8dcf122021e09d57",
+    "installed_source_sha256": "ba3320a80bdd3a528bf7ffa825bb9e7fc83214c69d075179c7e7b82a824148b0",
+    "installed_source_replaced": false,
+    "original_checkout_HEAD": "0ee0825cb69ad0286d9f97e4e1560524553051e1",
+    "original_checkout_status_unchanged": true,
+    "protected_signatures_unchanged": true,
+    "baseline_content_and_modes_unchanged": true,
+    "opencode_configuration_files_compared": 3653,
+    "opencode_configuration_changes": [],
+    "original_notebook_and_report_files_compared": 17,
+    "all_original_notebooks_and_reports_unchanged": true,
+    "original_shared_native_log_unchanged_during_corrected_tests": true,
+    "installed_hops_after_incident": 94,
+    "installed_hops_after_corrected_tests": 94,
+    "global_fallback_request_absent": true,
+    "invalid_model": {
+      "rc": 1,
+      "reason": "fatal",
+      "attempts": 1,
+      "rotations": 0
+    },
+    "supervisor_alive": true,
+    "warp_connected": true,
+    "ports_open": [
+      40000,
+      8080
+    ],
+    "owned_native_processes_remaining": [],
+    "no_registration_or_state_history_rollback": true,
+    "real_successful_quota_recovery_proven": false,
+    "closed_proxy": {
+      "ok": false,
+      "walled": false,
+      "failure_class": "timeout",
+      "command_rc": 1
+    },
+    "final_verification": {
+      "ran": true,
+      "ok": true,
+      "walled": false,
+      "model": "opencode/flint-40b-free",
+      "rc": 0
+    }
+  },
+  "readiness": "Review / controlled use only. Not fully qualified for MiniMax unattended operation or genuine quota recovery; no release or permanent installation.",
+  "calendar_note": "Machine logs carry observed 2026-11-12 timestamps; session supplied 2026-11-08. Elapsed durations use monotonic clocks."
+}

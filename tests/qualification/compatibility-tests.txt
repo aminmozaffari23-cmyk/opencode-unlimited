@@ -1,0 +1,392 @@
+re-running as root (test suite needs to install and manipulate firewalls)
+
+opencode-unlimited test suite — 2026-11-12T16:48:14Z
+root=0  offline_only=1  test_timeout=240s
+systemd --user usable: no
+logs: /home/user/ops/ouc-v2-qualification/checkout/tests/logs
+
+
+=================== no advertising / signatures anywhere in the shipped tree
+      shipped files containing an ad signature: none
+      code that writes an agent-rules file: none
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m no advertising / signatures anywhere in the shipped tree
+  [32mPASS[0m t01_no_advertising_in_tree
+
+=================== lane wrapper is byte-transparent (no output mangling)
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+      direct: 66616b652d6f70656e636f6465206172672d636f756e743d320a414e53493a201b5b313b33316d7265641b5b306d0a6e6f2d747261696c696e672d6e65776c696e652d6d61726b6572
+      lane  : 66616b652d6f70656e636f6465206172672d636f756e743d320a414e53493a201b5b313b33316d7265641b5b306d0a6e6f2d747261696c696e672d6e65776c696e652d6d61726b6572
+  [32mPASS[0m lane wrapper is byte-transparent (no output mangling)
+  [32mPASS[0m t02_lane_is_transparent
+
+=================== detects the real quota message opencode 1.19 writes
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+      offset advanced to 291
+  [32mPASS[0m detects the real quota message opencode 1.19 writes
+  [32mPASS[0m t03_detect_real_message
+
+=================== same wall bytes cannot trigger twice, a rewritten log is re-read
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m same wall bytes cannot trigger twice, a rewritten log is re-read
+  [32mPASS[0m t04_detection_is_idempotent
+
+=================== still detects the legacy QuotaExceeded wording
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m still detects the legacy QuotaExceeded wording
+  [32mPASS[0m t05_detects_legacy_message
+
+=================== cooldown blocks a second rotation, pending survives it
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m cooldown blocks a second rotation, pending survives it
+  [32mPASS[0m t06_cooldown_and_pending
+
+=================== an unreachable egress never lands in the blacklist
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+      blacklist after a rotation with unknown old block: []
+      blacklist: ["2a09:bac5:b002:1d37"]
+  [32mPASS[0m an unreachable egress never lands in the blacklist
+  [32mPASS[0m t07_blacklist_never_empty
+
+=================== registration path waits for the delete to clear and finishes < 30s
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+      rotation took 11.32s
+      warp-cli rejections caused by racing the delete: 0
+  [32mPASS[0m registration path waits for the delete to clear and finishes < 30s
+  [32mPASS[0m t08_rotation_respects_settle
+
+=================== transient registration failures are retried with backoff
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+      failed registration attempts before success: 2
+  [32mPASS[0m transient registration failures are retried with backoff
+  [32mPASS[0m t09_retry_with_backoff
+
+=================== failed rotation never leaves the machine firewalled
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+      recorded error: no fresh /64 available right now; every candidate was spent or unverifiable [not
+  [32mPASS[0m failed rotation never leaves the machine firewalled
+  [32mPASS[0m t10_failure_keeps_internet
+
+=================== successful rotation re-installs the kill-switch
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m successful rotation re-installs the kill-switch
+  [32mPASS[0m t11_firewall_restored_on_success
+
+=================== OUC_DISABLE_KILL_SWITCH=1 disables the guard entirely
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+      rotation works with the guard disabled
+  [32mPASS[0m OUC_DISABLE_KILL_SWITCH=1 disables the guard entirely
+  [32mPASS[0m t12_disable_killswitch_env
+
+=================== portable supervisor: start / status / stop, single instance
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+      pid before/after second start: 16947 / 16947
+  [32mPASS[0m portable supervisor: start / status / stop, single instance
+  [32mPASS[0m t13_portable_lifecycle
+
+=================== supervisor auto-rotates when a wall appears (end of pipeline)
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+      supervisor rotated after 4s (hops=1)
+  [32mPASS[0m supervisor auto-rotates when a wall appears (end of pipeline)
+  [32mPASS[0m t14_supervisor_does_the_rotation
+
+=================== supervisor repairs a dead tunnel without deadlocking
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+      tunnel back after 23s; guard restored after +2s (True)
+  [32mPASS[0m supervisor repairs a dead tunnel without deadlocking
+  [32mPASS[0m t15_supervisor_repairs_dead_tunnel
+
+=================== supervisor log rotates instead of growing forever
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m supervisor log rotates instead of growing forever
+  [32mPASS[0m t16_log_rotation
+
+=================== a corrupt state file is recovered, not fatal
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m a corrupt state file is recovered, not fatal
+  [32mPASS[0m t17_state_corruption_recovery
+  [33mSKIP[0m t18_install_portable — legacy installer test requires explicit OUC_TEST_DISPOSABLE_HOST=1
+  [33mSKIP[0m t19_install_systemd_unit — legacy installer test requires explicit OUC_TEST_DISPOSABLE_HOST=1
+  [33mSKIP[0m t20_install_idempotent — legacy installer test requires explicit OUC_TEST_DISPOSABLE_HOST=1
+  [33mSKIP[0m t21_uninstall_complete — legacy installer test requires explicit OUC_TEST_DISPOSABLE_HOST=1
+
+=================== doctor reports a coherent picture
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+      doctor exit code: 1 (1 is fine here: no real tunnel in the sandbox)
+  [32mPASS[0m doctor reports a coherent picture
+  [32mPASS[0m t22_doctor
+
+=================== a /64 we already exhausted is skipped, not handed to the user again
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+      skipped the spent block: 2a09:bac5:b003:1d37
+  [32mPASS[0m a /64 we already exhausted is skipped, not handed to the user again
+  [32mPASS[0m t23_blacklist_skips_spent_block
+
+=================== default rotation is rotate-keys (seconds, no re-registration)
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+      rotation took 2.3s via rotate-keys#1
+  [32mPASS[0m default rotation is rotate-keys (seconds, no re-registration)
+  [32mPASS[0m t24_fast_path_rotate_keys
+
+=================== a recycled /64 is detected and another one is requested
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+      attempts: ['rotate-keys#1', 'rotate-keys#2']
+  [32mPASS[0m a recycled /64 is detected and another one is requested
+  [32mPASS[0m t25_recycled_block_is_retried
+
+=================== success means opencode answered, not merely that the address changed
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+      verified=True attempts=2
+  [32mPASS[0m success means opencode answered, not merely that the address changed
+  [32mPASS[0m t26_verification_gates_success
+
+=================== ipv6 pin: install, idempotent, status, remove, disable
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m ipv6 pin: install, idempotent, status, remove, disable
+  [32mPASS[0m t27_pin_lifecycle
+
+=================== ouc verify reports the truth about the current block
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+      healthy block -> exit 0
+      walled block -> exit 1
+  [32mPASS[0m ouc verify reports the truth about the current block
+  [32mPASS[0m t28_verify_command
+
+=================== no TUN device means proxy mode, and proxy mode never touches the firewall
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m no TUN device means proxy mode, and proxy mode never touches the firewall
+  [32mPASS[0m t40_proxy_mode_config
+
+=================== proxy mode: rotate-keys + a real request through the HTTP proxy
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m proxy mode: rotate-keys + a real request through the HTTP proxy
+  [32mPASS[0m t41_proxy_rotation_verified
+
+=================== the HTTP->SOCKS5 bridge really proxies a CONNECT request
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m the HTTP->SOCKS5 bridge really proxies a CONNECT request
+  [32mPASS[0m t42_bridge_end_to_end
+
+=================== status and doctor explain proxy mode (ports, bridge, egress family)
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m status and doctor explain proxy mode (ports, bridge, egress family)
+  [32mPASS[0m t43_proxy_status_and_doctor
+  [33mSKIP[0m t44_proxy_installer — legacy installer test requires explicit OUC_TEST_DISPOSABLE_HOST=1
+
+=================== ouc run: on a free-limit wall it finds a working block and continues the session
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m ouc run: on a free-limit wall it finds a working block and continues the session
+  [32mPASS[0m t46_run_resumes_after_wall
+
+=================== ouc run: a normal run makes exactly one opencode call and resumes nothing
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m ouc run: a normal run makes exactly one opencode call and resumes nothing
+  [32mPASS[0m t47_run_without_wall_is_one_call
+
+=================== ouc run: it gives up honestly after OUC_RESUME_MAX resumes (no infinite loop)
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m ouc run: it gives up honestly after OUC_RESUME_MAX resumes (no infinite loop)
+  [32mPASS[0m t48_run_stops_after_resume_max
+
+=================== ouc resume: verifies the block first, then continues with -s/-m
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m ouc resume: verifies the block first, then continues with -s/-m
+  [32mPASS[0m t49_resume_command_verifies_then_continues
+
+=================== ouc run: with OUC_RESUME_USE_SESSION_ID=1 it resumes the exact session (-s)
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m ouc run: with OUC_RESUME_USE_SESSION_ID=1 it resumes the exact session (-s)
+  [32mPASS[0m t50_run_can_resume_by_session_id
+
+=================== state lock/dir work for the non-root user, not just root (regression)
+  [32mPASS[0m state lock/dir work for the non-root user, not just root (regression)
+  [32mPASS[0m t51_state_lock_shared_by_root_and_user
+
+=================== watchdog brings the supervisor back after kill -9
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m watchdog brings the supervisor back after kill -9
+  [32mPASS[0m t52_watchdog_restarts_a_dead_supervisor
+
+=================== watchdog restarts a supervisor that is alive but has stopped breathing
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m watchdog restarts a supervisor that is alive but has stopped breathing
+  [32mPASS[0m t53_watchdog_notices_a_silent_supervisor
+
+=================== a second start is refused and the watchdog leaves a healthy one alone
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m a second start is refused and the watchdog leaves a healthy one alone
+  [32mPASS[0m t54_only_one_supervisor_ever
+
+=================== a step left running by a crash is retried, not lost or duplicated
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m a step left running by a crash is retried, not lost or duplicated
+  [32mPASS[0m t55_journal_reconciles_an_interrupted_step
+
+=================== a corrupted journal is replaced, never fatal
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m a corrupted journal is replaced, never fatal
+  [32mPASS[0m t56_journal_survives_corruption
+
+=================== the conversation is recycled on schedule and the journal carries the work
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m the conversation is recycled on schedule and the journal carries the work
+  [32mPASS[0m t57_conversation_is_recycled
+
+=================== only one agent run at a time
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m only one agent run at a time
+  [32mPASS[0m t58_second_agent_is_refused
+
+=================== a rate limit is waited out — no rotation, no spent block
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m a rate limit is waited out — no rotation, no spent block
+  [32mPASS[0m t59_rate_limit_never_rotates
+
+=================== a network problem keeps still: no rotation, no burned block
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m a network problem keeps still: no rotation, no burned block
+  [32mPASS[0m t60_network_problem_never_rotates
+
+=================== two rotations are spaced 15-20 s apart (production default)
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m two rotations are spaced 15-20 s apart (production default)
+  [32mPASS[0m t61_rotation_spacing_is_15_to_20_seconds
+
+=================== walls/rotations/resumes are unlimited by default (4 walls in one step)
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m walls/rotations/resumes are unlimited by default (4 walls in one step)
+  [32mPASS[0m t62_no_caps_on_walls_or_rotations
+
+=================== the run stops after OUC_MAX_CONSEC_FAIL consecutive failures
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m the run stops after OUC_MAX_CONSEC_FAIL consecutive failures
+  [32mPASS[0m t63_consecutive_failures_stop_the_run
+
+=================== defaults: 10 h, 60 consecutive failures, everything else unlimited
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m defaults: 10 h, 60 consecutive failures, everything else unlimited
+  [32mPASS[0m t64_default_budgets_are_ten_hours_and_sixty_failures
+
+=================== a silent model call is killed, then retried once
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m a silent model call is killed, then retried once
+  [32mPASS[0m t65_a_stalled_step_is_killed_and_retried
+
+=================== run.json is written and fresh (a monitor can trust it)
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m run.json is written and fresh (a monitor can trust it)
+  [32mPASS[0m t66_live_status_file_stays_fresh
+
+=================== the run report says what finished, what did not, and why it stopped
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m the run report says what finished, what did not, and why it stopped
+  [32mPASS[0m t67_final_report_is_honest
+
+=================== a task that asks for something irreversible is refused before it runs
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m a task that asks for something irreversible is refused before it runs
+  [32mPASS[0m t68_guardrails_refuse_irreversible_tasks
+
+=================== the 'sleep until the quota window reopens' behaviour is gone
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m the 'sleep until the quota window reopens' behaviour is gone
+  [32mPASS[0m t69_no_reset_wait_anywhere
+
+=================== a different task starts clean: the old journal is archived, not resumed
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+  [32mPASS[0m a different task starts clean: the old journal is archived, not resumed
+  [32mPASS[0m t70_a_new_task_never_inherits_an_old_journal
+
+=================== an external SSH login that rewrites authorized_keys with identical bytes is not a violation
+OFFLINE_SCOPE_OK 25 controller paths; all external commands are explicit fakes
+{"touch_is_silent": true, "dir_touch_is_silent": true, "append_is_caught": true, "touch_violations": [], "append_violations": ["/tmp/ouc-test.AkuNyU/home/.ssh content changed", "/tmp/ouc-test.AkuNyU/home/.ssh/authorized_keys content changed"]}
+  [32mPASS[0m an external SSH login that rewrites authorized_keys with identical bytes is not a violation
+  [32mPASS[0m t71_a_touched_key_file_is_not_tampering
+
+=================== native v2 events, proxy/cwd, context, ownership and cancellation regressions
+test_address_poll_interval_uses_monotonic_clock (__main__.RunnerRegression.test_address_poll_interval_uses_monotonic_clock) ... ok
+test_all_process_proxy_variables_agree (__main__.RunnerRegression.test_all_process_proxy_variables_agree) ... ok
+test_background_cpu_is_not_agent_progress (__main__.RunnerRegression.test_background_cpu_is_not_agent_progress) ... ok
+test_budget_elapsed_is_monotonic (__main__.RunnerRegression.test_budget_elapsed_is_monotonic) ... ok
+test_cli_verify_accepts_explicit_model (__main__.RunnerRegression.test_cli_verify_accepts_explicit_model) ... ok
+test_completed_cli_does_not_wait_for_background_pipe_eof (__main__.RunnerRegression.test_completed_cli_does_not_wait_for_background_pipe_eof) ... ok
+test_deadline_stops_owned_call_without_quota_claim (__main__.RunnerRegression.test_deadline_stops_owned_call_without_quota_claim) ... ok
+test_early_rotation_probe_error_still_releases_lock (__main__.RunnerRegression.test_early_rotation_probe_error_still_releases_lock) ... ok
+test_egress_wait_uses_monotonic_not_wall_clock (__main__.RunnerRegression.test_egress_wait_uses_monotonic_not_wall_clock) ... ok
+test_env_reconciles_pwd_with_actual_directory (__main__.RunnerRegression.test_env_reconciles_pwd_with_actual_directory) ... ok
+test_event_metadata_does_not_leak_between_errors (__main__.RunnerRegression.test_event_metadata_does_not_leak_between_errors) ... ok
+test_fake_provider_refuses_missing_explicit_sandbox (__main__.RunnerRegression.test_fake_provider_refuses_missing_explicit_sandbox) ... ok
+test_fake_quota_in_log_does_not_trigger_wall_scanner (__main__.RunnerRegression.test_fake_quota_in_log_does_not_trigger_wall_scanner) ... ok
+test_fatal_with_exit_zero_stops_without_rotation (__main__.RunnerRegression.test_fatal_with_exit_zero_stops_without_rotation) ... ok
+test_fixture_scope_rejects_global_fallback_without_writing (__main__.RunnerRegression.test_fixture_scope_rejects_global_fallback_without_writing) ... ok
+test_foreground_lease_blocks_alias_state_owner (__main__.RunnerRegression.test_foreground_lease_blocks_alias_state_owner) ... ok
+test_foreground_lease_blocks_legacy_rotation_flock (__main__.RunnerRegression.test_foreground_lease_blocks_legacy_rotation_flock) ... ok
+test_health_context_verifies_selected_model_and_directory (__main__.RunnerRegression.test_health_context_verifies_selected_model_and_directory) ... ok
+test_hop_response_wait_uses_monotonic_not_wall_clock (__main__.RunnerRegression.test_hop_response_wait_uses_monotonic_not_wall_clock) ... ok
+test_inference_curl_quota_hint_removed (__main__.RunnerRegression.test_inference_curl_quota_hint_removed) ... ok
+test_info_log_quoting_quota_is_not_error (__main__.RunnerRegression.test_info_log_quoting_quota_is_not_error) ... ok
+test_legacy_doctor_helper_has_defined_logger (__main__.RunnerRegression.test_legacy_doctor_helper_has_defined_logger) ... ok
+test_legacy_info_cannot_promote_quoted_error_severity (__main__.RunnerRegression.test_legacy_info_cannot_promote_quoted_error_severity) ... ok
+test_legacy_real_error_line_still_works (__main__.RunnerRegression.test_legacy_real_error_line_still_works) ... ok
+test_managed_lease_prevents_background_rotation (__main__.RunnerRegression.test_managed_lease_prevents_background_rotation) ... ok
+test_managed_lease_refuses_second_owner (__main__.RunnerRegression.test_managed_lease_refuses_second_owner) ... ok
+test_managed_v2_refuses_unstructured_format_override (__main__.RunnerRegression.test_managed_v2_refuses_unstructured_format_override) ... ok
+test_native_stream_split_at_every_byte (__main__.RunnerRegression.test_native_stream_split_at_every_byte) ... ok
+test_nonzero_exit_with_verify_marker_is_not_success (__main__.RunnerRegression.test_nonzero_exit_with_verify_marker_is_not_success) ... ok
+test_owned_rotation_lock_is_reentrant_and_keeps_existing_mode (__main__.RunnerRegression.test_owned_rotation_lock_is_reentrant_and_keeps_existing_mode) ... ok
+test_partial_legacy_line_is_completed_once (__main__.RunnerRegression.test_partial_legacy_line_is_completed_once) ... ok
+test_plain_size_is_not_rate_limit (__main__.RunnerRegression.test_plain_size_is_not_rate_limit) ... ok
+test_quoted_quota_in_model_text_is_not_control_event (__main__.RunnerRegression.test_quoted_quota_in_model_text_is_not_control_event) ... ok
+test_restart_baseline_discards_previous_inode_partial (__main__.RunnerRegression.test_restart_baseline_discards_previous_inode_partial) ... ok
+test_restart_does_not_replay_acknowledged_hop (__main__.RunnerRegression.test_restart_does_not_replay_acknowledged_hop) ... ok
+test_resume_retains_selected_agent_model (__main__.RunnerRegression.test_resume_retains_selected_agent_model) ... ok
+test_resume_verifies_selected_model (__main__.RunnerRegression.test_resume_verifies_selected_model) ... ok
+test_root_background_resume_receives_callable_demoter (__main__.RunnerRegression.test_root_background_resume_receives_callable_demoter) ... ok
+test_rotation_duration_survives_backward_wall_clock_jump (__main__.RunnerRegression.test_rotation_duration_survives_backward_wall_clock_jump) ... /usr/local/lib/python3.13/unittest/mock.py:2253: ResourceWarning: unclosed file <_io.FileIO name='/tmp/ouc-v2-unit-nuz52mbg/state/resume.log' mode='ab' closefd=True>
+  def __init__(self, name, parent):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+ok
+test_run_child_reconciles_explicit_cwd_and_pwd (__main__.RunnerRegression.test_run_child_reconciles_explicit_cwd_and_pwd) ... ok
+test_sigterm_writes_cancelled_report_and_releases_lease (__main__.RunnerRegression.test_sigterm_writes_cancelled_report_and_releases_lease) ... ok
+test_simulated_network_does_not_rotate_or_switch_model (__main__.RunnerRegression.test_simulated_network_does_not_rotate_or_switch_model) ... ok
+test_simulated_quota_recovery_preserves_context (__main__.RunnerRegression.test_simulated_quota_recovery_preserves_context) ... ok
+test_simulated_rate_does_not_rotate_or_switch_model (__main__.RunnerRegression.test_simulated_rate_does_not_rotate_or_switch_model) ... ok
+test_simulated_stall_retains_selected_model (__main__.RunnerRegression.test_simulated_stall_retains_selected_model) ... ok
+test_simulated_unknown_exit_retains_selected_model (__main__.RunnerRegression.test_simulated_unknown_exit_retains_selected_model) ... ok
+test_skipping_large_log_starts_at_actual_end_not_first_megabyte (__main__.RunnerRegression.test_skipping_large_log_starts_at_actual_end_not_first_megabyte) ... ok
+test_stall_cleans_only_owned_descendants (__main__.RunnerRegression.test_stall_cleans_only_owned_descendants) ... ok
+test_successful_json_text_not_error_even_with_429 (__main__.RunnerRegression.test_successful_json_text_not_error_even_with_429) ... ok
+test_svg_coordinates_are_not_rate_limit (__main__.RunnerRegression.test_svg_coordinates_are_not_rate_limit) ... ok
+test_symlink_workdir_has_physical_matching_pwd (__main__.RunnerRegression.test_symlink_workdir_has_physical_matching_pwd) ... ok
+test_tool_output_error_is_not_provider_failure (__main__.RunnerRegression.test_tool_output_error_is_not_provider_failure) ... ok
+test_truncated_native_success_is_not_a_completed_step (__main__.RunnerRegression.test_truncated_native_success_is_not_a_completed_step) ... ok
+test_two_hop_channels_do_not_replay_each_other_after_restart (__main__.RunnerRegression.test_two_hop_channels_do_not_replay_each_other_after_restart) ... ok
+test_typed_error_with_exit_zero_cannot_mark_done (__main__.RunnerRegression.test_typed_error_with_exit_zero_cannot_mark_done) ... ok
+test_unknown_error_shape_fails_closed (__main__.RunnerRegression.test_unknown_error_shape_fails_closed) ... ok
+test_user_state_override_is_complete (__main__.RunnerRegression.test_user_state_override_is_complete) ... ok
+test_v2_actual_model_unavailable_shape (__main__.RunnerRegression.test_v2_actual_model_unavailable_shape) ... ok
+test_v2_explicit_continue_preference_is_respected (__main__.RunnerRegression.test_v2_explicit_continue_preference_is_respected) ... ok
+test_v2_http_401_is_fatal (__main__.RunnerRegression.test_v2_http_401_is_fatal) ... ok
+test_v2_known_session_is_exact_not_latest (__main__.RunnerRegression.test_v2_known_session_is_exact_not_latest) ... ok
+test_v2_network_error (__main__.RunnerRegression.test_v2_network_error) ... ok
+test_v2_private_server_without_blanket_auto (__main__.RunnerRegression.test_v2_private_server_without_blanket_auto) ... ok
+test_v2_quota_preserves_session (__main__.RunnerRegression.test_v2_quota_preserves_session) ... ok
+test_v2_rate_not_quota (__main__.RunnerRegression.test_v2_rate_not_quota) ... ok
+test_v2_unknown_error_never_becomes_success (__main__.RunnerRegression.test_v2_unknown_error_never_becomes_success) ... ok
+test_v2_unknown_recovery_model_does_not_rotate (__main__.RunnerRegression.test_v2_unknown_recovery_model_does_not_rotate) ... ok
+test_verification_rate_failure_never_rotates_again (__main__.RunnerRegression.test_verification_rate_failure_never_rotates_again) ... ok
+test_verify_marker_plus_typed_error_is_not_success (__main__.RunnerRegression.test_verify_marker_plus_typed_error_is_not_success) ... ok
+test_verify_override_keeps_configured_default_model (__main__.RunnerRegression.test_verify_override_keeps_configured_default_model) ... ok
+
+----------------------------------------------------------------------
+Ran 70 tests in 4.806s
+
+OK
+  [32mPASS[0m native v2 events, proxy/cwd, context, ownership and cancellation regressions
+  [32mPASS[0m t72_native_v2_runner_regressions
+
+  (destructive REAL WARP tests excluded; explicit disposable-host opt-in required)
+
+==========================================================
+  results: [32m55 passed[0m  [31m0 failed[0m  [33m11 skipped[0m
+==========================================================

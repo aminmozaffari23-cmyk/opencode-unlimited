@@ -1,4 +1,33 @@
-# TEST_RESULTS.md — opencode-unlimited 2.4.1
+# TEST_RESULTS.md — current qualification and historical releases
+
+## Unreleased 2.4.2 / OpenCode 2.2.7
+
+Read [the single beginner guide and full qualification record](BEGINNER_GUIDE.md).
+Machine-readable evidence: [tests/qualification/v2-results.json](tests/qualification/v2-results.json).
+
+- Final safe-default run: **55 groups passed, 0 failed, 11 skipped** (five
+  legacy host-affecting installer groups plus six destructive real-WARP groups).
+- **70 focused tests** are nested inside one group, not 70 extra outer groups.
+  All 70 also passed on the Codespace under tracing: no Internet-family
+  connect attempts, unchanged shared channels, installed hops 94 -> 94.
+- Same product source earlier passed all 60 compatibility groups in a
+  disposable local sandbox before the additional installer safety gate.
+- Real final-source Beam task: **4/4, 337.373 s**. Real shell cwd, manual
+  session memory, scoped routing, native lane, and benign `429K` checks passed.
+- MiniMax selected-model preflight passed; full task **did not finish**:
+  a real transport reset was observed and the safety observer cancelled it.
+  This was not a quota observation or a successful retry/recovery test.
+- Four desktop axe audits reported zero confirmed violations but retained
+  incomplete contrast checks; no WCAG certification is implied.
+- The earlier harness fallback leak and its additional operational rotations
+  are preserved as an incident, not hidden or counted as passing qualification.
+- Source/configuration/protected signatures and 17 original notebooks/reports
+  matched the backups; corrected tests added no installed rotations. Existing
+  installation not replaced. Genuine quota recovery and ten-hour operation
+  remain unqualified.
+
+## Historical results below — not current v2 certification
+
 
 Everything below was **executed on a real machine**, not reviewed on paper.
 The 2.0.1/2.1.0 tunnel-mode results are kept further down as history.

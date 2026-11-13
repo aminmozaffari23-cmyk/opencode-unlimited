@@ -10,8 +10,10 @@ State lives in $FAKE_WARP_STATE (JSON), calls are logged to $FAKE_WARP_LOG.
 """
 import json, os, sys, time
 
-STATE = os.environ.get("FAKE_WARP_STATE", "/tmp/fake-warp-state.json")
-LOG = os.environ.get("FAKE_WARP_LOG", "")
+from sandbox_scope import checked_path, fixture_path
+
+STATE = fixture_path("FAKE_WARP_STATE")
+LOG = fixture_path("FAKE_WARP_LOG", optional=True)
 MIN_SETTLE = float(os.environ.get("FAKE_WARP_MIN_SETTLE", "8"))
 FORCE_FAIL = int(os.environ.get("FAKE_WARP_FAIL_NEW", "0"))
 REG_DELAY_MS = int(os.environ.get("FAKE_WARP_REG_DELAY_MS", "0"))

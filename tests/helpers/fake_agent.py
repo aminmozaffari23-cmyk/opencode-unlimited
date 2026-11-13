@@ -18,15 +18,16 @@ import os
 import sys
 import time
 
-STATE = os.environ.get("FAKE_AGENT_STATE", "/tmp/fake-agent.json")
-ARGV = os.environ.get("FAKE_OC_ARGS", "/tmp/fake-agent-args.txt")
-LOG = os.environ.get("OUC_LOG_PATH") or os.path.expanduser(
-    "~/.local/share/opencode/log/opencode.log")
+from sandbox_scope import checked_path, fixture_path
+
+STATE = fixture_path("FAKE_AGENT_STATE")
+ARGV = fixture_path("FAKE_OC_ARGS")
+LOG = fixture_path("OUC_LOG_PATH")
 
 
 def log_path(st=None):
     """Where the controller is watching: state file wins, then env, then default."""
-    return (st or {}).get("log") or LOG
+    return checked_path((st or {}).get("log") or LOG)
 
 WALL = ('timestamp=2026-11-12T00:00:00.000Z level=ERROR run=abc message="stream error" '
         'providerID={provider} modelID={model} session.id={session} small=false '
@@ -66,6 +67,9 @@ def append(line, path=None):
 
 
 def main():
+    if sys.argv[1:] == ["--version"]:
+        print("opencode v1.0.0")
+        return 0
     st = load()
     st["calls"] = int(st.get("calls", 0)) + 1
     script = st.get("script") or ["ok"]
