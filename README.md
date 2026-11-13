@@ -45,9 +45,16 @@ history, principally for OpenCode 1.19.5. They are **not** blanket qualification
 of OpenCode 2.2.7; where they differ, the current guide/results take precedence.
 
 ```
-57 passed, 0 failed, 0 skipped     (offline suite, 2.4.0)
+56 passed, 0 failed, 11 skipped    (offline suite, 2.4.2, safe defaults)
+61 passed, 0 failed,  6 skipped    (offline + OUC_TEST_DISPOSABLE_HOST=1)
+100 passed                         (pytest: v2 runner + transport resilience)
 6 passed                           (live: 5 tunnel-mode + 1 proxy-mode)
 ```
+
+The 6 remaining skips are the live WARP tests; they require `warp-cli` and
+`/dev/net/tun` and are never faked. The 11 -> 6 difference is the legacy
+installer tests, which now require an explicit disposable-host opt-in instead
+of mutating the host by default.
 
 Plus real end-to-end runs against **opencode 1.19.5 itself**. A genuine wall —
 the free tier exhausted by 47 real requests — was detected and recovered from in
@@ -329,7 +336,7 @@ Everything is environment-driven and can be set in the unit
 | `OUC_STATE_DIR` | `/var/lib/opencode-unlimited` | state, logs, pidfile |
 | `OUC_TARGET_HOME` | the installing user's home | where opencode's log lives |
 | `OUC_SETTLE_SECONDS` | `9` | wait between delete and new (never below 8) |
-| `OUC_COOLDOWN_SECONDS` | `60` | minimum gap between rotations |
+| `OUC_COOLDOWN_SECONDS` | `90` | minimum gap between rotations |
 | `OUC_REG_RETRIES` / `OUC_REG_BACKOFF` | `3` / `3` | registration retries and doubling backoff |
 | `OUC_SAME_BLOCK_RETRIES` | `2` | cycles when Cloudflare returns the same /64 |
 | `OUC_ROTATION_TIMEOUT` | `45` | hard budget for one rotation |
@@ -343,7 +350,7 @@ Everything is environment-driven and can be set in the unit
 ## Tests
 
 ```bash
-bash tests/run_tests.sh --offline     # 22 tests, no WARP, no network changes
+bash tests/run_tests.sh --offline     # 67 tests, no WARP, no network changes
 sudo bash tests/run_tests.sh          # offline + 5 real tests on a live tunnel
 bash tests/run_tests.sh --select=t31  # a single test
 ```
