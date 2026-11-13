@@ -1,0 +1,15 @@
+test_socks_connect_timeout_is_not_a_stream_inactivity_timeout (test_transport_resilience.TransportRegression.test_socks_connect_timeout_is_not_a_stream_inactivity_timeout) ... FAIL
+
+======================================================================
+FAIL: test_socks_connect_timeout_is_not_a_stream_inactivity_timeout (test_transport_resilience.TransportRegression.test_socks_connect_timeout_is_not_a_stream_inactivity_timeout)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/ops/ouc-v2-resilience/checkout/tests/test_transport_resilience.py", line 380, in test_socks_connect_timeout_is_not_a_stream_inactivity_timeout
+    self.assertIsNone(stream.gettimeout(),'handshake timeout leaked into the provider stream')
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 0.05 is not None : handshake timeout leaked into the provider stream
+
+----------------------------------------------------------------------
+Ran 1 test in 0.124s
+
+FAILED (failures=1)

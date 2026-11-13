@@ -1,0 +1,4 @@
+{
+  "reason": "routing/firewall invariant failed",
+  "traceback": "Traceback (most recent call last):\n  File \"/workspaces/ouc-v2-resilience/helpers/live_job_stream.py\", line 151, in <module>\n    try:main()\n        ~~~~^^\n  File \"/workspaces/ouc-v2-resilience/helpers/live_job_stream.py\", line 134, in main\n    website=run('minimax-website',['agent','--task',str(R/'task.txt'),'--dir',str(site),'-m',PRIMARY],site,deadline=3600);phases.append(website)\n  File \"/workspaces/ouc-v2-resilience/helpers/live_job_stream.py\", line 107, in run\n    assert not direct and not firewall,'routing/firewall invariant failed'\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: routing/firewall invariant failed\n"
+}

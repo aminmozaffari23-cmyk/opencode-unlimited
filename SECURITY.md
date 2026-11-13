@@ -1,4 +1,15 @@
-# SECURITY.md — opencode-unlimited 2.4.1
+# SECURITY.md — opencode-unlimited
+
+> Current v2 qualification was **proxy mode only**, with no TUN/firewall/routes/
+> hosts changes in the product Codespace. Read [BEGINNER_GUIDE.md](BEGINNER_GUIDE.md)
+> for the disclosed harness incident, isolation/lock corrections, and measured
+> limits. The agent guardrails are not a security sandbox; proxy environment
+> variables do not guarantee that every arbitrary tool uses the proxy.
+>
+> The tunnel/firewall material below is historical design documentation, not
+> evidence that tunnel mode or ten-hour genuine quota recovery was qualified
+> by this branch. No release or permanent installation was performed.
+
 
 This file states exactly what this tool does to your machine, what it can
 expose, and how it fails. It is written so you can decide whether the

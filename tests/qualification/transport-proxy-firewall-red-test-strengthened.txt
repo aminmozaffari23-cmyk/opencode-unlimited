@@ -1,0 +1,71 @@
+test_proxy_firewall_all_entry_points_are_noop (test_transport_resilience.TransportRegression.test_proxy_firewall_all_entry_points_are_noop) ... FAIL
+
+======================================================================
+FAIL: test_proxy_firewall_all_entry_points_are_noop (test_transport_resilience.TransportRegression.test_proxy_firewall_all_entry_points_are_noop)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/user/ops/ouc-v2-resilience/checkout/tests/test_transport_resilience.py", line 292, in test_proxy_firewall_all_entry_points_are_noop
+    invocation.assert_not_called()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/local/lib/python3.13/unittest/mock.py", line 940, in assert_not_called
+    raise AssertionError(msg)
+AssertionError: Expected 'run' to not have been called. Called 10 times.
+Calls: [call(['/tmp/ouc-v2-unit-qt4en7t0/unused-iptables.py', '-F', 'OUC_LEAKGUARD'], capture_output=True, text=True, timeout=10),
+ call().stdout.__bool__(),
+ call().stderr.__bool__(),
+ call().stdout.__add__(<MagicMock name='run().stderr' id='140009772969536'>),
+ call().stdout.__add__().strip(),
+ call(['/tmp/ouc-v2-unit-qt4en7t0/unused-iptables.py', '-F', 'OUC_LEAKGUARD'], capture_output=True, text=True, timeout=10),
+ call().stdout.__bool__(),
+ call().stderr.__bool__(),
+ call().stdout.__add__(<MagicMock name='run().stderr' id='140009772969536'>),
+ call().stdout.__add__().strip(),
+ call(['/tmp/ouc-v2-unit-qt4en7t0/unused-iptables.py', '-D', 'OUTPUT', '-j', 'OUC_LEAKGUARD'], capture_output=True, text=True, timeout=10),
+ call().stdout.__bool__(),
+ call().stderr.__bool__(),
+ call().stdout.__add__(<MagicMock name='run().stderr' id='140009772969536'>),
+ call().stdout.__add__().strip(),
+ call().returncode.__ne__(0),
+ call(['/tmp/ouc-v2-unit-qt4en7t0/unused-iptables.py', '-D', 'OUTPUT', '-j', 'OUC_LEAKGUARD'], capture_output=True, text=True, timeout=10),
+ call().stdout.__bool__(),
+ call().stderr.__bool__(),
+ call().stdout.__add__(<MagicMock name='run().stderr' id='140009772969536'>),
+ call().stdout.__add__().strip(),
+ call().returncode.__ne__(0),
+ call(['/tmp/ouc-v2-unit-qt4en7t0/unused-iptables.py', '-D', 'OUTPUT', '-j', 'OUC_LEAKGUARD'], capture_output=True, text=True, timeout=10),
+ call().stdout.__bool__(),
+ call().stderr.__bool__(),
+ call().stdout.__add__(<MagicMock name='run().stderr' id='140009772969536'>),
+ call().stdout.__add__().strip(),
+ call().returncode.__ne__(0),
+ call(['/tmp/ouc-v2-unit-qt4en7t0/unused-iptables.py', '-F', 'OUC_LEAKGUARD'], capture_output=True, text=True, timeout=10),
+ call().stdout.__bool__(),
+ call().stderr.__bool__(),
+ call().stdout.__add__(<MagicMock name='run().stderr' id='140009772969536'>),
+ call().stdout.__add__().strip(),
+ call(['/tmp/ouc-v2-unit-qt4en7t0/unused-iptables.py', '-X', 'OUC_LEAKGUARD'], capture_output=True, text=True, timeout=10),
+ call().stdout.__bool__(),
+ call().stderr.__bool__(),
+ call().stdout.__add__(<MagicMock name='run().stderr' id='140009772969536'>),
+ call().stdout.__add__().strip(),
+ call(['/tmp/ouc-v2-unit-qt4en7t0/unused-iptables.py', '-D', 'OUTPUT', '-j', 'OUC_LEAKGUARD'], capture_output=True, text=True, timeout=10),
+ call().stdout.__bool__(),
+ call().stderr.__bool__(),
+ call().stdout.__add__(<MagicMock name='run().stderr' id='140009772969536'>),
+ call().stdout.__add__().strip(),
+ call().returncode.__ne__(0),
+ call(['/tmp/ouc-v2-unit-qt4en7t0/unused-iptables.py', '-F', 'OUC_LEAKGUARD'], capture_output=True, text=True, timeout=10),
+ call().stdout.__bool__(),
+ call().stderr.__bool__(),
+ call().stdout.__add__(<MagicMock name='run().stderr' id='140009772969536'>),
+ call().stdout.__add__().strip(),
+ call(['/tmp/ouc-v2-unit-qt4en7t0/unused-iptables.py', '-X', 'OUC_LEAKGUARD'], capture_output=True, text=True, timeout=10),
+ call().stdout.__bool__(),
+ call().stderr.__bool__(),
+ call().stdout.__add__(<MagicMock name='run().stderr' id='140009772969536'>),
+ call().stdout.__add__().strip()].
+
+----------------------------------------------------------------------
+Ran 1 test in 0.004s
+
+FAILED (failures=1)

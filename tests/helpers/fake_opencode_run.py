@@ -17,8 +17,10 @@ import json
 import os
 import sys
 
-STATE = os.environ.get("FAKE_OC_STATE", "/tmp/fake-oc-run.json")
-ARGV = os.environ.get("FAKE_OC_ARGS", "/tmp/fake-oc-run-args.txt")
+from sandbox_scope import checked_path, fixture_path
+
+STATE = fixture_path("FAKE_OC_STATE")
+ARGV = fixture_path("FAKE_OC_ARGS")
 
 WALL = ('timestamp=2026-11-09T00:00:00.000Z level=ERROR run=abc message="stream error" '
         'providerID={provider} modelID={model} session.id={session} small=false '
@@ -42,6 +44,9 @@ def save(d):
 
 def main():
     argv = sys.argv[1:]
+    if argv == ["--version"]:
+        print("opencode v1.0.0")
+        return 0
     st = load()
     st["calls"] = int(st.get("calls", 0)) + 1
     if argv and argv[0] == "run":
@@ -60,6 +65,7 @@ def main():
         provider, _, model = model_full.partition("/")
         path = (st.get("log") or os.environ.get("OUC_LOG_PATH")
                 or os.path.expanduser("~/.local/share/opencode/log/opencode.log"))
+        path = checked_path(path)
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             with open(path, "a") as fh:

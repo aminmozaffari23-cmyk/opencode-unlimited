@@ -1,13 +1,48 @@
-# opencode-unlimited 2.4.1
+# opencode-unlimited — unreleased 2.4.2 working tree
 
-Keeps your Cloudflare WARP tunnel up, and when opencode's free tier says
-**“Free usage limit reached”**, quietly moves the machine to a fresh IPv6
-block so you get a fresh quota — without ever cutting your internet and
-without touching a single byte of opencode's output.
+**Start with the single [English beginner guide](BEGINNER_GUIDE.md).** The
+[transport-resilience execution report](docs/reports/transport-resilience-follow-up.md)
+records the actual tests, unsuccessful attempts, observer corrections, and
+approved installed Codespace update. This remains a review branch: no new
+release, main merge, or version bump was published.
 
-This is a rewrite of the original `opencode-unlimited-usage`
-script. Every claim in this README was verified by the tests in
-[`TEST_RESULTS.md`](TEST_RESULTS.md); the raw logs are in `tests/logs/`.
+Managed `ouc agent/run/resume` now implement **three additional primary-model
+transport attempts → isolated tool-denied secondary diagnosis → primary retry
+or bounded rotation with original-model verification**. No hidden task-model
+switch is made. The HTTP-to-SOCKS bridge no longer applies its 20-second
+handshake timeout to an established response stream. Proxy shutdown never
+executes firewall commands or edits hosts.
+
+Final source: **100 focused regressions**, **56 safe-default compatibility
+groups passed / 0 failed / 11 deliberately skipped**, **128 local + 96 remote
+simulated subprocess stress cases**, and 4,000 randomized event streams per
+environment. Focused tests are included in compatibility groups, not additive.
+The unchanged real MiniMax task completed **4/4 in 1,192.031 s**; the actual
+installed controller and normal `opencode` shortcut passed separate smoke tests.
+See [public results](tests/qualification/transport-results.json).
+
+The final MiniMax run had no transport failure or quota rotation. Complete
+escalation is fault-injection evidence, not proof of a successful genuine
+final-source outage recovery. Healthy-secondary live escalation, genuine
+successful quota recovery, and a ten-hour soak remain unproven. The real-site
+trace included 86 failed IPv6 probes, not zero attempted direct connections;
+the original observer failure and separate read-only audit are disclosed.
+
+`lane` remains transparent native execution with scoped proxies; the ordinary
+daily Codespace command is still `opencode`. The installed Bash function does not turn
+the interactive TUI into a managed headless task. There is no advertising or
+planted agent-rules file. Original configuration, native CLI, SSH files,
+notebooks, Git history/dirty tree, and WARP registration were preserved.
+
+The [earlier qualification guide](docs/history/opencode-v2-first-qualification-guide.md)
+and [earlier result record](tests/qualification/v2-results.json) are retained as
+history, not claims about this final source.
+
+## Historical release material
+
+The older numbers and feature descriptions below are retained as release
+history, principally for OpenCode 1.19.5. They are **not** blanket qualification
+of OpenCode 2.2.7; where they differ, the current guide/results take precedence.
 
 ```
 57 passed, 0 failed, 0 skipped     (offline suite, 2.4.0)
@@ -70,20 +105,20 @@ What it does that a plain loop does not:
 
 | Problem | What the agent does |
 |---|---|
-| it crashes at 03:00 | every step is written to `~/.local/state/opencode-unlimited/journal.json`; a step left mid-flight is retried, never lost, never duplicated |
+| it crashes at 03:00 | every step is written to `~/.local/state/opencode-unlimited/journal.json`; an interrupted step is recorded and may be retried; tool side effects are not exactly-once |
 | the work would be lost | `git` checkpoint after each step (branch-local commit, never a push) |
-| the free limit hits | rotates to a block that *answers*, then continues the same session — no limit on walls, rotations or resumes |
+| the free limit hits | tries verification for the interrupted model, then continuation; count defaults remain unlimited, not a quota guarantee |
 | a rate limit hits | waits 60→120→240→480→900 s and **never** spends a block |
 | the network drops | keeps still, retries every 30 s for up to 10 min, **never** spends a block |
 | an auth/model error | stops immediately with the reason — retrying would only waste the night |
 | the model goes silent 10 min | kills the call, retries once, then marks the step failed and moves on |
 | the conversation grows stale | fresh session every 3 h / 2 MB / 40 turns; the journal carries the context |
 | the machine dies | `systemd` restarts the supervisor; without systemd a cron watchdog does it every 2 min |
-| it decides to do something stupid | force-push, `/etc/hosts`, firewall, SSH keys, package removal: refused before the run starts, and audited after every step |
+| it decides to do something stupid | task-pattern preflight and protected-path signatures; **not** a filesystem or tool-permission sandbox |
 
-It stops for exactly three reasons, and always says which: 10 hours passed
-(`OUC_MAX_HOURS`), 60 consecutive failures (`OUC_MAX_CONSEC_FAIL`), or the task
-list is finished. Then it writes `run-report-<timestamp>.md`: what finished, what
+Time and failure budgets include 10 hours (`OUC_MAX_HOURS`) and 60
+consecutive failures (`OUC_MAX_CONSEC_FAIL`). Completion, fatal errors,
+guardrails, unavailable recovery, and cancellation can also stop a run. Then it writes `run-report-<timestamp>.md`: what finished, what
 did not, why it stopped, and the next action.
 
 Live status while it runs: `~/.local/state/opencode-unlimited/run.json`

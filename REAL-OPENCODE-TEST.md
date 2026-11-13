@@ -1,4 +1,8 @@
-# REAL-OPENCODE-TEST.md — opencode-unlimited 2.4.1
+# REAL-OPENCODE-TEST.md — historical measurements
+
+> Historical OpenCode 1.x experiment, not current v2 qualification. Do not run
+> an exhaustion loop to reproduce it. Current measured results and limitations
+> are in [BEGINNER_GUIDE.md](BEGINNER_GUIDE.md).
 
 A real test against **opencode 1.19.5 itself**, not a simulation: the free-tier
 limit was hit with real prompts and the tool had to deal with it.

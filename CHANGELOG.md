@@ -1,4 +1,60 @@
-# CHANGELOG — opencode-unlimited 2.4.1
+# CHANGELOG — opencode-unlimited
+
+## 2.4.2 — unreleased working tree
+
+The already-unpublished 2.4.2 version/content-signature fix is retained; this
+qualification does not introduce another version bump or publish a release.
+
+### Transport resilience follow-up — implementation 89ffea8
+
+- Shared three-additional-attempt transport policy for `agent`, `run`, and
+  explicit `resume`; isolated native tool-denied secondary diagnosis, then a
+  primary retry or bounded rotation verified against the original model.
+- Egress/diagnostic/rotation success does not clear primary task failures;
+  transport-only rotation does not mark the old block quota-exhausted.
+- Proxy-safe firewall/hosts lifecycle, rotation-spacing lock/deadline cleanup,
+  terminal-native-error cleanup, and established-stream timeout correction.
+- Final-source 100 focused regressions; 56 safe-default groups pass, 0 fail,
+  11 intentionally skipped. 128 local/96 remote simulated subprocess cases,
+  4,000 randomized event streams per environment, and a 22-second idle bridge
+  test. These are not a real quota exhaustion test or a ten-hour soak.
+- Unchanged real MiniMax task: 4/4 in 1,192.031 s. Eight independent browser
+  render cases passed; incomplete accessibility checks remain disclosed.
+- Original observer failure on 86 ENETUNREACH probes preserved; separate
+  read-only adjudication confirmed completion and no successful direct
+  connection. No zero-attempt or blanket privacy guarantee is claimed.
+- Actual Codespace installation updated from the fetched commit with config,
+  native binary, Git dirty tree and registration intact. Final installed task smoke
+  15.622 s; ordinary `opencode` entry smoke 11.482 s, without added `--auto`.
+  The new Bash function also forwards leading native version/help flags; the
+  earlier alias/argparse delivery failure is retained. Controller hash unchanged.
+- The final task needed no transport recovery. Full escalation is simulated;
+  two intermediate-build real retries are not completed-recovery proof.
+  Genuine successful quota recovery/ten-hour live soak remain unqualified.
+
+Current report: [transport-resilience follow-up](docs/reports/transport-resilience-follow-up.md).
+
+### Earlier v2 qualification — historical source 6be5f5d
+
+- Native v2 private-server/JSON launching, scoped proxies, physical cwd/PWD,
+  completion/error handling, and exact-session/model continuation.
+- Same-model recovery verification; explicit `verify -m`; an unspecified v2
+  recovery model stops instead of silently substituting the test model.
+- Foreground recovery holds the physical rotation flock, including against an
+  older supervisor. Monotonic active timing and owned-process cleanup.
+- Historical hop/channel and large-log cursor regressions, protected content
+  guards, and the unused doctor-helper logger fix.
+- 70 focused simulations pass; externally traced Codespace fixtures made zero
+  Internet connects and left shared channels unchanged. Final safe-default
+  suite: 55 groups pass, 0 fail, 11 deliberately excluded host-affecting tests.
+- A harness fallback-file leak was contained, disclosed, and corrected. Its
+  contaminated run is not quota-recovery evidence.
+- Actual final-source Beam agent: 4/4 in 337.373 s. MiniMax preflight passed,
+  but its full task was observer-cancelled on `provider.transport/ECONNRESET`.
+  No successful genuine quota recovery or ten-hour soak is claimed.
+
+Full single-file beginner guide and executed limits: [BEGINNER_GUIDE.md](BEGINNER_GUIDE.md).
+
 
 ## 2.4.1 — 2026-11-12
 
