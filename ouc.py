@@ -66,7 +66,7 @@ import time
 import urllib.request
 import uuid
 
-VERSION = "2.5.0"
+VERSION = "2.6.0"
 BRAND = "opencode-unlimited"
 DEFAULT_STATE_DIR = "/var/lib/opencode-unlimited"
 UNIT_NAME = "opencode-unlimited.service"
@@ -242,6 +242,35 @@ class Log:
 
 class Config:
     """Config = defaults <- config.json <- environment. Env always wins."""
+
+    @staticmethod
+    def _resolve_id(which: str, disk: dict):
+        """uid/gid of the account opencode runs as, or None.
+
+        Order: explicit env -> recorded at install -> SUDO_UID/SUDO_GID ->
+        the owner of the target home. None means "unknown", and a guard that
+        cannot name its owner is not installed (it says so instead).
+        """
+        key = f"OUC_TARGET_{which.upper()}"
+        raw = os.environ.get(key)
+        if raw is None:
+            raw = disk.get(f"target_{which}")
+        if raw is None:
+            raw = os.environ.get(f"SUDO_{which.upper()}")
+        if raw in (None, ""):
+            try:
+                st = os.stat(os.environ.get("OUC_TARGET_HOME")
+                             or disk.get("target_home")
+                             or os.path.expanduser("~"))
+                raw = st.st_uid if which == "uid" else st.st_gid
+            except OSError:
+                return None
+        try:
+            val = int(raw)
+        except (TypeError, ValueError):
+            return None
+        # root managing root is not a scoped guard: no point pretending
+        return val if val != 0 else None
 
     def __init__(self):
         self.state_dir = os.environ.get("OUC_STATE_DIR") or DEFAULT_STATE_DIR
@@ -479,6 +508,11 @@ class Config:
         # paths that live under target_home
         self.opencode_log = os.environ.get("OUC_LOG_PATH") or os.path.join(
             self.target_home, ".local/share/opencode/log/opencode.log")
+
+        # Who runs opencode. The proxy-compatible leak guard scopes egress to
+        # this owner, so it has to be known before any rule is built.
+        self.target_uid = self._resolve_id("uid", disk)
+        self.target_gid = self._resolve_id("gid", disk)
         self.user_state_dir = _ustate
 
         # our own files
@@ -1300,6 +1334,66 @@ class Warp:
         self._run("connect", timeout=20)
 
 
+def port_owner(port: int) -> tuple:
+    """(pid, cmdline) of the process listening on a local TCP port, or (0, "").
+
+    `port_open()` only proves *someone* is listening. A squatter on the SOCKS
+    or bridge port would otherwise be indistinguishable from our own daemon,
+    and traffic would be routed into a black hole (or an attacker). This reads
+    the socket inode out of /proc/net/tcp{,6} and matches it against /proc/*/fd.
+    """
+    # Only sockets that answer on loopback matter: something bound to another
+    # interface (a container bridge, a port-forwarder) does not occupy
+    # 127.0.0.1:<port> and must not be reported as a squatter.
+    LOOPBACK_V4 = {"0100007F", "00000000"}          # 127.0.0.1, 0.0.0.0
+    LOOPBACK_V6 = {"00000000000000000000000000000000",
+                   "00000000000000000000000001000000",  # ::
+                   "0000000000000000FFFF00000100007F"}  # ::ffff:127.0.0.1
+    inodes = set()
+    for table in ("/proc/net/tcp", "/proc/net/tcp6"):
+        loopback = LOOPBACK_V6 if table.endswith("tcp6") else LOOPBACK_V4
+        try:
+            with open(table) as fh:
+                next(fh, None)
+                for line in fh:
+                    f = line.split()
+                    if len(f) < 10 or f[3] != "0A":       # 0A = LISTEN
+                        continue
+                    try:
+                        addr, _, port_hex = f[1].rpartition(":")
+                        if int(port_hex, 16) != port or addr.upper() not in loopback:
+                            continue
+                        inodes.add(f[9])
+                    except (IndexError, ValueError):
+                        continue
+        except OSError:
+            continue
+    if not inodes:
+        return 0, ""
+    targets = {f"socket:[{i}]" for i in inodes}
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            for fd in os.listdir(f"/proc/{pid}/fd"):
+                try:
+                    if os.readlink(f"/proc/{pid}/fd/{fd}") in targets:
+                        return int(pid), pid_cmdline(int(pid))
+                except OSError:
+                    continue
+        except OSError:
+            continue
+    return 0, ""
+
+
+def pid_cmdline(pid: int) -> str:
+    try:
+        with open(f"/proc/{pid}/cmdline", "rb") as fh:
+            return fh.read().replace(b"\0", b" ").decode(errors="replace").strip()
+    except OSError:
+        return ""
+
+
 def port_open(host: str, port: int, timeout: float = 1.0) -> bool:
     try:
         with socket.create_connection((host, port), timeout=timeout):
@@ -1501,16 +1595,52 @@ class Bridge:
         self.log = log
 
     def alive(self) -> bool:
-        return port_open("127.0.0.1", self.cfg.proxy_http_port)
+        """True only when *our* bridge owns the port.
 
-    def ensure(self) -> None:
-        if not self.cfg.proxy_mode:
+        A bare port check would accept a squatter and route every request into
+        it. If the port is busy but the process is not ours, say so loudly and
+        let `start()` refuse rather than lie.
+        """
+        if not port_open("127.0.0.1", self.cfg.proxy_http_port):
+            return False
+        pid = read_pidfile(self.cfg.bridge_pid_file)
+        if pid and pid_alive(pid) and "bridge" in pid_cmdline(pid):
+            return True
+        owner, cmd = port_owner(self.cfg.proxy_http_port)
+        if owner and "bridge" in cmd:
+            # our bridge, started by someone else (e.g. a previous supervisor)
+            return True
+        return False
+
+    def in_use_by_foreign(self) -> tuple:
+        """(pid, cmdline) when the bridge port is held by something not ours."""
+        owner, cmd = port_owner(self.cfg.proxy_http_port)
+        if owner and "bridge" not in cmd:
+            return owner, cmd
+        return 0, ""
+
+    def ensure(self, needed: "bool | None" = None) -> None:
+        """Keep the bridge up when something needs it.
+
+        `needed` defaults to "proxy mode", but a tunnel-mode deployment whose
+        ladder has escalated to Psiphon needs the bridge just as much: Psiphon
+        only speaks SOCKS5 and opencode only speaks HTTP proxy.
+        """
+        if needed is None:
+            needed = self.cfg.proxy_mode
+        if not needed:
             return
         if self.alive():
             return
         self.start()
 
     def start(self) -> bool:
+        owner, cmd = self.in_use_by_foreign()
+        if owner:
+            self.log(f"bridge: port {self.cfg.proxy_http_port} is held by pid {owner} "
+                     f"({cmd[:80]!r}) — refusing to route through an unowned "
+                     f"listener", "SECURITY")
+            return False
         script = os.path.abspath(__file__)
         cmd = [sys.executable, script, "bridge",
                "--listen", f"127.0.0.1:{self.cfg.proxy_http_port}",
@@ -1657,6 +1787,17 @@ def probe_egress(cfg: Config) -> str:
 
 CHAIN = "OUC_LEAKGUARD"
 
+# Two guard dialects, because the two backends leak differently.
+#   tunnel: WARP owns a TUN device; allow that device, drop everything else.
+#   proxy : Psiphon is a userspace SOCKS5 process dialling out over the host's
+#           own interface. A TUN-shaped guard would drop its sockets and
+#           deadlock the fallback, so the guard is scoped by *owner* instead:
+#           the account that runs opencode may reach loopback (the bridge) and
+#           DNS, and nothing else. The daemon and the tunnel keep working.
+GUARD_TUNNEL = "tunnel"
+GUARD_PROXY = "proxy"
+GUARD_OFF = "off"
+
 
 class Firewall:
     """The kill-switch.
@@ -1708,8 +1849,42 @@ class Firewall:
         except Exception as exc:
             return 1, str(exc)
 
-    def _rules_v4(self) -> list[list[str]]:
+    def owner_rules_available(self) -> bool:
+        """Owner-scoped matching needs a known non-root uid and root to install it."""
+        return bool(self.cfg.target_uid) and os.geteuid() == 0
+
+    def effective_mode(self, mode: str) -> tuple:
+        """(mode, why) after refusing modes we cannot actually enforce."""
+        if mode != GUARD_PROXY:
+            return mode, ""
+        if not self.cfg.target_uid:
+            return GUARD_OFF, ("the account opencode runs as is unknown, so egress "
+                               "cannot be scoped safely")
+        if os.geteuid() != 0:
+            return GUARD_OFF, "owner-scoped rules need root"
+        return GUARD_PROXY, ""
+
+    def _rules_v4(self, mode: str = GUARD_TUNNEL) -> list[list[str]]:
         iface = self.cfg.tun_iface
+        if mode == GUARD_PROXY:
+            uid = str(self.cfg.target_uid)
+            return [
+                ["-A", CHAIN, "-o", "lo", "-j", "ACCEPT"],
+                ["-A", CHAIN, "-m", "state", "--state", "ESTABLISHED,RELATED", "-j", "ACCEPT"],
+                ["-A", CHAIN, "-d", "10.0.0.0/8", "-j", "ACCEPT"],
+                ["-A", CHAIN, "-d", "172.16.0.0/12", "-j", "ACCEPT"],
+                ["-A", CHAIN, "-d", "192.168.0.0/16", "-j", "ACCEPT"],
+                # WARP endpoints stay reachable so the ladder can go back
+                ["-A", CHAIN, "-d", "162.159.0.0/16", "-j", "ACCEPT"],
+                ["-A", CHAIN, "-d", "188.114.0.0/16", "-j", "ACCEPT"],
+                # DNS for the managed user only (the proxy resolves names for it)
+                ["-A", CHAIN, "-m", "owner", "--uid-owner", uid,
+                 "-p", "udp", "--dport", "53", "-j", "ACCEPT"],
+                ["-A", CHAIN, "-m", "owner", "--uid-owner", uid,
+                 "-p", "tcp", "--dport", "53", "-j", "ACCEPT"],
+                # the managed user reaches the internet only through the bridge
+                ["-A", CHAIN, "-m", "owner", "--uid-owner", uid, "-j", "DROP"],
+            ]
         return [
             ["-A", CHAIN, "-o", "lo", "-j", "ACCEPT"],
             ["-A", CHAIN, "-m", "state", "--state", "ESTABLISHED,RELATED", "-j", "ACCEPT"],
@@ -1723,8 +1898,19 @@ class Firewall:
             ["-A", CHAIN, "-j", "DROP"],
         ]
 
-    def _rules_v6(self) -> list[list[str]]:
+    def _rules_v6(self, mode: str = GUARD_TUNNEL) -> list[list[str]]:
         iface = self.cfg.tun_iface
+        if mode == GUARD_PROXY:
+            # Psiphon is IPv4-only, so the managed user gets no IPv6 egress at
+            # all; the WARP /32 stays reachable for the return trip.
+            return [
+                ["-A", CHAIN, "-o", "lo", "-j", "ACCEPT"],
+                ["-A", CHAIN, "-m", "state", "--state", "ESTABLISHED,RELATED", "-j", "ACCEPT"],
+                ["-A", CHAIN, "-d", "fe80::/10", "-j", "ACCEPT"],
+                ["-A", CHAIN, "-d", "2606:4700::/32", "-j", "ACCEPT"],
+                ["-A", CHAIN, "-m", "owner", "--uid-owner", str(self.cfg.target_uid),
+                 "-j", "DROP"],
+            ]
         return [
             ["-A", CHAIN, "-o", "lo", "-j", "ACCEPT"],
             ["-A", CHAIN, "-m", "state", "--state", "ESTABLISHED,RELATED", "-j", "ACCEPT"],
@@ -1741,12 +1927,37 @@ class Firewall:
         ok6, _ = self._ipt(True, "-C", "OUTPUT", "-j", CHAIN)
         return ok4 == 0 and ok6 == 0
 
-    def install(self) -> bool:
+    def mode(self) -> str:
+        """The guard dialect currently installed, as recorded in state.json."""
+        if self.state is None:
+            return GUARD_OFF
+        try:
+            return str(self.state.load().get("guard_mode") or GUARD_OFF)
+        except Exception:
+            return GUARD_OFF
+
+    def _record_mode(self, mode: str, why: str = "") -> None:
+        if self.state is None:
+            return
+        try:
+            self.state.update(guard_mode=mode, guard_reason=why)
+        except Exception:
+            pass
+
+    def install(self, mode: str = GUARD_TUNNEL) -> bool:
         avail, why = self.available()
         if not avail:
             self.log(f"kill-switch not installed: {why}", "WARN")
             return False
-        for v6, rules in ((False, self._rules_v4()), (True, self._rules_v6())):
+        mode, degraded_why = self.effective_mode(mode)
+        if mode == GUARD_OFF:
+            self.log(f"kill-switch NOT installed: {degraded_why} — the machine "
+                     f"keeps its internet and the real IP may be visible", "SECURITY")
+            self.teardown()
+            self._record_mode(GUARD_OFF, degraded_why)
+            return False
+        for v6, rules in ((False, self._rules_v4(mode)),
+                          (True, self._rules_v6(mode))):
             self._ipt(v6, "-N", CHAIN)
             self._ipt(v6, "-F", CHAIN)
             for rule in rules:
@@ -1755,7 +1966,10 @@ class Firewall:
             if rc != 0:
                 self._ipt(v6, "-I", "OUTPUT", "-j", CHAIN)
         self._record(True)
-        self.log("kill-switch installed (v4+v6)")
+        self._record_mode(mode, "proxy-compatible: egress scoped to the account that "
+                               "runs opencode" if mode == GUARD_PROXY
+                         else "tunnel: egress scoped to the WARP interface")
+        self.log(f"kill-switch installed (v4+v6, {mode} mode)")
         return True
 
     def lift(self) -> None:
@@ -1768,6 +1982,7 @@ class Firewall:
                 rc, _ = self._ipt(v6, "-D", "OUTPUT", "-j", CHAIN)
                 if rc != 0:
                     break
+        self._record_mode(GUARD_OFF, "lifted: nothing is carrying traffic right now")
         self.log("kill-switch lifted (traffic goes out on the real interface)")
 
     def teardown(self) -> None:
@@ -1780,6 +1995,8 @@ class Firewall:
                     break
             self._ipt(v6, "-F", CHAIN)
             self._ipt(v6, "-X", CHAIN)
+        self._record(False)
+        self._record_mode(GUARD_OFF, "removed")
         self.log("kill-switch removed")
 
 
@@ -1846,7 +2063,11 @@ class Psiphon:
                 cmd = fh.read().replace(b"\0", b" ").decode(errors="replace")
         except OSError:
             return 0
-        return pid if "psiphon-tunnel-core" in cmd else 0
+        # Match the family, not one exact spelling: the shipped binary can be
+        # renamed, wrapped, or built per-arch (psiphon-tunnel-core-x86_64).
+        # An exact-string test made `pid()` report "dead" for a healthy tunnel,
+        # which made the supervisor restart it every tick.
+        return pid if "psiphon" in cmd.lower() else 0
 
     def socks_open(self) -> bool:
         return port_open("127.0.0.1", self.cfg.psiphon_socks_port)
@@ -2046,6 +2267,16 @@ class Psiphon:
             return False, detail
         self.stop()
         self._close_log()
+        # A listener we do not own is not our tunnel. Refuse instead of
+        # reporting success and routing every request into it.
+        if self.socks_open():
+            owner, cmd = port_owner(self.cfg.psiphon_socks_port)
+            self.log(f"psiphon: port {self.cfg.psiphon_socks_port} is already held "
+                     f"by pid {owner or '?'} ({cmd[:80]!r}) — refusing to start "
+                     f"over an unowned listener", "SECURITY")
+            return False, (f"port {self.cfg.psiphon_socks_port} is held by "
+                           f"pid {owner or '?'} ({cmd[:60] or 'unknown'}); refusing "
+                           f"to trust it")
         cfg_data = self.write_config(region)
         argv = [self.cfg.psiphon_bin, "-config", self.cfg.psiphon_config,
                 "-formatNotices"]
@@ -2095,8 +2326,17 @@ class Psiphon:
             return False, (f"no tunnel within {self.cfg.psiphon_start_wait}s"
                            + (f": {tail[:200]}" if tail else ""))
         # The notice means the tunnel is up; the SOCKS port follows immediately.
+        # Someone else may bind it in that window, so check the owner, not just
+        # the fact that something is listening.
         for _ in range(40):
             if self.socks_open():
+                owner, cmd = port_owner(self.cfg.psiphon_socks_port)
+                if owner and owner != proc.pid:
+                    self.log(f"psiphon: SOCKS port {self.cfg.psiphon_socks_port} was "
+                             f"taken by pid {owner} ({cmd[:60]!r}) during startup",
+                             "SECURITY")
+                    return False, (f"the SOCKS port was taken by pid {owner} "
+                                   f"({cmd[:60] or 'unknown'}) during startup")
                 return True, "tunnel up"
             time.sleep(0.25)
         return False, "tunnel reported up but the SOCKS port never opened"
@@ -2356,6 +2596,16 @@ def _rotate_psiphon(cfg: Config, log: Log, state: State, why: str,
             except Exception:
                 pass
         _activate_backend(cfg, state, log, BACKEND_PSIPHON)
+        if cfg.kill_switch and not cfg.proxy_mode:
+            fw = Firewall(cfg, log, state)
+            if fw.install(GUARD_PROXY):
+                log("kill-switch switched to proxy-compatible mode: egress is "
+                    "scoped by owner, so Psiphon can dial out and opencode "
+                    "cannot bypass it")
+            else:
+                log("kill-switch stayed off for the Psiphon fallback — the "
+                    "machine keeps its internet and the real IP may be visible",
+                    "SECURITY")
         log(f"rotation done in {result['duration']}s via {result['how']} "
             f"(fallback backend): {old_block or '?'} -> {norm_block(result['new'])}"
             + ("" if not result["verified"] else " (verified with a real request)"))
@@ -2687,7 +2937,7 @@ def _rotate_warp(cfg: Config, log: Log, state: State, why: str) -> dict:
                      last_hop=now(), pending_wall=False, pending_since=0,
                      last_error="", degraded=False, last_rotation=result)
         if cfg.kill_switch and not cfg.proxy_mode:
-            if fw.install():
+            if fw.install(GUARD_TUNNEL):
                 log("kill-switch re-installed")
             else:
                 log("kill-switch could not be re-installed (tunnel is up)", "WARN")
@@ -2713,7 +2963,7 @@ def _rotate_warp(cfg: Config, log: Log, state: State, why: str) -> dict:
             tunnel_up = Warp(cfg, log).connected()
             if cfg.kill_switch and not cfg.proxy_mode:
                 if tunnel_up:
-                    if was_installed and fw.install():
+                    if was_installed and fw.install(GUARD_TUNNEL):
                         log("tunnel is up — kill-switch restored")
                     state.update(degraded=False, last_error=result["error"],
                                  last_rotation=result)
@@ -3047,19 +3297,30 @@ class Supervisor:
             self.log("tunnel repair failed — staying open (real IP visible) and "
                      "retrying next tick", "SECURITY")
 
-    def enforce_firewall(self) -> None:
+    def enforce_firewall(self, backend: str = BACKEND_WARP) -> None:
+        """Keep the guard in the dialect the *current backend* can survive.
+
+        Re-arming TUN-only rules while Psiphon is dialling out over the host's
+        own interface is a deadlock: the DROP kills every relay connection. The
+        reverse mistake — leaving the owner-scoped proxy rules in place after
+        returning to WARP — would leave opencode unable to use the tunnel.
+        """
         if self.cfg.proxy_mode:
-            return
+            return                  # no firewall is managed in proxy mode
         if not self.cfg.kill_switch:
             return
-        if not self.warp.connected():
+        wanted = GUARD_PROXY if backend == BACKEND_PSIPHON else GUARD_TUNNEL
+        if backend == BACKEND_WARP and not self.warp.connected():
             if self.fw.installed():
                 self.fw.lift()
                 self.log("tunnel down — kill-switch lifted", "WARN")
             return
-        if not self.fw.installed():
-            self.fw.install()
-            self.state.update(degraded=False)
+        if self.fw.mode() != wanted or not self.fw.installed():
+            if self.fw.install(wanted):
+                self.state.update(degraded=False)
+                if wanted == GUARD_PROXY:
+                    self.log("kill-switch switched to proxy-compatible mode for "
+                             "the Psiphon fallback (egress scoped by owner)")
 
     def handle_request(self) -> None:
         req, req_path = None, ""
@@ -3096,9 +3357,53 @@ class Supervisor:
                 pass
         self.state.update(last_hop_request=rid, handled_hop_requests=self.handled_requests)
 
+    def backend(self) -> str:
+        """Which backend is carrying traffic right now, per state.json."""
+        try:
+            return str(self.state.load().get("active_backend") or BACKEND_WARP)
+        except Exception:
+            return BACKEND_WARP
+
+    def on_fallback(self) -> bool:
+        return self.backend() == BACKEND_PSIPHON
+
+    def ensure_fallback(self) -> None:
+        """Own the Psiphon tunnel the way ensure_tunnel() owns WARP.
+
+        Without this, a `kill -9` on psiphon-tunnel-core leaves the supervisor
+        believing the fallback is up: state says psiphon, the port is dead, and
+        every request fails until a human notices.
+        """
+        ps = Psiphon(self.cfg, self.log)
+        if ps.pid() and ps.socks_open():
+            return
+        if time.monotonic() - getattr(self, "_last_fallback_fix", float("-inf")) < 10:
+            return
+        self._last_fallback_fix = time.monotonic()
+        st = self.state.load()
+        if ps.pid():
+            self.log("fallback: tunnel process is alive but its SOCKS port is "
+                     "closed — restarting it", "WARN")
+        else:
+            self.log("fallback: the Psiphon tunnel is gone — restarting it", "WARN")
+        regions = self.cfg.psiphon_regions or ["US"]
+        idx = int(st.get("psiphon_region_index") or 0)
+        region = regions[idx % len(regions)]
+        ps.stop()
+        ok, detail = ps.start(region)
+        if ok:
+            self.state.update(active_socks_port=self.cfg.psiphon_socks_port)
+            self.log(f"fallback: tunnel restored on {region}")
+        else:
+            self.log(f"fallback: could not restore the tunnel ({detail})", "ERROR")
+
     def tick(self, baseline: bool = False) -> None:
-        if self.cfg.proxy_mode:
-            self.bridge.ensure()
+        # The bridge is needed whenever HTTP-proxy traffic must reach SOCKS5:
+        # always in proxy mode, and in tunnel mode as soon as the ladder has
+        # escalated to Psiphon.
+        on_fallback = self.on_fallback()
+        if self.cfg.proxy_mode or on_fallback:
+            self.bridge.ensure(needed=True)
         # Scan before the tunnel check: repairing a dead tunnel can block for a
         # minute or more, and a wall that lands during the repair must still be
         # recorded (it is the reason the user is stuck, even if the tunnel is
@@ -3108,10 +3413,17 @@ class Supervisor:
             _skip_supervisor_history(self.cfg)
         else:
             scan_wall(self.cfg, self.state, self.log, baseline=baseline)
-        self.ensure_tunnel()
-        self.sync_address()            # WARP may have moved us on its own
-        self.ensure_pin(self.warp.connected())
-        self.enforce_firewall()
+        if on_fallback:
+            # Psiphon carries the traffic: keep its tunnel alive, keep the IPv6
+            # pin off (Psiphon exits are IPv4), and hand the guard over.
+            self.ensure_fallback()
+            self.ensure_pin(False)
+            self.enforce_firewall(backend=BACKEND_PSIPHON)
+        else:
+            self.ensure_tunnel()
+            self.sync_address()        # WARP may have moved us on its own
+            self.ensure_pin(self.warp.connected())
+            self.enforce_firewall(backend=BACKEND_WARP)
         if not managed_run_active(self.cfg):
             maybe_rotate_for_wall(self.cfg, self.state, self.log)
             supervisor_auto_resume(self.cfg, self.state, self.log)
@@ -3540,7 +3852,9 @@ def cmd_status(args, cfg: Config, log: Log) -> int:
                          or norm_block(probe_egress(cfg)),
         "kill_switch": {"configured": cfg.kill_switch, "reason": cfg.kill_switch_reason,
                         "installed": ks_installed, "verified": ks_verified,
-                        "degraded": state.get("degraded")},
+                        "degraded": state.get("degraded"),
+                        "mode": state.get("guard_mode") or GUARD_OFF,
+                        "mode_reason": state.get("guard_reason") or ""},
         "rotation": {"hops": state.get("hops", 0), "last_hop": state.get("last_hop", 0),
                      "blacklisted_blocks": len([b for b in state.get("blacklist", [])
                                                 if norm_block(b)]),
@@ -3590,8 +3904,14 @@ def cmd_status(args, cfg: Config, log: Log) -> int:
         ks_txt = "NOT installed"
     else:
         ks_txt = "unknown (run with sudo to verify)"
+    if ks["mode"] == GUARD_PROXY:
+        ks_txt += " — proxy mode (egress scoped to the account that runs opencode)"
+    elif ks["mode"] == GUARD_TUNNEL:
+        ks_txt += " — tunnel mode (egress scoped to the WARP interface)"
     print(f"  {'!' if ks['degraded'] else ok(ks['installed'])} kill-switch: {ks_txt}"
-          + ("   ** DEGRADED: real IP visible while repairing **" if ks["degraded"] else ""))
+          + ("   ** DEGRADED: real IP visible while repairing **" if ks["degraded"] else "")
+          + (f"   ({ks['mode_reason']})" if ks["mode_reason"] and ks["mode"] == GUARD_OFF
+             else ""))
     print(f"  ✓ rotations: {info['rotation']['hops']}   "
           f"blacklisted blocks: {info['rotation']['blacklisted_blocks']}")
 
@@ -3614,7 +3934,11 @@ def cmd_status(args, cfg: Config, log: Log) -> int:
         print(f"  ✓ warp mode: full tunnel (TUN {cfg.tun_iface}), kill-switch armed")
 
     pin = info["pin"]
-    if pin["enabled"]:
+    on_fallback = (info["backends"]["active"] == BACKEND_PSIPHON)
+    if on_fallback and not pin["installed"]:
+        print("  ✓ ipv6 pin: off — Psiphon exits are IPv4, so the pin is lifted "
+              "for the duration of the fallback")
+    elif pin["enabled"]:
         print(f"  {'✓' if pin['installed'] else '!'} ipv6 pin: "
               + (f"on ({', '.join(pin['addresses']) or 'resolved'}) — opencode uses the tunnel"
                  if pin["installed"] else "off — opencode may use IPv4, where rotating /64s does nothing"))
@@ -3727,13 +4051,36 @@ def cmd_repair(args, cfg: Config, log: Log) -> int:
 
 
 def cmd_rescue(args, cfg: Config, log: Log) -> int:
-    """Get the machine back to a working network, whatever state we're in."""
+    """Get the machine back to a working network, whatever state we're in.
+
+    Order matters: the guard goes first (so nothing is blocked while we work),
+    then the fallback tunnel, then the IPv6 pin — a pin left in /etc/hosts
+    after a fallback episode is exactly the state that makes opencode
+    unreachable — and only then do we try to bring WARP back.
+    """
+    state = State(cfg)
     print("removing the leak guard...")
-    Firewall(cfg, log).teardown()
+    Firewall(cfg, log, state).teardown()
     if Psiphon(cfg, log).stop():
         print("stopped the Psiphon fallback tunnel")
-        State(cfg).update(active_backend=BACKEND_WARP,
-                          active_socks_port=cfg.proxy_socks_port)
+    state.update(active_backend=BACKEND_WARP,
+                 active_socks_port=cfg.proxy_socks_port,
+                 guard_mode=GUARD_OFF, guard_reason="rescue",
+                 pin_lifted_for_backend="", degraded=False,
+                 fallback_activated_at=0, warp_fail_streak=0)
+    bridge = Bridge(cfg, log)
+    if not cfg.proxy_mode:
+        try:
+            removed = Pinner(cfg, log, state).remove()
+        except Exception as exc:
+            removed = False
+            print(f"  could not remove the pin: {exc}")
+        print("ipv6 pin removed from /etc/hosts" if removed
+              else "no ipv6 pin was installed")
+    if bridge.alive() and not cfg.proxy_mode:
+        # tunnel mode does not need a bridge once the fallback is gone
+        bridge.stop()
+        print("stopped the HTTP bridge")
     warp = Warp(cfg, log)
     if not warp.connected():
         print("reconnecting the tunnel...")
@@ -3754,6 +4101,12 @@ def cmd_killswitch(args, cfg: Config, log: Log) -> int:
         return 0 if ok else 1
     if args.action == "off":
         fw.teardown()
+        # "off" must mean the host is exactly as it was: no guard, no pin.
+        if not cfg.proxy_mode:
+            try:
+                Pinner(cfg, log, State(cfg)).remove()
+            except Exception:
+                pass
         print("removed")
         return 0
     print("installed" if fw.installed() else "not installed",

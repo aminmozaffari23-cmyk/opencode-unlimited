@@ -34,6 +34,20 @@ NO_NOTICE = os.environ.get("FAKE_PSIPHON_NO_NOTICE", "")
 NOTICE_DELAY = float(os.environ.get("FAKE_PSIPHON_NOTICE_DELAY", "0.2"))
 
 
+def _hold(conn) -> None:
+    """Keep a CONNECTed socket open; the bridge pipes bytes through it."""
+    try:
+        while conn.recv(4096):
+            pass
+    except OSError:
+        pass
+    finally:
+        try:
+            conn.close()
+        except OSError:
+            pass
+
+
 def record(entry: dict) -> None:
     if not LOG:
         return
@@ -110,15 +124,43 @@ def main() -> int:
             record({"event": "socks-listening", "port": socks_port})
 
             def serve():
+                """Minimal SOCKS5 CONNECT, like the real tunnel's local proxy.
+
+                Accepting and closing (the old behaviour) made every bridge
+                CONNECT fail with 502, so no test could prove that the
+                resurrected tunnel actually *carries* traffic.
+                """
                 while True:
                     try:
                         conn, _ = listener.accept()
                     except OSError:
                         return
                     try:
-                        conn.close()
+                        greeting = conn.recv(2)
+                        if len(greeting) < 2:
+                            conn.close()
+                            continue
+                        conn.recv(greeting[1])            # methods
+                        conn.sendall(b"\x05\x00")
+                        head = conn.recv(4)
+                        if len(head) < 4 or head[0] != 5:
+                            conn.close()
+                            continue
+                        atyp = head[3]
+                        if atyp == 1:
+                            conn.recv(4 + 2)
+                        elif atyp == 4:
+                            conn.recv(16 + 2)
+                        else:
+                            conn.recv(1 + 2)
+                        conn.sendall(b"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00")
+                        record({"event": "socks-connect"})
+                        threading.Thread(target=_hold, args=(conn,), daemon=True).start()
                     except OSError:
-                        pass
+                        try:
+                            conn.close()
+                        except OSError:
+                            pass
             threading.Thread(target=serve, daemon=True).start()
         except OSError as exc:
             record({"event": "socks-failed", "error": str(exc)})

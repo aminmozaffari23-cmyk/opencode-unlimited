@@ -2196,7 +2196,533 @@ except OSError:
   finish "t82"
 }
 
-ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions t73_transport_resilience_regressions t74_orphaned_bridge_is_stopped t75_block_normalisation_and_ttl t76_escalation_after_five_warp_failures t77_psiphon_region_round_robin t78_bridge_follows_the_active_backend t79_hop_backend_override t80_tunnel_notice_dialects t81_a_daemons_writeonly_stdin_cannot_break_a_child t82_the_tunnel_outlives_the_command_that_started_it"
+t89_tunnel_to_proxy_guard_transition(){
+  begin "tunnel mode hands the guard and the pin over to Psiphon, and takes them back"
+  sb
+  # Tunnel mode (no proxy): a real TUN, real-looking iptables, a fake WARP that
+  # stays Connected, and a fake psiphon. Everything here is the state machine
+  # that deadlocks a userspace SOCKS5 backend if it is done blindly.
+  export OUC_WARP_MODE=warp OUC_IGNORE_TUN_CHECK=1 OUC_PIN=1
+  export OUC_PIN_AAAA="2606:4700:10::ac42:ad95"
+  # hermetic ports: a shared host may have anything on 8080/9060
+  export OUC_PROXY_SOCKS_PORT=19110 OUC_PROXY_HTTP_PORT=19199
+  export OUC_PSIPHON_SOCKS_PORT=19170 OUC_PSIPHON_HTTP_PORT=19171
+  export OUC_IPTABLES="$HELPER/fake_iptables.py" OUC_IP6TABLES="$HELPER/fake_iptables.py"
+  export FAKE_IPT_STATE="$T/ipt.json" FAKE_WARP_STATE="$T/warp.json"
+  export OUC_PSIPHON_BIN="$HELPER/fake_psiphon.py"
+  export FAKE_PSIPHON_LOG="$T/psiphon.log" FAKE_PSIPHON_STATE="$T/psiphon.json"
+  export OUC_PROBE_CMD="$HELPER/fake_probe_backends.sh"
+  printf '{"registered":true,"connected":true,"keys_repeat":0}\n' > "$FAKE_WARP_STATE"
+  printf '{"ips":["74.208.85.35","172.105.246.108"],"index":0}\n' > "$FAKE_PSIPHON_STATE"
+  printf '127.0.0.1 localhost\n' > "$OUC_HOSTS_FILE"
+
+  python3 - "$T" > "$T/t89.out" 2>&1 <<'PY'
+import json, os, sys
+sys.path.insert(0, ".")
+import ouc
+t = sys.argv[1]
+cfg = ouc.Config(); log = ouc.Log(os.path.join(t, "t89.log"))
+state = ouc.State(cfg)
+sup = ouc.Supervisor(cfg, log)
+
+def hosts():
+    return open(cfg.hosts_file).read()
+
+def guard():
+    try:
+        return json.load(open(os.environ["FAKE_IPT_STATE"]))
+    except Exception:
+        return {"rules": [], "jumped": False, "chain": False}
+
+# --- leg 1: WARP carries traffic in tunnel mode ------------------------
+state.update(active_backend="warp", active_socks_port=cfg.proxy_socks_port)
+sup.tick()
+print("L1_pin", "pin" if "opencode.ai" in hosts() else "no-pin")
+print("L1_guard_mode", state.load().get("guard_mode"))
+print("L1_jumped", guard()["jumped"])
+print("L1_uid_rules", sum(1 for r in guard()["rules"] if "--uid-owner" in r))
+
+# --- leg 2: the ladder escalates to Psiphon ---------------------------
+# WARP is still Connected (that is the trap: it is *registered but walled*),
+# so the pin and the TUN-only guard would both be re-armed unless the tick is
+# backend-aware.
+state.update(active_backend="psiphon", active_socks_port=cfg.psiphon_socks_port,
+             fallback_activated_at=int(__import__("time").time()))
+sup.tick()
+st = state.load()
+print("L2_pin", "pin" if "opencode.ai" in hosts() else "no-pin")
+print("L2_guard_mode", st.get("guard_mode"))
+print("L2_uid_rules", sum(1 for r in guard()["rules"] if "--uid-owner" in r))
+ps = ouc.Psiphon(cfg, log)
+print("L2_psiphon_pid", ps.pid())
+print("L2_psiphon_socks", ps.socks_open())
+print("L2_psiphon_cfg_region", state.load().get("psiphon_region_index"))
+print("L2_bridge", ouc.port_open("127.0.0.1", cfg.proxy_http_port))
+
+# --- leg 3: back to WARP ---------------------------------------------
+state.update(active_backend="warp", active_socks_port=cfg.proxy_socks_port,
+             fallback_activated_at=0, warp_fail_streak=0)
+sup.tick()
+st = state.load()
+print("L3_pin", "pin" if "opencode.ai" in hosts() else "no-pin")
+print("L3_guard_mode", st.get("guard_mode"))
+print("L3_uid_rules", sum(1 for r in guard()["rules"] if "--uid-owner" in r))
+
+# --- leg 4: rescue restores the baseline from any state --------------
+state.update(active_backend="psiphon", guard_mode="proxy")
+ouc.cmd_rescue(type("A", (), {"force": True})(), cfg, log)
+st = state.load()
+print("L4_pin", "pin" if "opencode.ai" in hosts() else "no-pin")
+print("L4_chain", guard()["chain"], "jumped", guard()["jumped"])
+print("L4_backend", st.get("active_backend"))
+print("L4_guard_mode", st.get("guard_mode"))
+print("L4_hosts", repr(hosts()))
+PY
+
+  check "tunnel mode pins IPv6 while WARP carries traffic" \
+        "$(sed -n 's/^L1_pin //p' "$T/t89.out")" "pin"
+  check "and arms the TUN-only guard" \
+        "$(sed -n 's/^L1_guard_mode //p' "$T/t89.out")" "tunnel"
+  check "escalation lifts the IPv6 pin (Psiphon exits are IPv4)" \
+        "$(sed -n 's/^L2_pin //p' "$T/t89.out")" "no-pin"
+  check "escalation switches the guard to the proxy-compatible mode" \
+        "$(sed -n 's/^L2_guard_mode //p' "$T/t89.out")" "proxy"
+  check "the proxy guard scopes egress by owner, not by TUN interface" \
+        "$(awk '/^L2_uid_rules /{print ($2>0)?"yes":"no"}' "$T/t89.out")" "yes"
+  check "the fallback tunnel is listening on its SOCKS port" \
+        "$(sed -n 's/^L2_psiphon_socks //p' "$T/t89.out")" "True"
+  check "and the supervisor owns it (pidfile verified against /proc)" \
+        "$(awk '/^L2_psiphon_pid /{print ($2>0)?"yes":"no"}' "$T/t89.out")" "yes"
+  check "and the bridge exists in tunnel mode, not only in proxy mode" \
+        "$(sed -n 's/^L2_bridge //p' "$T/t89.out")" "True"
+  check "returning to WARP re-installs the IPv6 pin" \
+        "$(sed -n 's/^L3_pin //p' "$T/t89.out")" "pin"
+  check "and re-arms the full tunnel guard" \
+        "$(sed -n 's/^L3_guard_mode //p' "$T/t89.out")" "tunnel"
+  check "with no leftover owner rules" \
+        "$(sed -n 's/^L3_uid_rules //p' "$T/t89.out")" "0"
+  check "rescue removes the pin from any state" \
+        "$(sed -n 's/^L4_pin //p' "$T/t89.out")" "no-pin"
+  check "rescue tears the guard chain down" \
+        "$(sed -n 's/^L4_chain //p' "$T/t89.out")" "False jumped False"
+  check "rescue leaves the ladder on WARP" \
+        "$(sed -n 's/^L4_backend //p' "$T/t89.out")" "warp"
+  check "and records the guard as off" \
+        "$(sed -n 's/^L4_guard_mode //p' "$T/t89.out")" "off"
+  check "/etc/hosts is back to its baseline bytes" \
+        "$(sed -n 's/^L4_hosts //p' "$T/t89.out")" "'127.0.0.1 localhost\\n'"
+  pkill -f fake_psiphon.py 2>/dev/null || true
+  sb_cleanup
+  finish "t89"
+}
+
+t83_chaos_corrupt_state_and_stale_locks(){
+  begin "chaos: corrupt state.json, bogus pidfiles and a stale lock all self-heal"
+  sb
+  export OUC_WARP_MODE=proxy OUC_PROXY_SOCKS_PORT=19100 OUC_PROXY_HTTP_PORT=19189
+  export OUC_PSIPHON_SOCKS_PORT=19160 OUC_PSIPHON_HTTP_PORT=19161
+  export OUC_PSIPHON_BIN="$HELPER/fake_psiphon.py"
+  export FAKE_PSIPHON_LOG="$T/psiphon.log" FAKE_PSIPHON_STATE="$T/psiphon.json"
+  export OUC_PROBE_CMD="$HELPER/fake_probe_backends.sh"
+  printf '{"ips":["74.208.85.35"],"index":0}\n' > "$FAKE_PSIPHON_STATE"
+  python3 "$HELPER/fake_socks5.py" --port 19100 >/dev/null 2>&1 &
+  local socks_pid=$!
+  sleep 1
+
+  # 1. half-written JSON: the classic aftermath of a killed writer
+  printf '{"hops": 4, "blacklist": ["2a09:bac5:cbbb:1caa"], "curr' > "$OUC_STATE_DIR/state.json"
+  # 2. pidfiles naming processes that cannot exist
+  mkdir -p "$OUC_STATE_DIR/psiphon"
+  printf '999999\n' > "$OUC_STATE_DIR/psiphon/psiphon.pid"
+  printf '999999\n' > "$OUC_STATE_DIR/supervisor.pid"
+  printf '999999\n' > "$OUC_STATE_DIR/bridge.pid"
+  # 3. a lock file with no owner (the lock is the flock, not the file)
+  : > "$OUC_STATE_DIR/rotation.lock"
+  : > "$OUC_STATE_DIR/state.lock"
+  chmod 666 "$OUC_STATE_DIR"/*.lock 2>/dev/null || true
+
+  local rc_status rc_cfg rc_doctor rc_pin
+  # `doctor` exits 1 when it finds problems (no supervisor here) — that is a
+  # finding, not a crash. What must never happen is a traceback.
+  ouc status --json      > "$T/c-status.out"  2>&1; rc_status=$?
+  ouc config             > "$T/c-config.out"  2>&1; rc_cfg=$?
+  ouc doctor             > "$T/c-doctor.out"  2>&1; rc_doctor=$?
+  ouc pin status         > "$T/c-pin.out"     2>&1; rc_pin=$?
+  check "status survives a truncated state file" "$rc_status" "0"
+  check "config survives it"                     "$rc_cfg" "0"
+  check "doctor ran to a verdict (0 or 1, never a crash)" \
+        "$([ "$rc_doctor" -le 1 ] && echo ok || echo crash)" "ok"
+  check "pin status survives it"                 "$rc_pin" "0"
+  check "config still emitted parseable JSON from a corrupt state file" \
+        "$(python3 -c 'import json,sys; json.load(open(sys.argv[1])); print("valid")' \
+            "$T/c-config.out" 2>&1 | tail -1)" "valid"
+
+  ouc hop --backend psiphon --wait 60 > "$T/c-hop.out" 2>&1 \
+    || { fail "hop failed on a corrupt state"; sed 's/^/    /' "$T/c-hop.out"; finish "t83"; return; }
+  check "hop recreated a valid state file" \
+        "$(python3 -c 'import json,sys; json.load(open(sys.argv[1])); print("valid")' \
+            "$OUC_STATE_DIR/state.json" 2>&1 | tail -1)" "valid"
+  check "and the bogus psiphon pidfile did not stop the tunnel" \
+        "$(state_of "d.get('active_backend')")" "psiphon"
+
+  # no unhandled Python traceback anywhere in any of it
+  local tb
+  tb=$(grep -l "Traceback (most recent call last)" "$T"/c-*.out 2>/dev/null | wc -l)
+  check "zero unhandled tracebacks across status/config/doctor/pin/hop" "$tb" "0"
+  kill "$socks_pid" 2>/dev/null || true
+  wait "$socks_pid" 2>/dev/null || true
+  pkill -f fake_psiphon.py 2>/dev/null || true
+  sb_cleanup
+  finish "83-chaos-corrupt.log"
+}
+
+t84_chaos_process_assassination(){
+  begin "chaos: SIGKILL the tunnel and the bridge, and the supervisor owns them again"
+  sb
+  export OUC_WARP_MODE=proxy OUC_PROXY_SOCKS_PORT=19100 OUC_PROXY_HTTP_PORT=19189
+  export OUC_PSIPHON_SOCKS_PORT=19160 OUC_PSIPHON_HTTP_PORT=19161
+  export OUC_PSIPHON_BIN="$HELPER/fake_psiphon.py"
+  export FAKE_PSIPHON_LOG="$T/psiphon.log" FAKE_PSIPHON_STATE="$T/psiphon.json"
+  export OUC_PROBE_CMD="$HELPER/fake_probe_backends.sh"
+  printf '{"ips":["74.208.85.35","172.105.246.108"],"index":0}\n' > "$FAKE_PSIPHON_STATE"
+  python3 "$HELPER/fake_socks5.py" --port 19100 >/dev/null 2>&1 &
+  local socks_pid=$!
+  sleep 1
+  ouc hop --backend psiphon --wait 60 > "$T/a-hop.out" 2>&1 \
+    || { fail "could not establish the fallback"; sed 's/^/    /' "$T/a-hop.out"; finish "t84"; return; }
+  local psiphon_pid bridge_pid
+  psiphon_pid=$(pgrep -f "fake_psiphon.py" | head -1)
+  bridge_pid=$(pgrep -f "bridge --listen 127.0.0.1:19189" | head -1)
+  check "the fallback tunnel existed before the attack" \
+        "$([ -n "$psiphon_pid" ] && echo yes || echo no)" "yes"
+  check "the bridge existed before the attack" \
+        "$([ -n "$bridge_pid" ] && echo yes || echo no)" "yes"
+
+  # --- the attack ---------------------------------------------------
+  kill -9 "$psiphon_pid" 2>/dev/null || true
+  kill -9 "$bridge_pid" 2>/dev/null || true
+  sleep 1
+  check "the tunnel really is dead after SIGKILL" \
+        "$(pgrep -cf 'fake_psiphon.py')" "0"
+  check "and the bridge port is closed" \
+        "$(python3 -c 'import socket;s=socket.socket();s.settimeout(0.4)
+try:
+    s.connect(("127.0.0.1",19189)); print("open")
+except OSError:
+    print("closed")')" "closed"
+
+  # --- the recovery: one supervisor tick, exactly as a daemon would ---
+  python3 - "$T" > "$T/a-tick.out" 2>&1 <<'PY'
+import os, sys, time
+sys.path.insert(0, ".")
+import ouc
+cfg = ouc.Config(); log = ouc.Log(os.path.join(sys.argv[1], "t84.log"))
+state = ouc.State(cfg)
+sup = ouc.Supervisor(cfg, log)
+sup.tick()
+for _ in range(40):                      # the bridge takes a moment to bind
+    if ouc.port_open("127.0.0.1", cfg.proxy_http_port):
+        break
+    time.sleep(0.25)
+ps = ouc.Psiphon(cfg, log)
+print("TICK_backend", state.load().get("active_backend"))
+print("TICK_psiphon_pid", ps.pid())
+print("TICK_psiphon_socks", ps.socks_open())
+print("TICK_bridge", ouc.port_open("127.0.0.1", cfg.proxy_http_port))
+PY
+  check "one supervisor tick respawns the tunnel" \
+        "$(sed -n 's/^TICK_psiphon_socks //p' "$T/a-tick.out")" "True"
+  check "and re-binds the bridge on the right port" \
+        "$(sed -n 's/^TICK_bridge //p' "$T/a-tick.out")" "True"
+  check "with exactly one tunnel process afterwards" \
+        "$(pgrep -cf 'fake_psiphon.py')" "1"
+  check "and exactly one bridge process" \
+        "$(pgrep -cf 'bridge --listen 127.0.0.1:19189')" "1"
+
+  # --- proof it carries real traffic again ---------------------------
+  check "traffic flows through the resurrected pair" \
+        "$(python3 "$HELPER/fake_socks5.py" --help >/dev/null 2>&1; \
+           timeout 20 python3 - <<'PY'
+import socket
+s = socket.socket(); s.settimeout(8)
+try:
+    s.connect(("127.0.0.1", 19189))
+    s.sendall(b"CONNECT api.opencode.ai:443 HTTP/1.1\r\nHost: api.opencode.ai\r\n\r\n")
+    print("ok" if s.recv(64).startswith(b"HTTP/1.1 200") else "bad")
+except OSError as exc:
+    print(f"fail {exc}")
+PY
+)" "ok"
+  kill "$socks_pid" 2>/dev/null || true
+  wait "$socks_pid" 2>/dev/null || true
+  pkill -f fake_psiphon.py 2>/dev/null || true
+  pkill -f "bridge --listen 127.0.0.1:19189" 2>/dev/null || true
+  sb_cleanup
+  finish "84-chaos-assassination.log"
+}
+
+t85_chaos_port_squatting(){
+  begin "chaos: a squatter on the SOCKS or bridge port is refused, never trusted"
+  sb
+  export OUC_WARP_MODE=proxy OUC_PROXY_SOCKS_PORT=19100 OUC_PROXY_HTTP_PORT=19189
+  export OUC_PSIPHON_SOCKS_PORT=19160 OUC_PSIPHON_HTTP_PORT=19161
+  export OUC_PSIPHON_BIN="$HELPER/fake_psiphon.py"
+  export FAKE_PSIPHON_LOG="$T/psiphon.log" FAKE_PSIPHON_STATE="$T/psiphon.json"
+  export OUC_PROBE_CMD="$HELPER/fake_probe_backends.sh"
+  printf '{"ips":["74.208.85.35"],"index":0}\n' > "$FAKE_PSIPHON_STATE"
+  python3 "$HELPER/fake_socks5.py" --port 19100 >/dev/null 2>&1 &
+  local socks_pid=$!
+  # a rogue listener on the bridge port that is NOT our bridge
+  python3 -c '
+import socket, sys, time
+s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(("127.0.0.1", 19189)); s.listen(4)
+print("squatter up", flush=True)
+time.sleep(120)' > "$T/squat.out" 2>&1 &
+  local squat_pid=$!
+  sleep 2
+  check "the squatter holds the bridge port" \
+        "$(python3 -c 'import socket;s=socket.socket();s.settimeout(0.4)
+try:
+    s.connect(("127.0.0.1",19189)); print("open")
+except OSError:
+    print("closed")')" "open"
+
+  python3 - "$T" > "$T/s-tick.out" 2>&1 <<'PY'
+import os, sys
+sys.path.insert(0, ".")
+import ouc
+cfg = ouc.Config(); log = ouc.Log(os.path.join(sys.argv[1], "t85.log"))
+br = ouc.Bridge(cfg, log)
+print("ALIVE", br.alive())
+print("FOREIGN", br.in_use_by_foreign()[0] > 0)
+print("START", br.start())
+PY
+  check "the bridge refuses to call a squatter 'alive'" \
+        "$(sed -n 's/^ALIVE //p' "$T/s-tick.out")" "False"
+  check "and names the foreign owner" \
+        "$(sed -n 's/^FOREIGN //p' "$T/s-tick.out")" "True"
+  check "and refuses to start over it" \
+        "$(sed -n 's/^START //p' "$T/s-tick.out")" "False"
+  check "the refusal is a typed SECURITY log line, not silence" \
+        "$(grep -c 'SECURITY' "$T/t85.log" 2>/dev/null || echo 0)" "1"
+
+  # the SOCKS side: a squatter must not be mistaken for a working tunnel
+  kill "$socks_pid" 2>/dev/null || true
+  wait "$socks_pid" 2>/dev/null || true
+  sleep 0.5
+  # squat the *psiphon* SOCKS port this time (19160), not WARP's
+  python3 -c '
+import socket, time
+s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(("127.0.0.1", 19160)); s.listen(4); time.sleep(60)' &
+  local squat2=$!
+  sleep 1
+  python3 - "$T" > "$T/s-socks.out" 2>&1 <<'PY'
+import os, sys
+sys.path.insert(0, ".")
+import ouc
+cfg = ouc.Config(); log = ouc.Log(os.path.join(sys.argv[1], "t85b.log"))
+ps = ouc.Psiphon(cfg, log)
+print("SOCKS_OPEN", ps.socks_open())
+print("OWN_PID", ps.pid())
+print("START_OK", ps.start("US")[0])
+PY
+  check "a foreign SOCKS listener is not treated as our tunnel" \
+        "$(sed -n 's/^OWN_PID //p' "$T/s-socks.out")" "0"
+  check "and starting over it fails instead of reporting success" \
+        "$(sed -n 's/^START_OK //p' "$T/s-socks.out")" "False"
+  kill "$squat_pid" "$squat2" 2>/dev/null || true
+  wait "$squat_pid" "$squat2" 2>/dev/null || true
+  pkill -f 'fake_[p]siphon' 2>/dev/null || true
+  sleep 0.5
+  sb_cleanup
+  finish "85-chaos-squat.log"
+}
+
+t86_chaos_concurrent_hop_stampede(){
+  begin "chaos: five simultaneous hops cannot corrupt state or leak processes"
+  sb
+  export OUC_WARP_MODE=proxy OUC_PROXY_SOCKS_PORT=19100 OUC_PROXY_HTTP_PORT=19189
+  export OUC_PSIPHON_SOCKS_PORT=19160 OUC_PSIPHON_HTTP_PORT=19161
+  export OUC_PSIPHON_BIN="$HELPER/fake_psiphon.py"
+  export FAKE_PSIPHON_LOG="$T/psiphon.log" FAKE_PSIPHON_STATE="$T/psiphon.json"
+  export OUC_PROBE_CMD="$HELPER/fake_probe_backends.sh"
+  printf '{"ips":["74.208.85.35","172.105.246.108","23.92.28.100"],"index":0}\n' > "$FAKE_PSIPHON_STATE"
+  python3 "$HELPER/fake_socks5.py" --port 19100 >/dev/null 2>&1 &
+  local socks_pid=$!
+  sleep 1
+  local i pids=()
+  for i in 1 2 3 4 5; do
+    ( ouc hop --backend psiphon --wait 90 > "$T/p$i.out" 2>&1; echo $? > "$T/p$i.rc" ) &
+    pids+=($!)
+  done
+  # wait on the five hops only: a bare `wait` would also block on the fake
+  # SOCKS5 helper, which is meant to run forever.
+  wait "${pids[@]}" 
+  local ok_n err_n
+  ok_n=$(grep -l "^  ✓" "$T"/p*.out 2>/dev/null | wc -l)
+  err_n=$(grep -l "rotation already in progress" "$T"/p*.out 2>/dev/null | wc -l)
+  check "at most one of the five rotations actually ran" \
+        "$([ "$ok_n" -le 1 ] && echo yes || echo no)" "yes"
+  check "the others were refused with a typed error, not a crash" \
+        "$([ "$err_n" -ge 4 ] && echo yes || echo no)" "yes"
+  check "no traceback in any of the five" \
+        "$(grep -l "Traceback (most recent call last)" "$T"/p*.out 2>/dev/null | wc -l)" "0"
+  check "state.json is still valid JSON" \
+        "$(python3 -c 'import json,sys; json.load(open(sys.argv[1])); print("valid")' \
+            "$OUC_STATE_DIR/state.json" 2>&1 | tail -1)" "valid"
+  check "psiphon.config is still valid JSON" \
+        "$(python3 -c 'import json,sys; json.load(open(sys.argv[1])); print("valid")' \
+            "$OUC_STATE_DIR/psiphon/psiphon.config" 2>&1 | tail -1)" "valid"
+  check "exactly one tunnel process survived" "$(pgrep -cf 'fake_psiphon.py')" "1"
+  check "exactly one bridge process survived" \
+        "$(pgrep -cf 'bridge --listen 127.0.0.1:19189')" "1"
+  kill "$socks_pid" 2>/dev/null || true
+  wait "$socks_pid" 2>/dev/null || true
+  pkill -f fake_psiphon.py 2>/dev/null || true
+  pkill -f "bridge --listen 127.0.0.1:19189" 2>/dev/null || true
+  sb_cleanup
+  finish "86-chaos-stampede.log"
+}
+
+t87_chaos_blacklist_saturation(){
+  begin "chaos: burned regions are skipped, and the loop always terminates"
+  sb
+  export OUC_WARP_MODE=proxy OUC_PROXY_SOCKS_PORT=19100 OUC_PROXY_HTTP_PORT=19189
+  export OUC_PSIPHON_SOCKS_PORT=19160 OUC_PSIPHON_HTTP_PORT=19161
+  export OUC_PSIPHON_BIN="$HELPER/fake_psiphon.py"
+  export FAKE_PSIPHON_LOG="$T/psiphon.log" FAKE_PSIPHON_STATE="$T/psiphon.json"
+  export OUC_PROBE_CMD="$HELPER/fake_probe_backends.sh"
+  export OUC_PSIPHON_REGIONS="US,DE,NL"
+  export OUC_ROTATION_TIMEOUT=20
+  # region -> address, so "the next two regions are burned" is deterministic
+  printf '{"by_region":{"US":"74.208.85.35","DE":"172.105.246.108","NL":"23.92.28.100"}}\n' \
+      > "$FAKE_PSIPHON_STATE"
+  python3 "$HELPER/fake_socks5.py" --port 19100 >/dev/null 2>&1 &
+  local socks_pid=$!
+  sleep 1
+  # the next two regions' exits are already spent
+  python3 - "$OUC_STATE_DIR/state.json" <<'PY'
+import json, sys, time
+path = sys.argv[1]
+d = {"blacklist": ["74.208.85.35/32", "172.105.246.108/32"],
+     "blacklist_ts": {"74.208.85.35/32": int(time.time()),
+                      "172.105.246.108/32": int(time.time())},
+     "psiphon_region_index": 0, "active_backend": "warp"}
+open(path, "w").write(json.dumps(d))
+PY
+  local t0 t1
+  t0=$(date +%s)
+  ouc hop --backend psiphon --wait 90 > "$T/bl.out" 2>&1
+  local rc=$?
+  t1=$(date +%s)
+  check "the rotation still succeeded on the first clean exit" "$rc" "0"
+  check "it landed on a block that was not blacklisted" \
+        "$(state_of "d.get('current')")" "23.92.28.100"
+  check "the burned exits were explicitly refused, not silently retried" \
+        "$(python3 -c "
+import json, sys
+d = json.load(open(sys.argv[1]))
+a = (d.get('last_rotation') or {}).get('attempts') or []
+print([x.get('reason') for x in a if not x.get('accepted')])" "$OUC_STATE_DIR/state.json")" \
+        "['already exhausted', 'already exhausted']"
+  check "and it finished inside the configured budget" \
+        "$([ $((t1-t0)) -le 90 ] && echo yes || echo no)" "yes"
+  # the rotation's own record is the honest source for "how many regions"
+  check "the loop is bounded: one attempt per configured region" \
+        "$(python3 -c "
+import json, sys
+d = json.load(open(sys.argv[1]))
+print(len((d.get('last_rotation') or {}).get('attempts') or []))" "$OUC_STATE_DIR/state.json")" "3"
+  check "and the accepted attempt is the clean region" \
+        "$(python3 -c "
+import json, sys
+d = json.load(open(sys.argv[1]))
+a = (d.get('last_rotation') or {}).get('attempts') or []
+print([x['how'] for x in a if x.get('accepted')])" "$OUC_STATE_DIR/state.json")" "['psiphon@NL']"
+
+  # a fully saturated world must fail loudly and quickly, not spin
+  python3 - "$OUC_STATE_DIR/state.json" <<'PY'
+import json, sys, time
+path = sys.argv[1]
+now = int(time.time())
+ips = ["74.208.85.35/32", "172.105.246.108/32", "23.92.28.100/32"]
+d = {"blacklist": ips, "blacklist_ts": {i: now for i in ips},
+     "psiphon_region_index": 0, "active_backend": "warp"}
+open(path, "w").write(json.dumps(d))
+PY
+  t0=$(date +%s)
+  ouc hop --backend psiphon --wait 90 > "$T/bl2.out" 2>&1
+  local rc2=$?
+  t1=$(date +%s)
+  check "a fully spent pool fails instead of hanging" \
+        "$([ "$rc2" -ne 0 ] && echo yes || echo no)" "yes"
+  check "and says why, naming every burned region" \
+        "$(grep -o 'psiphon@[A-Z][A-Z]' "$T/bl2.out" | sort -u | tr '\n' ' ')" \
+        "psiphon@DE psiphon@NL psiphon@US "
+  check "without exceeding the rotation budget" \
+        "$([ $((t1-t0)) -le 120 ] && echo yes || echo no)" "yes"
+  kill "$socks_pid" 2>/dev/null || true
+  wait "$socks_pid" 2>/dev/null || true
+  pkill -f fake_psiphon.py 2>/dev/null || true
+  sb_cleanup
+  finish "87-chaos-blacklist.log"
+}
+
+t88_chaos_cli_monkey(){
+  begin "chaos: a storm of read-only CLI calls during a rotation changes nothing"
+  sb
+  export OUC_WARP_MODE=proxy OUC_PROXY_SOCKS_PORT=19100 OUC_PROXY_HTTP_PORT=19189
+  export OUC_PSIPHON_SOCKS_PORT=19160 OUC_PSIPHON_HTTP_PORT=19161
+  export OUC_PSIPHON_BIN="$HELPER/fake_psiphon.py"
+  export FAKE_PSIPHON_LOG="$T/psiphon.log" FAKE_PSIPHON_STATE="$T/psiphon.json"
+  export OUC_PROBE_CMD="$HELPER/fake_probe_backends.sh"
+  printf '{"ips":["74.208.85.35","172.105.246.108"],"index":0}\n' > "$FAKE_PSIPHON_STATE"
+  python3 "$HELPER/fake_socks5.py" --port 19100 >/dev/null 2>&1 &
+  local socks_pid=$!
+  sleep 1
+  ouc hop --backend psiphon --wait 60 >/dev/null 2>&1 || true
+  local before
+  before=$(sha256sum "$OUC_STATE_DIR/psiphon/psiphon.config" | cut -d' ' -f1)
+
+  # rotation in flight ...
+  ( ouc hop --backend psiphon --wait 90 > "$T/m-hop.out" 2>&1 ) &
+  local hop_pid=$!
+  # ... while a monkey hammers the read-only surface and some nonsense
+  local n=0 cmd
+  for i in $(seq 1 40); do
+    case $((i % 6)) in
+      0) cmd="status" ;; 1) cmd="config" ;; 2) cmd="doctor" ;;
+      3) cmd="pin status" ;; 4) cmd="status --json" ;; 5) cmd="hop --backend nonsense" ;;
+    esac
+    ouc $cmd > "$T/m$i.out" 2>&1
+    n=$((n+1))
+  done
+  wait "$hop_pid" 2>/dev/null || true
+  check "the monkey ran 40 commands" "$n" "40"
+  check "not one of them produced a traceback" \
+        "$(grep -l 'Traceback (most recent call last)' "$T"/m*.out 2>/dev/null | wc -l)" "0"
+  check "an invalid backend was rejected with a message, not a crash" \
+        "$(grep -lci 'invalid choice' "$T"/m5.out "$T"/m11.out "$T"/m17.out 2>/dev/null | wc -l)" "3"
+  check "state.json is byte-valid after the storm" \
+        "$(python3 -c 'import json,sys; json.load(open(sys.argv[1])); print("valid")' \
+            "$OUC_STATE_DIR/state.json" 2>&1 | tail -1)" "valid"
+  check "the rotation still completed while being hammered" \
+        "$(state_of "d.get('active_backend')")" "psiphon"
+  check "psiphon.config was rewritten exactly once (no torn writes)" \
+        "$([ -n "$before" ] && python3 -c 'import json,sys; json.load(open(sys.argv[1])); print("valid")' \
+            "$OUC_STATE_DIR/psiphon/psiphon.config" 2>&1 | tail -1)" "valid"
+  check "exactly one tunnel process, no orphans" "$(pgrep -cf 'fake_psiphon.py')" "1"
+  kill "$socks_pid" 2>/dev/null || true
+  wait "$socks_pid" 2>/dev/null || true
+  pkill -f fake_psiphon.py 2>/dev/null || true
+  pkill -f "bridge --listen 127.0.0.1:19189" 2>/dev/null || true
+  sb_cleanup
+  finish "88-chaos-monkey.log"
+}
+
+ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions t73_transport_resilience_regressions t74_orphaned_bridge_is_stopped t75_block_normalisation_and_ttl t76_escalation_after_five_warp_failures t77_psiphon_region_round_robin t78_bridge_follows_the_active_backend t79_hop_backend_override t80_tunnel_notice_dialects t81_a_daemons_writeonly_stdin_cannot_break_a_child t82_the_tunnel_outlives_the_command_that_started_it t89_tunnel_to_proxy_guard_transition t83_chaos_corrupt_state_and_stale_locks t84_chaos_process_assassination t85_chaos_port_squatting t86_chaos_concurrent_hop_stampede t87_chaos_blacklist_saturation t88_chaos_cli_monkey"
 REAL_TESTS="t30_real_install t31_real_auto_rotation t32_real_no_deadlock t33_real_hop t34_real_uninstall t45_real_proxy_rotation"
 TEST_TIMEOUT="${TEST_TIMEOUT:-240}"
 

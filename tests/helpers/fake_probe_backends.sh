@@ -44,6 +44,20 @@ if active == "psiphon":
             data = json.load(fh)
     except Exception:
         data = {}
+    # A real tunnel's egress depends on the region it is using, so a test can
+    # pin "region -> address" with "by_region". Without it we round-robin, which
+    # is fine when a test only needs "the address changed".
+    by_region = data.get("by_region") or {}
+    if by_region:
+        region = ""
+        try:
+            with open(os.path.join(state_dir, "psiphon", "psiphon.config")) as fh:
+                region = (json.load(fh) or {}).get("EgressRegion") or ""
+        except Exception:
+            region = ""
+        if region in by_region:
+            print(by_region[region])
+            sys.exit(0)
     ips = data.get("ips") or []
     if not ips:
         print("")
