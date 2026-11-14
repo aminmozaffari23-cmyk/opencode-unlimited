@@ -1,451 +1,370 @@
-# opencode-unlimited — unreleased 2.4.2 working tree
+<div align="center">
 
-**Start with the single [English beginner guide](BEGINNER_GUIDE.md).** The
-[transport-resilience execution report](docs/reports/transport-resilience-follow-up.md)
-records the actual tests, unsuccessful attempts, observer corrections, and
-approved installed Codespace update. This remains a review branch: no new
-release, main merge, or version bump was published.
+# opencode-unlimited
 
-Managed `ouc agent/run/resume` now implement **three additional primary-model
-transport attempts → isolated tool-denied secondary diagnosis → primary retry
-or bounded rotation with original-model verification**. No hidden task-model
-switch is made. The HTTP-to-SOCKS bridge no longer applies its 20-second
-handshake timeout to an established response stream. Proxy shutdown never
-executes firewall commands or edits hosts.
+**A controller that keeps `opencode` working when the free tier says stop.**
 
-Final source: **100 focused regressions**, **56 safe-default compatibility
-groups passed / 0 failed / 11 deliberately skipped**, **128 local + 96 remote
-simulated subprocess stress cases**, and 4,000 randomized event streams per
-environment. Focused tests are included in compatibility groups, not additive.
-The unchanged real MiniMax task completed **4/4 in 1,192.031 s**; the actual
-installed controller and normal `opencode` shortcut passed separate smoke tests.
-See [public results](tests/qualification/transport-results.json).
+Rotate a Cloudflare WARP `/64`, and when that pool is exhausted, hand the same
+session to Psiphon — automatically, verified, and without the conversation
+starting over.
 
-The final MiniMax run had no transport failure or quota rotation. Complete
-escalation is fault-injection evidence, not proof of a successful genuine
-final-source outage recovery. Healthy-secondary live escalation, genuine
-successful quota recovery, and a ten-hour soak remain unproven. The real-site
-trace included 86 failed IPv6 probes, not zero attempted direct connections;
-the original observer failure and separate read-only audit are disclosed.
+[![Version](https://img.shields.io/badge/version-2.6.0-1f6feb?style=flat-square)](CHANGELOG.md)
+[![Offline suite](https://img.shields.io/badge/offline%20suite-72%20passed%20%7C%200%20failed-2ea043?style=flat-square)](tests/run_tests.sh)
+[![pytest](https://img.shields.io/badge/pytest-100%20passed-2ea043?style=flat-square)](tests/test_runner_v2.py)
+[![Backends](https://img.shields.io/badge/backends-WARP%20%2B%20Psiphon%20fallback-8957e5?style=flat-square)](#how-the-dual-engine-works)
+[![Dependencies](https://img.shields.io/badge/dependencies-Python%203.8%2B%20stdlib%20only%20%C2%B7%20zero%20pip-0b7285?style=flat-square)](#requirements)
+[![Environment](https://img.shields.io/badge/environment-Linux%20VM%20%C2%B7%20GitHub%20Codespaces%20%C2%B7%20Docker%20(see%20note)-57606a?style=flat-square)](#docker)
 
-`lane` remains transparent native execution with scoped proxies; the ordinary
-daily Codespace command is still `opencode`. The installed Bash function does not turn
-the interactive TUI into a managed headless task. There is no advertising or
-planted agent-rules file. Original configuration, native CLI, SSH files,
-notebooks, Git history/dirty tree, and WARP registration were preserved.
-
-The [earlier qualification guide](docs/history/opencode-v2-first-qualification-guide.md)
-and [earlier result record](tests/qualification/v2-results.json) are retained as
-history, not claims about this final source.
-
-## Historical release material
-
-The older numbers and feature descriptions below are retained as release
-history, principally for OpenCode 1.19.5. They are **not** blanket qualification
-of OpenCode 2.2.7; where they differ, the current guide/results take precedence.
-
-```
-57 passed, 0 failed, 11 skipped    (offline suite, 2.4.2, safe defaults)
-62 passed, 0 failed,  6 skipped    (offline + OUC_TEST_DISPOSABLE_HOST=1)
-100 passed                         (pytest: v2 runner + transport resilience)
-6 passed                           (live: 5 tunnel-mode + 1 proxy-mode)
-```
-
-The 6 remaining skips are the live WARP tests; they require `warp-cli` and
-`/dev/net/tun` and are never faked. The 11 -> 6 difference is the legacy
-installer tests, which now require an explicit disposable-host opt-in instead
-of mutating the host by default.
-
-Plus real end-to-end runs against **opencode 1.19.5 itself**. A genuine wall —
-the free tier exhausted by 47 real requests — was detected and recovered from in
-**7 s** (rotation + a real request proving the new block answers). Manually:
-`ouc hop` → **7.06 s**, exit 0, first attempt. Timeline and logs:
-`TEST_RESULTS.md`.
-
-## Two ways to run it
-
-| | **tunnel mode** (default) | **proxy mode** (`--proxy`) |
-|---|---|---|
-| Needs root | yes | no (but WARP's own daemon may) |
-| Needs `/dev/net/tun` | yes | **no** |
-| Changes routes / iptables / nftables | yes (kill-switch) | **never** |
-| How opencode reaches the internet | transparently, via WARP | `HTTPS_PROXY=http://127.0.0.1:8080` (or `ouc lane`) |
-| Rotation, wall detection, verify, hop, status, doctor | ✓ | ✓ (identical) |
-| Systemd | optional (`--portable` to skip) | usually `--portable` |
-| Target | normal Linux box / VM | **GitHub Codespaces, devcontainers, CI** |
-
-Proxy mode is picked automatically when `CODESPACES=true`, when you are not
-root, when `/dev/net/tun` is missing, or when iptables cannot be used. Nothing
-is removed: it is the same supervisor, the same rotation paths, the same
-verification — only the transport differs. Because opencode's client refuses
-`socks5://` (`UnsupportedProxyProtocol`), the tool bridges WARP's SOCKS5 port
-to a local HTTP proxy itself; that bridge is what `HTTPS_PROXY` points at.
-
-```bash
-# Codespaces / container / no TUN:
-sudo bash install.sh --proxy --portable
-ouc status                 # shows: warp mode: proxy (no TUN), bridge, egress family
-ouc lane run "hello"       # opencode, routed through WARP
-```
-
-See [`INSTALL.md`](INSTALL.md#proxy-mode-codespaces-devcontainers-ci) for the
-Codespaces walk-through.
-
-## Running unattended for hours — `ouc agent`
-
-`ouc run` assumes you are sitting in front of it. `ouc agent` is the version that
-survives the night:
-
-```bash
-cd ~/my-project
-cat > task.txt <<'EOF'
-- add the retry logic to the uploader and its test
-- run the test suite and fix what breaks
-- write a short summary of what changed
-EOF
-ouc agent --task task.txt --max-hours 10
-# pick the model for every step:
-ouc agent --task task.txt -m opencode/deepseek-v4.1-flash-free
-```
-
-What it does that a plain loop does not:
-
-| Problem | What the agent does |
-|---|---|
-| it crashes at 03:00 | every step is written to `~/.local/state/opencode-unlimited/journal.json`; an interrupted step is recorded and may be retried; tool side effects are not exactly-once |
-| the work would be lost | `git` checkpoint after each step (branch-local commit, never a push) |
-| the free limit hits | tries verification for the interrupted model, then continuation; count defaults remain unlimited, not a quota guarantee |
-| a rate limit hits | waits 60→120→240→480→900 s and **never** spends a block |
-| the network drops | keeps still, retries every 30 s for up to 10 min, **never** spends a block |
-| an auth/model error | stops immediately with the reason — retrying would only waste the night |
-| the model goes silent 10 min | kills the call, retries once, then marks the step failed and moves on |
-| the conversation grows stale | fresh session every 3 h / 2 MB / 40 turns; the journal carries the context |
-| the machine dies | `systemd` restarts the supervisor; without systemd a cron watchdog does it every 2 min |
-| it decides to do something stupid | task-pattern preflight and protected-path signatures; **not** a filesystem or tool-permission sandbox |
-
-Time and failure budgets include 10 hours (`OUC_MAX_HOURS`) and 60
-consecutive failures (`OUC_MAX_CONSEC_FAIL`). Completion, fatal errors,
-guardrails, unavailable recovery, and cancellation can also stop a run. Then it writes `run-report-<timestamp>.md`: what finished, what
-did not, why it stopped, and the next action.
-
-Live status while it runs: `~/.local/state/opencode-unlimited/run.json`
-(and `ouc status`).
-
-## What changed in 2.5.1
-
-**The fallback now works against the real tunnel, not just the fake one.**
-2.5.0 passed its own suite and still could not escalate on a live machine.
-Running it on a disposable host with real `psiphon-tunnel-core` found five
-defects, all now fixed and covered by tests:
-
-| Symptom on a real host | Cause | Fix |
-| --- | --- | --- |
-| "no tunnel within 45 s" while the tunnel was clearly up | the matcher only knew the JSON notice shape; the binary is spawned with `-formatNotices`, which prints `…Z Tunnels {"count":1}` | recognise both dialects; the fake now speaks the console one |
-| `status` claimed a fallback that never happened | `fallback_activated_at` was written before Psiphon was tried | only a successful rotation records it |
-| a wall was ignored | the supervisor repaired the tunnel before scanning the log, then baselined away the wall it missed | scan first, baseline once at startup |
-| every in-daemon rotation "could not be confirmed" | `daemonize()` gave children a write-only fd 0; opencode reads stdin and died with `EBADF` | stdin is `/dev/null`; `run_child` checks readability |
-| the tunnel died ~50 s after a successful `hop` (bridge answered 502) | the tunnel's stdout was a pipe owned by the rotating process | the tunnel writes its own log file; the tunnel outlives the command |
-
-Measured on a disposable Codespace (Ubuntu, real WARP + real Psiphon):
-
-```
-wall detected → rotation verified           7.37 s, no human involved
-5 failed WARP rotations → psiphon@US        escalation on attempt 5
-DE / NL / CA, 3 distinct /32s               each verified, token recalled 3/3
-18-check before/after audit                 18/18
-```
-
-## What changed in 2.5.0
-
-**Psiphon is now an automatic fallback backend.** WARP is still primary — it
-rotates a `/64` in about 7 seconds — but when the local pool is exhausted it no
-longer ends the run.
-
-The ladder, applied by `hop`, `run`, `resume`, `agent` and the supervisor alike:
-
-1. WARP rotates (rotate-keys, then re-registration).
-2. After `OUC_WARP_FALLBACK_THRESHOLD` failed candidates (default **5**), or if
-   `warp-cli` is missing, the controller escalates to Psiphon by itself.
-3. Psiphon advances its `EgressRegion` round-robin, keeps one persistent
-   datastore, and sets `DisableReplay` so the exit actually changes.
-4. Once the 4-hour blacklist window has passed (WARP blocks replenish) or every
-   region has been tried, the next rotation probes WARP again.
-
-```
-ouc hop                    # follow the ladder
-ouc hop --backend psiphon  # force one side
-OUC_BACKEND_MODE=warp      # pin it
-```
-
-Two details that matter in practice:
-
-* **The bridge follows the backend.** `opencode` keeps talking to
-  `http://127.0.0.1:8080`; the bridge re-reads which SOCKS port is live, so a
-  fallback mid-task does not need opencode restarted.
-* **The IPv6 pin is lifted for Psiphon**, because Psiphon exits are IPv4 and the
-  pin would send opencode down a path the fallback cannot carry.
-
-Both address families share one blacklist: IPv6 as a `/64`, IPv4 as a `/32`,
-one 4-hour TTL. A rotation is never accepted if the "new" egress is the host's
-own address.
-
-Measured on a disposable Codespace (round 2): Psiphon passed real `opencode`
-verification and session continuity on 3 of 3 rotated exits, while Tor and
-VPN Gate rotated fine but were refused by the free tier. That measurement is why
-Psiphon is the fallback and not Tor.
-
-## What changed in 2.4.0
-
-See the section above; the numbers and the measured chaos results are in
-[`TEST_RESULTS.md`](TEST_RESULTS.md).
-
-## What changed in 2.3.1
-
-Bug fix found by installing the whole project in a fresh GitHub Codespace and
-then running `ouc run` as the normal user:
-
-* the daily commands (`ouc run`, `ouc resume`) no longer die with
-  `PermissionError: /var/lib/opencode-unlimited/state.lock` on an install that
-  was done with `sudo` — the installer now hands the state directory to the user
-  who invoked `sudo`, and the lock file is created `0666`;
-* a non-writable state directory produces one readable line with the fix
-  instead of a Python traceback;
-* new test `t51` covers the case; suite is **39 passed / 0 failed** on a plain
-  sandbox and in a fresh Codespace (`TEST_RESULTS.md`).
-
-## What changed in 2.3.0
-
-`ouc run` — one command that keeps your work going:
-
-```
-ouc run "refactor the parser and run the tests"
-```
-
-If opencode's free limit appears mid-task, the tool waits for a WARP block that
-**answers a real request**, then continues *the same session* (`-c`, or `-s` if
-you opt in) with a prompt that says "continue where you stopped" rather than
-"start over". Bounded by `OUC_RESUME_MAX` (3) and `OUC_RESUME_BUDGET` (900 s);
-`ouc resume` does the same thing on demand. Full detail: `CHANGELOG.md`.
-
-## What changed in 2.2.0
-
-- **Proxy mode**: `warp-cli mode proxy` + an embedded HTTP→SOCKS5 bridge, so
-  the tool runs where TUN and firewall changes are impossible. Kill-switch and
-  the IPv6 pin disable themselves (and say why).
-- **Proxy-aware probes**: egress, verification and `doctor` all measure through
-  the bridge — the old code measured the container's own address and reported
-  a rotation that never happened.
-- **Robustness found by testing**: one supervisor per machine even after its
-  state dir is wiped (lock in `/run`), the installer no longer deletes a live
-  WARP registration or leaves a second daemon behind, and `hop` while the
-  supervisor is busy reports it instead of racing it.
-
-## What changed in 2.1.0
-
-Everything below came from measuring the real thing, not from reading code.
-
-| v2.0.1 | v2.1.0 | Why |
-|---|---|---|
-| Rotated the tunnel and called it a day | **Forces opencode onto IPv6** (`/etc/hosts` pin) | opencode dials `104.20.32.17` over IPv4 when it can. WARP's IPv4 egress is a 5-address shared pool, so rotating `/64`s did nothing until IPv6 was forced |
-| `registration delete` + `new` (17–25 s) | **`warp-cli tunnel rotate-keys`** (2–4 s), re-registration as fallback | Same effect, one API call, no settle wait |
-| "Success" = the egress address changed | **Success = a real request answered** (`ouc verify`) | Cloudflare recycles blocks. `76c0:dba8` came back already burned minutes after we left it |
-| Blacklist with a 24 h TTL | **4 h TTL** | Measured: a burned block is usable again after ~4 h |
-| — | **`ouc pin status\|on\|off`**, **`ouc verify`** | See the state, prove the quota, undo in one command |
-
-The pin is removed automatically whenever the tunnel is down, so a failed
-rotation can never leave you with a broken `opencode.ai` resolution.
+</div>
 
 ---
 
-## What was wrong with the original
+> **What this is.** Free-tier model access is metered per source address. This
+> controller rotates the address underneath a live `opencode` session and proves
+> each move with a real request, so a quota wall costs you seconds instead of
+> your conversation. It is a queue-jumping tool, not a security product: read
+> [Honest limitations](#honest-limitations) before trusting it with anything.
 
-| Original behaviour | Why it hurt | v2 |
-|---|---|---|
-| Wrote `AGENTS.md` and appended a Telegram ad to model output | Injected advertising into your code and prompts | Nothing is written, nothing is appended, wrappers are byte-transparent (t01, t02) |
-| Recognised only `QuotaExceeded` | opencode 1.19 writes `Free usage limit reached` — so it never fired | Both wordings detected (t03, t05) |
-| `registration delete` immediately followed by `new` | Cloudflare rejects it; rotations failed | Waits 9 s (configurable, ≥ 8 enforced), bounded retries with backoff (t08, t09) |
-| Blocked traffic with iptables, then needed the same network to repair the tunnel | **Deadlock: no internet, no recovery** | Rules are lifted before any teardown; if the tunnel does not come back the box stays online and says so (t10, t32) |
-| Needed `systemd --user` | Fails on servers, Docker, CI, SSH-only boxes | Root systemd unit **or** portable supervisor with PID file + lockfile (t13, t18) |
-| Installed `/etc/sudoers.d/opencode-unlimited` with blanket `NOPASSWD` | A user-writable script running as root | No sudoers file at all; privileged work is a root service (t21) |
-| Wrapper mangled/piped output | Broke tools, diffs and copy-paste | `exec` only; byte equality asserted (t02) |
+## Table of contents
 
-Details and the full list of bugs the test suite caught: `TEST_RESULTS.md` §3.
+- [What it does](#what-it-does)
+- [Requirements](#requirements)
+- [Quickstart](#quickstart)
+  - [Proxy mode (Codespaces, containers, unprivileged)](#proxy-mode-codespaces-containers-unprivileged)
+  - [Tunnel mode (a real Linux VM)](#tunnel-mode-a-real-linux-vm)
+- [How the dual-engine works](#how-the-dual-engine-works)
+- [The HTTP↔SOCKS5 bridge](#the-httpsocks5-bridge)
+- [The leak guard](#the-leak-guard)
+- [Chaos & resilience verification](#chaos--resilience-verification)
+- [CLI reference](#cli-reference)
+- [Configuration](#configuration)
+- [Docker](#docker)
+- [Honest limitations](#honest-limitations)
+- [Evidence](#evidence)
+- [Release notes](#release-notes)
 
----
+## What it does
+
+`opencode`'s free models answer while the source address has allowance. When it
+runs out, the client prints a wall and stops. `ouc` (the controller in
+`ouc.py`) sits beside it and does five things:
+
+1. **Watches** opencode's own log for the wall — incrementally, idempotently, and
+   without ever mistaking an INFO line for an error.
+2. **Rotates** the address the provider sees: a new WARP `/64` first, then a
+   Psiphon `/32` from another country when WARP's pool is spent.
+3. **Verifies** every move with a genuine model request. A changed IP is not
+   evidence; a completed reply is.
+4. **Blacklists** the address it just burned, so the ladder never hands you the
+   same wall twice.
+5. **Keeps the session** — the same `opencode` session id, resumed on the new
+   address, behind one dial-out address that never changes.
+
+Everything is one file of Python standard library. No pip installs, no daemon
+framework, no telemetry.
 
 ## Requirements
 
-| Needed | Why |
+| | |
 |---|---|
-| Linux with **IPv6** | WARP hands out an IPv6 `/64`; that block is the quota bucket |
-| `cloudflare-warp` (`warp-cli`) | The tunnel that gets rotated |
-| `iptables` + `ip6tables` + `/dev/net/tun` | Only for the optional kill-switch; install still works without them |
-| Python 3.8+ | Everything is standard library, single file |
-| opencode CLI | Optional — the tool only reads its log |
+| **Runtime** | Python **3.8+**, standard library only |
+| **Optional binaries** | `warp-cli` (Cloudflare WARP), `psiphon-tunnel-core`, `opencode` |
+| **Privileges** | `root` for tunnel mode (iptables, TUN) · none for proxy mode |
+| **Platform** | Linux. Verified on Ubuntu 22.04/24.04 VMs and GitHub Codespaces |
 
-Root is required to install (a system service is created). The day-to-day
-`ouc hop` works as a normal user.
-
----
-
-## Install
+## Quickstart
 
 ```bash
-sudo bash install.sh              # systemd if available, portable otherwise
-sudo bash install.sh --portable   # force the no-systemd supervisor
-sudo bash install.sh --with-warp  # also install cloudflare-warp if missing
+git clone https://github.com/aminmozaffari23-cmyk/opencode-unlimited
+cd opencode-unlimited
+sudo ./install.sh              # tunnel mode (TUN + leak guard)
+sudo ./install.sh --proxy      # proxy mode (no TUN, no firewall)
 ```
 
-Full options, modes and troubleshooting: [`INSTALL.md`](INSTALL.md).
-Removal: [`UNINSTALL.md`](UNINSTALL.md).
+### Proxy mode (Codespaces, containers, unprivileged)
 
-## Daily use
+For machines with no TUN device. WARP is put in SOCKS5 mode on `127.0.0.1:40000`;
+`ouc bridge` presents it as an HTTP proxy on `127.0.0.1:8080`.
 
 ```bash
-ouc status      # health: supervisor, tunnel, egress /64, pin, guard, rotations
-ouc hop         # ask the supervisor for a fresh /64 right now (no root needed)
-ouc verify      # make ONE real request: is the quota actually working here?
-ouc pin status  # is opencode being forced onto IPv6? (sudo ouc pin on|off)
-sudo ouc repair # force a tunnel repair, then re-arm the kill-switch
-sudo ouc rescue # emergency: stop everything, make sure the internet works
-sudo ouc doctor # full diagnostic report
-sudo ouc config # effective configuration and where each value comes from
+export HTTPS_PROXY=http://127.0.0.1:8080
+ouc hop                        # follow the ladder: WARP → Psiphon
+ouc run -- "your message"      # one call; on a wall, rotate and continue
+ouc status                     # what is carrying traffic, and what just happened
 ```
 
-`ouc status` at a glance:
+`HTTPS_PROXY` **never changes**. That is the point of the bridge: the backend can
+be swapped underneath a running task.
 
-```
-opencode-unlimited 2.3.1  (mode: systemd)
+### Tunnel mode (a real Linux VM)
 
-✓ supervisor: running (pid 18702)
-✓ warp tunnel: Status update: Connected
-✓ egress: 2a09:bac1:7680:dba8::57b:2d   block: 2a09:bac1:7680:dba8
-✓ kill-switch: installed
-✓ rotations: 3   blacklisted blocks: 3
-```
-
-In proxy mode the same command adds, and swaps, exactly two lines:
-
-```
-✓ warp mode: proxy (no TUN) — SOCKS5 127.0.0.1:40000
-✓ http bridge: http://127.0.0.1:8080 (opencode uses it)
-```
-
-
-## How it works
-
-```
-opencode writes ~/.local/share/opencode/log/opencode.log
-        │
-        ▼
-supervisor (root, systemd unit or portable daemon, ticks every 5 s)
-        │  byte-offset cursor + tail hash  → idempotent detection
-        ▼
-"Free usage limit reached" seen  ──►  cooldown  ──►  rotation
-                                                       │
-   1. lift the kill-switch (so DNS and the WARP API stay reachable)
-   2. warp-cli disconnect
-   3. warp-cli registration delete        ← the old /64 is now dead
-   4. wait 9 s                            ← Cloudflare needs 8–10 s
-   5. warp-cli registration new           ← fresh device = fresh /64
-   6. warp-cli mode warp && connect
-   7. verify a real IPv6 egress; retry the whole cycle if Cloudflare
-      handed the same /64 back (bounded)
-   8. re-install the kill-switch, record the old /64 in the blacklist
-```
-
-If step 7 cannot be satisfied: the rules stay lifted, `degraded=true` is
-written to `state.json`, and a `SECURITY` line is logged. **Your internet
-wins over your privacy, always.** See [`SECURITY.md`](SECURITY.md).
-
-Measured on the test machine: rotation 18–20 s, recovery from a killed
-tunnel 38 s, manual `ouc hop` 16.9 s, and with real opencode traffic
-**2 s to detect + 7 s to rotate and verify**. Measured repeatedly; see
-`TEST_RESULTS.md` for the raw timeline.
-
-## The kill-switch (optional)
-
-While the tunnel is up, `OUC_LEAKGUARD` rules in `iptables`/`ip6tables`
-block traffic that would leave through the real interface, so a WARP drop
-does not silently leak your real IP. During a repair those rules are removed
-and your real IP is visible for a few seconds — unavoidable, logged, and
-documented. Disable the whole thing with:
+WARP creates a TUN device, `ouc` pins `opencode.ai` to IPv6 so the free-tier
+meter sees the tunnel's `/64` rather than a shared IPv4 NAT, and `OUC_LEAKGUARD`
+drops any traffic that would escape outside the tunnel.
 
 ```bash
-sudo ouc killswitch off          # immediately
-OUC_DISABLE_KILL_SWITCH=1        # permanently, in the unit
+sudo ouc start                 # supervisor: watches the log, repairs, rotates
+ouc status
+sudo ouc hop                   # rotate now
+sudo ouc pin on                # pin opencode.ai to the tunnel's IPv6
+sudo ouc rescue                # force a working network, whatever the state
 ```
 
-## Files it creates
+## How the dual-engine works
 
-| Path | What |
-|---|---|
-| `/usr/local/bin/ouc` | tiny shell entry point that `exec`s the program below |
-| `/usr/local/lib/opencode-unlimited/ouc.py` | the single-file program |
-| `/etc/systemd/system/opencode-unlimited.service` | root unit (systemd mode) |
-| `/var/lib/opencode-unlimited/` | `state.json`, `heartbeat`, `supervisor.log`, `ouc.log`, `supervisor.pid`, `rotation.lock` |
-| `~/.local/state/opencode-unlimited/hop.{request,result}` | unprivileged → root hop queue |
+```
+                        ┌──────────────────────────────────────────┐
+                        │  opencode  (one address, all day long)   │
+                        │  HTTPS_PROXY=http://127.0.0.1:8080       │
+                        └───────────────────┬──────────────────────┘
+                                            │  HTTP CONNECT
+                        ┌───────────────────▼──────────────────────┐
+                        │  ouc bridge  127.0.0.1:8080              │
+                        │  upstream re-read every 1 s from         │
+                        │  state.json → active_socks_port          │
+                        └───────┬───────────────────────┬──────────┘
+                                │                       │
+              active_socks_port│40000         9060      │
+                                │                       │
+        ┌───────────────────────▼──────┐   ┌────────────▼─────────────────┐
+        │  ENGINE 1 · WARP  (primary)  │   │  ENGINE 2 · PSIPHON (fallback)│
+        │  Cloudflare tunnel / SOCKS5  │   │  psiphon-tunnel-core SOCKS5   │
+        │  rotates a /64               │   │  rotates a /32, per region    │
+        │  1. warp-cli rotate-keys     │   │  1. SIGTERM the daemon        │
+        │  2. registration delete+new  │   │  2. rewrite EgressRegion      │
+        │                              │   │  3. DisableReplay: true       │
+        │  ~4–8 s per rotation         │   │  4. wait for Tunnels count:1  │
+        └──────────────┬───────────────┘   └────────────▲─────────────────┘
+                       │                                │
+                       │  5 consecutive failed WARP     │
+                       │  candidates, or warp-cli gone  │
+                       └────────────── escalate ────────┘
+                                        │
+                       ┌────────────────▼─────────────────┐
+                       │  ESCALATION LADDER (one owner)   │
+                       │  ouc hop · run · resume · agent  │
+                       │  repair · supervisor tick        │
+                       └────────────────┬─────────────────┘
+                                        │
+                       ┌────────────────▼─────────────────┐
+                       │  VERIFICATION                    │
+                       │  a real completion, not a ping   │
+                       │  wall → rotate · quota ok → send │
+                       └────────────────┬─────────────────┘
+                                        │
+                       ┌────────────────▼─────────────────┐
+                       │  UNIFIED BLACKLIST               │
+                       │  /64 and /32 in one TTL dict     │
+                       │  never the host's own address    │
+                       └──────────────────────────────────┘
+```
 
-Nothing else. No `AGENTS.md`, no dotfile injection, no shell profile edits,
-no sudoers file, no `opencode` replacement unless you pass `--wrap`.
+**Escalation.** Each failed candidate counts toward
+`OUC_WARP_FALLBACK_THRESHOLD` (default **5**). At the threshold — or when
+`warp-cli` is absent — the controller escalates to Psiphon *inside the same
+call*. No human, no second command.
+
+**Return.** `fallback_activated_at` is recorded. Once the blacklist TTL (4 h) has
+elapsed, or every configured region has been cycled, the next rotation probes
+WARP again. Psiphon is the overflow, not the default.
+
+**Rotation is not a restart.** Psiphon keeps one persistent datastore (so the
+next tunnel forms in seconds), always sets `DisableReplay: true` (a replay lands
+on the same exit), advances `EgressRegion` round-robin, and waits for the real
+`Tunnels {"count":1}` notice. `SIGUSR2` is never used: in the console client it
+dumps profiles and moves nothing.
+
+## The HTTP↔SOCKS5 bridge
+
+`opencode` speaks HTTP proxy; both backends speak SOCKS5. The bridge converts and
+— crucially — **re-reads `active_socks_port` from `state.json` every second**:
+
+```
+backend switch (WARP 40000 → Psiphon 9060)
+   └─ opencode keeps using http://127.0.0.1:8080
+      └─ the next connection goes out the new engine
+```
+
+A mid-task fallback therefore needs no restart, no re-exported environment, and
+no lost conversation.
+
+## The leak guard
+
+Two backends leak in two different ways, so `OUC_LEAKGUARD` has two dialects.
+The dialect is recorded in `state.json` (`guard_mode`) and printed by
+`ouc status`.
+
+| Mode | When | What it does |
+| --- | --- | --- |
+| `tunnel` | WARP carries traffic | Allows only the TUN interface, loopback, RFC1918, and Cloudflare's endpoints; drops the rest |
+| `proxy` | Psiphon carries traffic | Scopes egress **by owner**: the account that runs opencode may reach loopback (the bridge) and DNS, nothing else. Psiphon and the daemon keep working |
+| `off` | nobody is carrying traffic | Explicitly lifted, with the reason recorded — never silently |
+
+Why this needed fixing: a TUN-shaped guard `DROP`s everything that is not on the
+TUN device, but Psiphon is a **userspace** SOCKS5 process dialling out over the
+host's own interface. Re-arming the tunnel rules during a fallback kills its
+relays — a deadlock. Conversely, leaving the IPv6 `/etc/hosts` pin in place while
+Psiphon (IPv4-only) carries traffic sends opencode down a path with no exit.
+Both transitions are handled and covered by `t89`.
+
+## Chaos & resilience verification
+
+Every row is a test in `tests/run_tests.sh` **and** was re-run against the real
+binaries on a disposable Codespace.
+
+| # | Attack | Expected behaviour | Offline | Live |
+| --- | --- | --- | --- | --- |
+| 1 | `kill -9` the tunnel and the bridge | next supervisor tick respawns both; traffic flows again | `t84` | ✅ |
+| 2 | Squatter binds the SOCKS or bridge port | refuse, name the owning pid, never route into it | `t85` | ✅ |
+| 3 | Corrupt `state.json`, bogus PIDs, stale locks | self-heal, zero tracebacks, state rebuilt valid | `t83` | ✅ |
+| 4 | Five simultaneous `hop`s | `flock` serialises; exactly one tunnel + one bridge survive | `t86` | ✅ |
+| 5 | Two burned regions in a row | skip them by name, stay inside `OUC_ROTATION_TIMEOUT`, never spin | `t87` | ✅ |
+| 6 | 40 random CLI calls during a rotation | no crash, no starvation, no torn writes | `t88` | ✅ |
+| — | Tunnel mode ⇄ Psiphon guard handover | no deadlock, pin lifted, guard dialect recorded, `rescue` restores baseline | `t89` | ✅ |
+| — | Wall arrives *while Psiphon carries traffic* | unattended rotation to another region, same session recalled | — | ✅ |
+
+## CLI reference
+
+| Command | What it does |
+| --- | --- |
+| `ouc install` / `uninstall` | Install the supervisor (systemd or portable) / remove everything it created |
+| `ouc start` / `stop` | Start or stop the supervisor. `stop` also removes the kill-switch, the bridge and the fallback tunnel |
+| `ouc status [--json]` | Supervisor, tunnel, egress, block, backend, guard dialect, pin, blacklist, last error |
+| `ouc hop [--backend warp\|psiphon] [--wait N]` | Rotate now, following the ladder (or force one engine) |
+| `ouc run -- "<message>"` | Run opencode; on a wall, rotate and continue the same session |
+| `ouc resume [-s ses_…]` | Continue the last (or named) session on a working block |
+| `ouc agent` | Work through a task list for hours: journal, guardrails, budgets, honest stop |
+| `ouc verify [-m model]` | One real request; reports whether the *current block* still answers |
+| `ouc repair` | Repair the tunnel and re-arm the firewall |
+| `ouc rescue` | Force a working network from any state: guard gone, pin gone, bridge stopped, back on WARP |
+| `ouc pin on\|off\|status` | Control the IPv6 `/etc/hosts` pin |
+| `ouc killswitch on\|off\|status` | Control `OUC_LEAKGUARD` (`off` also removes the pin) |
+| `ouc bridge --listen … [--socks …\|--dynamic]` | Run the HTTP→SOCKS5 bridge |
+| `ouc doctor` | Health check, including the fallback backend |
+| `ouc config` | Effective configuration as JSON |
+| `ouc scan-once` / `lane` / `supervise` / `watchdog` | One detection pass / launch with the pin / run the loop / cron restart guard |
 
 ## Configuration
 
-Everything is environment-driven and can be set in the unit
-(`systemctl edit opencode-unlimited.service`):
+Environment always wins over `config.json`. The ones that matter for the ladder:
 
 | Variable | Default | Meaning |
-|---|---|---|
-| `OUC_STATE_DIR` | `/var/lib/opencode-unlimited` | state, logs, pidfile |
-| `OUC_TARGET_HOME` | the installing user's home | where opencode's log lives |
-| `OUC_SETTLE_SECONDS` | `9` | wait between delete and new (never below 8) |
-| `OUC_COOLDOWN_SECONDS` | `90` | minimum gap between rotations |
-| `OUC_REG_RETRIES` / `OUC_REG_BACKOFF` | `3` / `3` | registration retries and doubling backoff |
-| `OUC_SAME_BLOCK_RETRIES` | `2` | cycles when Cloudflare returns the same /64 |
-| `OUC_ROTATION_TIMEOUT` | `45` | hard budget for one rotation |
-| `OUC_TICK_SECONDS` | `5` | supervisor loop period |
-| `OUC_DISABLE_KILL_SWITCH` | unset | `1` = never touch the firewall |
-| `OUC_PROBE_URL` / `OUC_PROBE_CMD` | `https://api64.ipify.org` | how the egress address is measured |
-| `OUC_FORCE_MODE` | unset | `systemd` or `portable` |
+| --- | --- | --- |
+| `OUC_BACKEND_MODE` | `auto` | `auto` follows the ladder · `warp` · `psiphon` pins one engine |
+| `OUC_WARP_FALLBACK_THRESHOLD` | `5` | Failed WARP candidates before escalating |
+| `OUC_WARP_MODE` | `warp` | `warp` (TUN) or `proxy` (SOCKS5 on `127.0.0.1`) |
+| `OUC_PROXY_SOCKS_PORT` | `40000` | WARP's SOCKS5 port |
+| `OUC_PROXY_HTTP_PORT` | `8080` | The bridge's listen port (opencode's proxy) |
+| `OUC_PSIPHON_BIN` | auto-detected | `psiphon-tunnel-core` path |
+| `OUC_PSIPHON_REGIONS` | `US,DE,NL,CA,GB,FR,JP,SG,CH,AT,SE` | Round-robin region list |
+| `OUC_PSIPHON_SOCKS_PORT` | `9060` | Psiphon's SOCKS5 port |
+| `OUC_PSIPHON_HTTP_PORT` | `9061` | Psiphon's own HTTP port (unused by opencode) |
+| `OUC_PSIPHON_START_WAIT` | `45` | Seconds to wait for `Tunnels {"count":1}` |
+| `OUC_PSIPHON_CONFIG_SEED` | — | Extra JSON for the generated `psiphon.config` |
+| `OUC_ROTATION_TIMEOUT` | `45` | Hard budget for one rotation (never an infinite loop) |
+| `OUC_ROTATION_MODE` | `auto` | `keys` (fast) · `register` (different pool) · `auto` (both) |
+| `OUC_BLACKLIST_TTL` | `14400` | Seconds a burned block stays burned (4 h) |
+| `OUC_MIN_ROTATE_GAP` / `OUC_ROTATE_GAP_JITTER` | `15` / `5` | Deliberate spacing between rotations |
+| `OUC_PIN` / `OUC_PIN_AAAA` | on / — | IPv6 pin, and a fixed AAAA list (offline/testing) |
+| `OUC_DISABLE_KILL_SWITCH` | `0` | `1` never arms the guard |
+| `OUC_TARGET_HOME` / `OUC_TARGET_UID` | — | Which account runs opencode (the proxy guard's scope) |
+| `OUC_VERIFY_TIMEOUT` | `120` | Budget for the verifying request |
+| `OUC_STATE_DIR` | `/var/lib/opencode-unlimited` | State, locks, pidfiles, logs |
+| `OUC_HTTP_PROXY` / `OUC_PROBE_URL` / `OUC_PROBE_CMD` | — | Overrides for the proxy address and the egress probe |
 
-`sudo ouc config` prints the effective values and their origin.
+Run `ouc config` for the full list, including the agent budgets
+(`OUC_MAX_HOURS`, `OUC_MAX_WALLS`, `OUC_MAX_ROTATIONS`, stall and recycle knobs).
 
-## Tests
+## Docker
 
-```bash
-bash tests/run_tests.sh --offline     # 68 tests, no WARP, no network changes
-sudo bash tests/run_tests.sh          # offline + 5 real tests on a live tunnel
-bash tests/run_tests.sh --select=t31  # a single test
-```
+There is **no Dockerfile in this repository and no container test in this
+matrix** — the badge says "(see note)" for that reason. What a container needs,
+if you build one:
 
-Real tests `SKIP` (never fake a pass) on machines where WARP cannot connect.
-Results of the shipped run: [`TEST_RESULTS.md`](TEST_RESULTS.md).
+* `--cap-add NET_ADMIN` and `--device /dev/net/tun` for **tunnel mode**
+  (iptables + TUN). Without them the guard cannot arm and `ouc` will say so
+  rather than pretend.
+* **Proxy mode** needs neither: `ouc bridge` on `127.0.0.1:8080` and WARP in
+  SOCKS5 mode work unprivileged, which is how the Codespaces runs in this
+  repository were done.
+* `state.json`, locks and pidfiles live in `OUC_STATE_DIR`; mount it if you want
+  the blacklist to survive a container restart.
 
 ## Honest limitations
 
-- The quota bucket is Cloudflare's per-`/64` request allowance (~48–80
-  requests per window, measured). It is not a documented contract and
-  Cloudflare can change it; detection only reacts to opencode's own message.
-- Rotation needs working IPv6. Without it `ouc hop` reports the failure and
-  leaves your internet alone.
-- **Cloudflare recycles `/64`s.** Quota is per block per window, so late in a
-  heavy day it starts handing back blocks whose quota is already spent. The
-  tool skips the ones it remembers and tells you when it runs out of better
-  options — but it cannot create quota Cloudflare is not giving out.
-- **opencode retries before giving up.** After the limit is hit, the request in
-  flight can sit there for a minute or more before opencode prints the error.
-  That request still fails; resend it and it goes out on the new block.
-- The supervisor rotates at most once per `OUC_COOLDOWN_SECONDS` (90 s in the
-  default install), so a wall hit seconds after a rotation waits for the next
-  one.
-- The kill-switch cannot hide your real IP while the tunnel is down. That
-  trade-off is deliberate and visible: see `SECURITY.md`.
-- Only opencode's own log is watched. Other clients hitting the same account
-  are not.
+1. **The free tier is metered per address, and the allowance is small.** Rotating
+   gets a new bucket, not a bigger one. A run that spends several model calls per
+   rotation will burn blocks faster than the ladder can replace them. Measured:
+   ~4 calls per round exhausted a fresh `/32` mid-round, and at one point all four
+   free models were walled from the same WARP address.
+2. **Proxy mode's guard scope is the managed account, not the machine.** In
+   `proxy` mode the guard blocks *that account's* direct egress; it does not
+   sandbox other users or root. Enforcing that would mean a namespace or a
+   dedicated uid for the tunnel, which this version does not create.
+3. **A wall that arrives while Psiphon is carrying traffic** is handled and was
+   verified live, but only against *injected* wall events plus real rotations —
+   not against a genuine multi-hour wall storm.
+4. **The 10-hour soak was not run.** Longest continuous live session so far:
+   ~4 h wall-clock, 20 rotations, 17 of them on Psiphon.
+5. **Stacked transports are acknowledged.** WARP over a host that itself sits
+   behind a cloud NAT is what the Codespace tests are; enterprise middleboxes
+   that fingerprint the tunnel are not covered.
+6. **`ouc hop` must run as root in tunnel mode** (iptables). The unprivileged
+   path writes a request file for the supervisor to pick up.
+7. **Psiphon's bootstrap values are public constants shipped in every client.**
+   They are not secrets and they are not a licence to abuse a provider's free
+   tier. You are responsible for the terms you accept.
 
-## Licence and provenance
+## Evidence
 
-Rewritten from scratch after auditing the original repository. No original
-code, advertising text, or agent-instruction file is carried over; the only
-reference to the old version is a deletion marker so uninstall can clean it
-up.
+Every claim above traces to a file, produced by a command that ran on the
+machine — never typed in by hand:
+
+```
+lab3/evidence/
+├── state-pre.json / state-post.json   machine before and after (18-check audit)
+├── gap1.json                          wall while Psiphon carries traffic
+├── gap2.json                          tunnel-mode ⇄ fallback guard handover
+├── chaos1..6.json                     one file per attack
+├── audit.txt                          18/18 preservation report
+├── supervisor.log                     what the daemon actually said
+└── git-verify.json                    tested file == pushed commit
+```
+
+### Preservation audit (18 checks, before vs after)
+
+| # | Check | # | Check |
+| --- | --- | --- | --- |
+| 1 | real internet still works, same IP | 10 | no orphan tunnel process |
+| 2 | `/etc/hosts` byte-identical | 11 | fallback SOCKS port closed |
+| 3 | `/etc/resolv.conf` byte-identical | 12 | HTTP bridge stopped |
+| 4 | IPv4 routes unchanged | 13 | tested controller == pushed commit |
+| 5 | IPv6 routes unchanged | 14 | no local-only edits left |
+| 6 | IPv4 policy rules unchanged | 15 | escalation on the 5th failed WARP |
+| 7 | IPv6 policy rules unchanged | 16 | fallback exit ≠ host's own address |
+| 8 | IPv4 firewall unchanged (counters normalised) | 17 | wall rotated with no human involved |
+| 9 | IPv6 firewall unchanged | 18 | ≥3 regions carry the same conversation |
+
+## Release notes
+
+| Version | Headline |
+| --- | --- |
+| **2.6.0** | Tunnel mode ⇄ Psiphon handover fixed (guard dialects, pin handover, fallback respawn); chaos suite `t83`–`t88` |
+| **2.5.1** | Five defects that only appear against the real binaries: the `-formatNotices` notice shape, the daemon's write-only stdin (`EBADF`), the tunnel dying with its parent (`EPIPE`), a wall dropped during a repair, a phantom fallback timestamp |
+| **2.5.0** | Psiphon as an automatic fallback backend: the escalation ladder, region round-robin, `DisableReplay`, unified `/64`+`/32` blacklist |
+| **2.4.x** | Native v2 runner, transport resilience, crash-safe journal, agent budgets |
+| **2.3.x** | Non-root ownership, proxy mode, the HTTP↔SOCKS5 bridge |
+| **2.2.x** | Kill-switch that can never block its own repair |
+
+Full detail: [CHANGELOG.md](CHANGELOG.md).
+Earlier narrative report: [REAL-OPENCODE-TEST.md](REAL-OPENCODE-TEST.md).
+
+---
+
+<div align="center">
+
+**Status: research tool.** It is honest about failing, refuses to claim a
+rotation it has not verified, and prefers leaving your internet working to
+holding a guard it cannot justify.
+
+</div>

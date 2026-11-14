@@ -696,5 +696,93 @@ class RunnerRegression(unittest.TestCase):
         self.assertEqual(args.model, 'opencode/beam-free')
 
 
+class TestRecoveryLeaseWait(unittest.TestCase):
+    """Measured live: the supervisor rotated, then its own auto-resume refused.
+
+    `resume.log` said "another managed run owns recovery; refusing a duplicate"
+    because the tick that spawned the continuation still held rotation.lock.
+    The session the daemon had just rotated for was silently dropped. A
+    foreground command must still fail fast; the daemon's own child must wait.
+    """
+
+    HOLDER = (
+        "import fcntl, sys, time\n"
+        "fh = open(sys.argv[1], 'a+')\n"
+        "fcntl.flock(fh, fcntl.LOCK_EX)\n"
+        "print('HELD', flush=True)\n"
+        "time.sleep(float(sys.argv[2]))\n"
+    )
+
+    def _hold(self, path, seconds):
+        """Hold the flock from *another process* — StateLock is re-entrant."""
+        proc = subprocess.Popen([sys.executable, '-c', self.HOLDER, path, str(seconds)],
+                                stdout=subprocess.PIPE, text=True)
+        self.assertEqual(proc.stdout.readline().strip(), 'HELD')
+        return proc
+
+    def test_foreground_lease_fails_fast_when_a_rotation_is_running(self):
+        with tempfile.TemporaryDirectory() as td:
+            cfg = self._cfg(td)
+            holder = self._hold(cfg.rotation_lock, 30)
+            try:
+                t0 = time.monotonic()
+                self.assertFalse(o.ManagedRunLease(cfg).acquire())
+                self.assertLess(time.monotonic() - t0, 2.0)
+            finally:
+                holder.kill()
+                holder.wait()
+
+    def test_daemon_child_waits_for_the_rotation_then_takes_the_lease(self):
+        with tempfile.TemporaryDirectory() as td:
+            cfg = self._cfg(td)
+            holder = self._hold(cfg.rotation_lock, 3)
+            try:
+                t0 = time.monotonic()
+                lease = o.ManagedRunLease(cfg)
+                self.assertTrue(lease.acquire(wait=30))
+                self.assertGreaterEqual(time.monotonic() - t0, 1.0)
+                lease.close()
+            finally:
+                holder.kill()
+                holder.wait()
+
+    def test_a_wall_older_than_the_window_is_not_resumed(self):
+        with tempfile.TemporaryDirectory() as td:
+            cfg = self._cfg(td)
+            cfg.auto_resume = True
+            cfg.auto_resume_window = 900
+            state = o.State(cfg)
+            state.update(last_wall=o.now() - 5000, auto_resume_last=0)
+            with patch.object(o.subprocess, 'Popen') as popen:
+                self.assertFalse(o.supervisor_auto_resume(cfg, state, o.Log(os.devnull)))
+                popen.assert_not_called()
+
+    def test_a_wall_inside_a_multi_region_escalation_is_still_resumed(self):
+        with tempfile.TemporaryDirectory() as td:
+            cfg = self._cfg(td)
+            cfg.auto_resume = True
+            cfg.auto_resume_window = 900
+            cfg.oc_bin = sys.executable
+            state = o.State(cfg)
+            # 600 s old: past the old hardcoded 120 s, inside the escalation
+            state.update(last_wall=o.now() - 600, auto_resume_last=0)
+            with patch.object(o.subprocess, 'Popen') as popen:
+                popen.return_value.pid = 4242
+                self.assertTrue(o.supervisor_auto_resume(cfg, state, o.Log(os.devnull)))
+                env = popen.call_args.kwargs['env']
+                self.assertEqual(env.get('OUC_WAIT_FOR_RECOVERY'), '240')
+
+    @staticmethod
+    def _cfg(td):
+        cfg = o.Config()
+        cfg.state_dir = td
+        cfg.rotation_lock = os.path.join(td, 'rotation.lock')
+        cfg.managed_lock = os.path.join(td, 'managed-run.lock')
+        cfg.state_lock = os.path.join(td, 'state.lock')
+        cfg.state_file = os.path.join(td, 'state.json')
+        cfg.resume_lock = os.path.join(td, 'resume.lock')
+        return cfg
+
+
 if __name__ == '__main__':
     unittest.main()

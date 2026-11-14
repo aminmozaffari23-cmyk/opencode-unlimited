@@ -385,6 +385,13 @@ class Config:
         #      continue the interrupted session instead of starting over ----
         self.auto_resume = env_bool("OUC_AUTO_RESUME",
                                     bool(disk.get("auto_resume", False)))
+        # How long after a wall the continuation may still start. A Psiphon
+        # escalation legitimately spends minutes cycling regions before it
+        # finds a working exit; a 120 s window expired in the middle of exactly
+        # that, so the daemon rotated and then dropped the session it rotated
+        # for. The window now covers a full multi-region escalation.
+        self.auto_resume_window = max(120, env_int(
+            "OUC_AUTO_RESUME_WINDOW", int(disk.get("auto_resume_window", 900))))
         self.resume_prompt = (os.environ.get("OUC_RESUME_PROMPT")
                               or disk.get("resume_prompt") or DEFAULT_RESUME_PROMPT)
         # 0 = unlimited: a long unattended run resumes as often as it must.
@@ -4642,21 +4649,50 @@ class ManagedRunLease:
         self.fh = None
         self.rotation = None
 
-    def acquire(self) -> bool:
+    def acquire(self, wait: float = 0.0) -> bool:
+        """Take the lease, optionally waiting out somebody else's rotation.
+
+        A foreground command must fail fast — telling the user "a rotation is
+        running, try again" is better than hanging their shell. But the
+        supervisor's *own* auto-resume is spawned from inside the tick, which
+        may still be holding the rotation lock in this very process's sibling
+        thread of work; refusing there silently drops the continuation the
+        feature exists to provide. `wait` is for that caller only.
+        """
+        deadline = time.monotonic() + max(0.0, wait)
         try:
             mkdirp(self.cfg.state_dir)
             self.fh = open(self.cfg.managed_lock, "a+")
             os.chmod(self.cfg.managed_lock, 0o666)
-            fcntl.flock(self.fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            while True:
+                try:
+                    fcntl.flock(self.fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        raise
+                    time.sleep(2)
             # Also fence an older supervisor that knows only rotation.lock.
             # rotate() re-enters this lock in this process, never via a second
             # competing OS flock. Existing lock-file permissions are preserved.
-            self.rotation = StateLock(self.cfg.rotation_lock, blocking=False, fix_mode=False)
-            self.rotation.__enter__()
-            return True
+            while True:
+                self.rotation = StateLock(self.cfg.rotation_lock, blocking=False,
+                                          fix_mode=False)
+                try:
+                    self.rotation.__enter__()
+                    return True
+                except (BlockingIOError, OSError):
+                    self.rotation = None
+                    if time.monotonic() >= deadline:
+                        raise
+                    time.sleep(2)
         except (OSError, StateLockError):
             self.rotation = None
             if self.fh:
+                try:
+                    fcntl.flock(self.fh.fileno(), fcntl.LOCK_UN)
+                except OSError:
+                    pass
                 self.fh.close()
                 self.fh = None
             return False
@@ -4693,7 +4729,12 @@ def managed_command(fn):
     @functools.wraps(fn)
     def wrapped(args, cfg, log):
         lease = ManagedRunLease(cfg)
-        if not lease.acquire():
+        wait = 0.0
+        try:
+            wait = float(os.environ.get("OUC_WAIT_FOR_RECOVERY") or 0)
+        except ValueError:
+            wait = 0.0
+        if not lease.acquire(wait=wait):
             print("another managed run owns recovery; refusing a duplicate", file=sys.stderr)
             return 1
         interrupted = [signal.SIGINT]
@@ -5161,7 +5202,7 @@ def supervisor_auto_resume(cfg: Config, state: "State", log: "Log") -> bool:
         return False
     s = state.load()
     last = int(s.get("last_wall") or 0)
-    if not last or now() - last > 120:
+    if not last or now() - last > cfg.auto_resume_window:
         return False                      # nothing fresh to resume
     if int(s.get("auto_resume_last") or 0) >= last:
         return False                      # this wall was already handled
@@ -5172,7 +5213,11 @@ def supervisor_auto_resume(cfg: Config, state: "State", log: "Log") -> bool:
     except OSError:
         return False                      # another resume is running
     try:
-        env = dict(os.environ, OUC_STATE_DIR=cfg.state_dir, OUC_WARP_MODE=cfg.warp_mode)
+        # The tick that spawned us may still be inside a rotation, so the child
+        # waits for the lease instead of refusing — a dropped continuation is
+        # exactly the failure this feature exists to prevent.
+        env = dict(os.environ, OUC_STATE_DIR=cfg.state_dir, OUC_WARP_MODE=cfg.warp_mode,
+                   OUC_WAIT_FOR_RECOVERY="240")
         kwargs = dict(stdin=subprocess.DEVNULL, env=env, start_new_session=True,
                       stdout=open(os.path.join(cfg.state_dir, "resume.log"), "a"),
                       stderr=subprocess.STDOUT)
@@ -5187,6 +5232,9 @@ def supervisor_auto_resume(cfg: Config, state: "State", log: "Log") -> bool:
                                      "resume", "--reason", "auto"], **kwargs)
         finally:
             kwargs['stdout'].close()
+            # release the resume flock with this call, not with the interpreter:
+            # the supervisor outlives it and must not fence off the next one
+            fh.close()
         state.update(auto_resume_last=last, auto_resume_pid=proc.pid)
         log(f"auto-resume: continuing the last session (pid {proc.pid})")
         return True
