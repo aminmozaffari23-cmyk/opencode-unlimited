@@ -45,8 +45,8 @@ history, principally for OpenCode 1.19.5. They are **not** blanket qualification
 of OpenCode 2.2.7; where they differ, the current guide/results take precedence.
 
 ```
-56 passed, 0 failed, 11 skipped    (offline suite, 2.4.2, safe defaults)
-61 passed, 0 failed,  6 skipped    (offline + OUC_TEST_DISPOSABLE_HOST=1)
+57 passed, 0 failed, 11 skipped    (offline suite, 2.4.2, safe defaults)
+62 passed, 0 failed,  6 skipped    (offline + OUC_TEST_DISPOSABLE_HOST=1)
 100 passed                         (pytest: v2 runner + transport resilience)
 6 passed                           (live: 5 tunnel-mode + 1 proxy-mode)
 ```
@@ -350,7 +350,7 @@ Everything is environment-driven and can be set in the unit
 ## Tests
 
 ```bash
-bash tests/run_tests.sh --offline     # 67 tests, no WARP, no network changes
+bash tests/run_tests.sh --offline     # 68 tests, no WARP, no network changes
 sudo bash tests/run_tests.sh          # offline + 5 real tests on a live tunnel
 bash tests/run_tests.sh --select=t31  # a single test
 ```

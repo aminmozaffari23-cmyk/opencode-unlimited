@@ -38,6 +38,12 @@ else
     systemctl daemon-reload 2>/dev/null || true
     iptables  -D OUTPUT -j OUC_LEAKGUARD 2>/dev/null; iptables  -F OUC_LEAKGUARD 2>/dev/null; iptables  -X OUC_LEAKGUARD 2>/dev/null
     ip6tables -D OUTPUT -j OUC_LEAKGUARD 2>/dev/null; ip6tables -F OUC_LEAKGUARD 2>/dev/null; ip6tables -X OUC_LEAKGUARD 2>/dev/null
+    # A proxy bridge started by an earlier run lives in its own session and can
+    # outlive both the supervisor and the state dir that recorded its pid.
+    # Match our installed copy precisely; never pkill a bare "ouc".
+    pkill -f "$LIB_DIR/ouc.py bridge" 2>/dev/null || true
+    sleep 1
+    pkill -9 -f "$LIB_DIR/ouc.py bridge" 2>/dev/null || true
     rm -f /etc/sudoers.d/opencode-unlimited
     rm -rf "$LIB_DIR" "$BIN_PATH" "$WARP_WRAPPER"
     rm -rf "$STATE_DIR"
@@ -45,6 +51,9 @@ else
 fi
 
 # final sweep: these must not survive under any circumstance
+# A bridge whose binary we just deleted still shows that path in its cmdline,
+# so this matches even after the removal above.
+pkill -f "$LIB_DIR/ouc.py bridge" 2>/dev/null || true
 rm -f /etc/sudoers.d/opencode-unlimited 2>/dev/null
 rm -f /usr/local/bin/opencode-unlimited-keeper 2>/dev/null
 rm -rf "$LIB_DIR" 2>/dev/null

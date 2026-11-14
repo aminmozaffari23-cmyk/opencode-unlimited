@@ -1345,13 +1345,68 @@ class Bridge:
         self.log("bridge: started but not accepting connections", "WARN")
         return False
 
+    def _proc_bridge_pids(self) -> list:
+        """Bridge PIDs found by scanning /proc, without trusting the pidfile.
+
+        The bridge is started with start_new_session=True so that a crash in a
+        proxy thread cannot take the supervisor down. The same property means it
+        outlives a supervisor that was killed instead of shut down. If the
+        pidfile is also gone — uninstall deletes the state dir that holds it —
+        reading the pidfile alone can never find the orphan, and it keeps the
+        HTTP port bound forever. Scan the process table instead.
+        """
+        found = []
+        try:
+            entries = os.listdir("/proc")
+        except OSError:
+            return found
+        needle = f"127.0.0.1:{self.cfg.proxy_http_port}"
+        for entry in entries:
+            if not entry.isdigit():
+                continue
+            pid = int(entry)
+            if pid == os.getpid():
+                continue
+            try:
+                with open(f"/proc/{pid}/cmdline", "rb") as fh:
+                    raw = fh.read()
+            except OSError:
+                continue
+            if not raw:
+                continue          # kernel thread, or already gone
+            argv = [p.decode("utf-8", "replace") for p in raw.split(b"\0") if p]
+            joined = " ".join(argv)
+            # require all three: our program, the bridge subcommand, our port
+            if "ouc" in joined and "bridge" in argv and needle in joined:
+                found.append(pid)
+        return found
+
     def stop(self) -> None:
+        """Stop the bridge whether or not the pidfile still describes it."""
+        pids = []
         pid = read_pidfile(self.cfg.bridge_pid_file)
         if pid and pid_alive(pid):
+            pids.append(pid)
+        for extra in self._proc_bridge_pids():
+            if extra not in pids:
+                pids.append(extra)
+
+        for p in pids:
             try:
-                os.kill(pid, signal.SIGTERM)
+                os.kill(p, signal.SIGTERM)
             except OSError:
                 pass
+        deadline = time.time() + 5
+        while pids and time.time() < deadline:
+            if not any(pid_alive(p) for p in pids):
+                break
+            time.sleep(0.1)
+        for p in pids:
+            if pid_alive(p):
+                try:
+                    os.kill(p, signal.SIGKILL)
+                except OSError:
+                    pass
         try:
             os.unlink(self.cfg.bridge_pid_file)
         except OSError:
@@ -2451,14 +2506,19 @@ def cmd_stop(args, cfg: Config, log: Log, quiet: bool = False) -> int:
         rc, out = systemctl("stop", UNIT_NAME)
         if not quiet:
             print(out or "stopped")
-        # belt and braces: never leave the guard installed, never leave a pin
+        # belt and braces: never leave the guard installed, never leave a pin,
+        # and never leave the proxy bridge holding its port
         Firewall(cfg, log).teardown()
         Pinner(cfg, log).remove()
+        Bridge(cfg, log).stop()
         return 0
     pid = read_pidfile(cfg.pid_file)
     if not pid or not pid_alive(pid):
         Firewall(cfg, log).teardown()
         Pinner(cfg, log).remove()
+        # The supervisor is gone, but the bridge runs in its own session and
+        # can easily have outlived it. Stop it here or nothing ever will.
+        Bridge(cfg, log).stop()
         if not quiet:
             print("not running")
         return 0
@@ -2476,6 +2536,7 @@ def cmd_stop(args, cfg: Config, log: Log, quiet: bool = False) -> int:
         except OSError:
             pass
     Firewall(cfg, log).teardown()
+    Bridge(cfg, log).stop()
     try:
         os.unlink(cfg.pid_file)
     except OSError:
@@ -2940,6 +3001,13 @@ def cmd_uninstall(args, cfg: Config, log: Log) -> int:
     ns = argparse.Namespace(portable=False)
     cfg.mode = "portable" if not systemd_available() else cfg.mode
     cmd_stop(ns, cfg, log, quiet=True)
+
+    # The proxy bridge runs in its own session. cmd_stop handles it, but repeat
+    # it here while the state dir (and therefore bridge.pid) still exists: the
+    # next step removes that directory, after which the pid is unrecoverable
+    # without scanning /proc.
+    print("  stopping proxy bridge...")
+    Bridge(cfg, log).stop()
 
     print("  removing systemd units...")
     if systemd_available():

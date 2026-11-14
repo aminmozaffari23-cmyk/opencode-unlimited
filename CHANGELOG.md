@@ -2,6 +2,39 @@
 
 ## 2.4.2 — unreleased working tree
 
+### Fixes found by testing on a fresh host
+
+Both defects were found by running the project on a disposable Ubuntu 24.04
+host and a GitHub Codespace (Python 3.14.2), not by reading the code.
+
+* **Uninstall could leave the proxy bridge running forever.** The bridge is
+  started with `start_new_session=True` so a crash in a proxy thread cannot take
+  the supervisor down — which also means it survives a supervisor that was
+  killed rather than shut down. `cmd_stop` returned early at "supervisor not
+  running" without looking at the bridge, and `uninstall` then deleted the state
+  directory that held `bridge.pid`, making the orphan unidentifiable. The result
+  was a process holding `127.0.0.1:8080` with its binary already deleted, so a
+  re-install either failed to bind or lost the port to the stale bridge.
+
+  Now: `Bridge.stop()` kills the pidfile PID *and* falls back to a `/proc`
+  scan matched on our port, so it works with no pidfile at all; `cmd_stop` stops
+  the bridge on every path including the early return; `uninstall` stops it
+  while the state dir still exists, and `uninstall.sh` adds a precise
+  `pkill -f "$LIB_DIR/ouc.py bridge"` for the fallback branch that runs when
+  `ouc` is already missing. Covered by new test `t74`, which asserts both the
+  pidfile and the no-pidfile cases and that the port is actually free.
+
+* **`t21` failed on minimal images.** It wrote to `/etc/sudoers.d/` without
+  creating the directory, so it failed on any image without the `sudo` package
+  (`debootstrap --variant=minbase`, slim CI layers) for a reason unrelated to
+  what it checks. Now `mkdir -p`s first.
+
+Suites after the fixes: **57 passed / 0 failed / 11 skipped** safe-default,
+**62 / 0 / 6** with `OUC_TEST_DISPOSABLE_HOST=1`, **100 passed** pytest.
+End-to-end on a fresh host: `kill -9` the supervisor, wipe the state dir,
+`uninstall` → bridge gone, port 8080 closed. The same scenario on the unfixed
+tree left the bridge listening, which is the bug above.
+
 The already-unpublished 2.4.2 version/content-signature fix is retained; this
 qualification does not introduce another version bump or publish a release.
 
