@@ -131,6 +131,30 @@ did not, why it stopped, and the next action.
 Live status while it runs: `~/.local/state/opencode-unlimited/run.json`
 (and `ouc status`).
 
+## What changed in 2.5.1
+
+**The fallback now works against the real tunnel, not just the fake one.**
+2.5.0 passed its own suite and still could not escalate on a live machine.
+Running it on a disposable host with real `psiphon-tunnel-core` found five
+defects, all now fixed and covered by tests:
+
+| Symptom on a real host | Cause | Fix |
+| --- | --- | --- |
+| "no tunnel within 45 s" while the tunnel was clearly up | the matcher only knew the JSON notice shape; the binary is spawned with `-formatNotices`, which prints `…Z Tunnels {"count":1}` | recognise both dialects; the fake now speaks the console one |
+| `status` claimed a fallback that never happened | `fallback_activated_at` was written before Psiphon was tried | only a successful rotation records it |
+| a wall was ignored | the supervisor repaired the tunnel before scanning the log, then baselined away the wall it missed | scan first, baseline once at startup |
+| every in-daemon rotation "could not be confirmed" | `daemonize()` gave children a write-only fd 0; opencode reads stdin and died with `EBADF` | stdin is `/dev/null`; `run_child` checks readability |
+| the tunnel died ~50 s after a successful `hop` (bridge answered 502) | the tunnel's stdout was a pipe owned by the rotating process | the tunnel writes its own log file; the tunnel outlives the command |
+
+Measured on a disposable Codespace (Ubuntu, real WARP + real Psiphon):
+
+```
+wall detected → rotation verified           7.37 s, no human involved
+5 failed WARP rotations → psiphon@US        escalation on attempt 5
+DE / NL / CA, 3 distinct /32s               each verified, token recalled 3/3
+18-check before/after audit                 18/18
+```
+
 ## What changed in 2.5.0
 
 **Psiphon is now an automatic fallback backend.** WARP is still primary — it

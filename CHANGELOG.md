@@ -1,5 +1,48 @@
 # CHANGELOG — opencode-unlimited
 
+## 2.5.1 — the fallback becomes reachable on a real host
+
+2.5.0 was written against a fake tunnel. Running it on a disposable Codespace
+with the real `psiphon-tunnel-core` found five defects that the offline suite
+could not see, because the fakes mirrored the same assumptions as the code.
+
+### Fixed
+
+* **The Tunnels notice was never recognised.** `Psiphon.start()` spawns the
+  binary with `-formatNotices`, which prints
+  `2026-11-14T17:55:43.156Z Tunnels {"count":1}`. The matcher only knew the
+  default JSON shape `{"noticeType": "Tunnels"}`, so a healthy tunnel was
+  reported as "no tunnel within 45 s" and every escalation fell straight back
+  to WARP. Both dialects are recognised now, and the fake speaks the console
+  dialect whenever it is invoked with `-formatNotices`, so the suite can no
+  longer pass on a shape the real binary never emits.
+* **A failed escalation still marked a fallback episode.** `fallback_activated_at`
+  was written before the Psiphon rotation was attempted, so `status` could claim
+  a fallback that never happened. Only a successful rotation records it.
+* **A wall during a tunnel repair was silently dropped.** `Supervisor.tick()`
+  repaired the tunnel *before* scanning opencode's log; a repair can block for a
+  minute, and the first tick then ran with `baseline=True` and dismissed the
+  wall as pre-existing history. The log is scanned before the tunnel check, and
+  the baseline is taken once at process start.
+* **The daemon handed its children a write-only stdin.** `daemonize()` pointed
+  fd 0 at the supervisor log (`O_WRONLY`). `opencode` reads stdin, so every
+  child died with `EBADF: bad file descriptor, read` before sending anything —
+  every rotation inside the daemon came back "could not be confirmed". stdin is
+  now `/dev/null`, and `run_child` only inherits fd 0 when it is readable.
+* **The tunnel died with the command that started it.** `Psiphon.start()` gave
+  the tunnel a stdout pipe owned by the rotating process. A `hop` that reported
+  success handed over a tunnel that was dead ~50 s later (the bridge answered
+  502). The tunnel now writes to `<state>/psiphon/psiphon.log` and the
+  controller follows that file, so the tunnel belongs to the machine.
+* Verify failures now quote opencode's last words (stdout, falling back to
+  stderr) instead of a bare `exit 1`.
+
+### Tests
+
+`t80` (both notice dialects, and the fake must speak the console one), `t81`
+(write-only daemon stdin), `t82` (tunnel outlives its rotation command).
+Offline suite 65 passed / 0 failed / 11 skipped; pytest 100 passed.
+
 ## 2.5.0 — Psiphon as an automatic fallback backend
 
 WARP stays primary. Psiphon becomes the overflow backend for when the local
