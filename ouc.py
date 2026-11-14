@@ -1197,7 +1197,18 @@ def verify_request(cfg: Config, log: Log, *, model: str = "", cwd: str = "") -> 
         out['detail'] = 'opencode answered on the current block'
     else:
         out['failure_class'] = 'unknown'
-        out['detail'] = f"opencode exit {result['rc']} without a completed exact-marker reply"
+        # Say what opencode actually said. "exit 1" alone has cost hours of
+        # guessing at the wrong layer; the child's last words are the evidence.
+        tail = [l.strip() for l in (result.get('text') or '').splitlines() if l.strip()]
+        if not tail:
+            # stderr carries the transport/provider complaint when stdout is empty
+            tail = [l.strip() for l in
+                    (result.get('chunk') or b'').decode('utf-8', 'replace').splitlines()
+                    if l.strip()]
+        out['detail'] = (f"opencode exit {result['rc']} without a completed "
+                         f"exact-marker reply"
+                         + (f": {tail[-1][:200]}" if tail else ""))
+        out['tail'] = tail[-5:]
     return out
 
 
@@ -1795,7 +1806,14 @@ class Psiphon:
     move the exit.
     """
 
-    TUNNEL_RE = re.compile(r'"noticeType"\s*:\s*"Tunnels"')
+    # Two shapes must both count as "a tunnel is up":
+    #   default JSON   {"data": {"count": 1}, "noticeType": "Tunnels"}
+    #   -formatNotices 2026-11-14T14:35:58.395Z Tunnels {"count":1}
+    # We spawn with -formatNotices, so the console shape is the one that
+    # actually arrives; matching only the JSON shape made a perfectly healthy
+    # tunnel look like "no tunnel within Ns" and blocked every escalation.
+    TUNNEL_RE = re.compile(r'(?:"noticeType"\s*:\s*"Tunnels"'
+                           r'|(?:^|\s)Tunnels\s*\{)')
     COUNT_RE = re.compile(r'"count"\s*:\s*(\d+)')
 
     def __init__(self, cfg: Config, log: "Log | None" = None):
@@ -2743,7 +2761,10 @@ def rotate(cfg: Config, log: Log, state: State, why: str = "",
     if not reason or not ps_ok:
         return result
     log(f"backend: escalating to Psiphon — {reason}", "WARN")
-    state.update(fallback_activated_at=now())
+    # Do not record a fallback episode here: if Psiphon cannot produce a
+    # working exit there is no episode to time out, and a stray timestamp
+    # would make `status` claim a fallback that never happened. The rotation
+    # sets it itself on success.
     escalated = _rotate_psiphon(cfg, log, state, why or "rotation")
     if escalated.get("ok"):
         escalated["escalated_from"] = BACKEND_WARP
@@ -3027,14 +3048,20 @@ class Supervisor:
     def tick(self, baseline: bool = False) -> None:
         if self.cfg.proxy_mode:
             self.bridge.ensure()
-        self.ensure_tunnel()
-        self.sync_address()            # WARP may have moved us on its own
-        self.ensure_pin(self.warp.connected())
-        self.enforce_firewall()
+        # Scan before the tunnel check: repairing a dead tunnel can block for a
+        # minute or more, and a wall that lands during the repair must still be
+        # recorded (it is the reason the user is stuck, even if the tunnel is
+        # also down). Rotation stays after ensure_tunnel so the two recoveries
+        # never race for the same lock.
         if managed_run_active(self.cfg):
             _skip_supervisor_history(self.cfg)
         else:
             scan_wall(self.cfg, self.state, self.log, baseline=baseline)
+        self.ensure_tunnel()
+        self.sync_address()            # WARP may have moved us on its own
+        self.ensure_pin(self.warp.connected())
+        self.enforce_firewall()
+        if not managed_run_active(self.cfg):
             maybe_rotate_for_wall(self.cfg, self.state, self.log)
             supervisor_auto_resume(self.cfg, self.state, self.log)
         self.handle_request()
@@ -3060,6 +3087,13 @@ class Supervisor:
             self.log(f"proxy mode: opencode must use HTTP_PROXY={self.cfg.http_proxy}")
         self.ensure_pin(self.warp.connected())
         self.heartbeat()
+        # Baseline the log *now*, at process start. The first full tick can be
+        # delayed by a long tunnel repair; if the baseline were taken then, any
+        # wall written in between would be dismissed as pre-existing history.
+        try:
+            scan_wall(self.cfg, self.state, self.log, baseline=True)
+        except Exception as exc:
+            self.log(f"startup scan failed: {exc}", "WARN")
         first = True
         while not self.stop:
             try:
@@ -3187,11 +3221,16 @@ def daemonize(cfg: Config, argv: list[str]) -> int:
     # stdio -> supervisor log
     mkdirp(os.path.dirname(cfg.supervisor_log))
     fd = os.open(cfg.supervisor_log, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
-    os.dup2(fd, 0)
+    # stdin gets /dev/null: a readable descriptor. Pointing fd 0 at the log
+    # (write-only) is what made every child that reads stdin die with
+    # "EBADF: bad file descriptor, read" — opencode does read stdin.
+    null_fd = os.open(os.devnull, os.O_RDONLY)
+    os.dup2(null_fd, 0)
     os.dup2(fd, 1)
     os.dup2(fd, 2)
-    if fd > 2:
-        os.close(fd)
+    for extra in (fd, null_fd):
+        if extra > 2:
+            os.close(extra)
     with open(cfg.pid_file, "w") as fh:
         fh.write(f"{os.getpid()}\n")
     os.chmod(cfg.pid_file, 0o644)
@@ -5484,9 +5523,23 @@ def run_child(cfg: Config, argv: list, env: dict, follower: "LogFollower",
                 last_change = time.monotonic()
         if len(legacy) > MAX_LOG_READ:
             del legacy[:-MAX_LOG_READ]
+    # A daemon has no terminal: its fd 0 may be closed outright. A child that
+    # inherits that descriptor dies with "EBADF: bad file descriptor, read"
+    # before it can send anything (opencode does read stdin), which used to
+    # surface as an unverifiable rotation. Keep the terminal only when there
+    # genuinely is one.
+    try:
+        mode = fcntl.fcntl(0, fcntl.F_GETFL) & os.O_ACCMODE
+        stdin_usable = mode in (os.O_RDONLY, os.O_RDWR)
+    except OSError:
+        stdin_usable = False
+    if structured or not stdin_usable:
+        stdin_arg = subprocess.DEVNULL
+    else:
+        stdin_arg = None
     try:
         proc = subprocess.Popen(argv, env=env, cwd=cwd,
-                                stdin=subprocess.DEVNULL if structured else None,
+                                stdin=stdin_arg,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 start_new_session=True, preexec_fn=preexec_fn)
         tree = OwnedProcessTree(proc)

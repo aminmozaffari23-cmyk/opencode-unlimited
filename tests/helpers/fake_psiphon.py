@@ -23,6 +23,12 @@ import time
 from sandbox_scope import fixture_path
 
 LOG = fixture_path("FAKE_PSIPHON_LOG", optional=True)
+# The controller spawns the real binary with -formatNotices, which switches
+# stdout from JSON notices to the console dialect:
+#   2026-11-14T14:35:58.395Z Tunnels {"count":1}
+# The stand-in must speak the same dialect, or it will happily pass while the
+# controller matches on a shape the real binary never emits.
+FORMAT_NOTICES = "-formatNotices" in sys.argv
 FAIL = os.environ.get("FAKE_PSIPHON_FAIL", "")
 NO_NOTICE = os.environ.get("FAKE_PSIPHON_NO_NOTICE", "")
 NOTICE_DELAY = float(os.environ.get("FAKE_PSIPHON_NOTICE_DELAY", "0.2"))
@@ -69,8 +75,12 @@ def main() -> int:
             "message": "no usable bootstrap values"}}), flush=True)
         return 3
     if FAIL:
-        print(json.dumps({"noticeType": "Error",
-                          "data": {"message": FAIL}}), flush=True)
+        if FORMAT_NOTICES:
+            stamp = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
+            print(f"{stamp} Error {json.dumps({'error': FAIL})}", flush=True)
+        else:
+            print(json.dumps({"noticeType": "Error",
+                              "data": {"message": FAIL}}), flush=True)
         record({"event": "failed", "error": FAIL})
         return 4
     if NO_NOTICE:
@@ -78,8 +88,13 @@ def main() -> int:
         while True:
             time.sleep(0.2)
     time.sleep(NOTICE_DELAY)
-    print(json.dumps({"noticeType": "Tunnels", "data": {
-        "count": 1, "region": cfg.get("EgressRegion", "")}}), flush=True)
+    if FORMAT_NOTICES:
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
+        print(f'{stamp} Tunnels {{"count":1,"region":'
+              f'"{cfg.get("EgressRegion", "")}"}}', flush=True)
+    else:
+        print(json.dumps({"noticeType": "Tunnels", "data": {
+            "count": 1, "region": cfg.get("EgressRegion", "")}}), flush=True)
     record({"event": "tunnels", "region": cfg.get("EgressRegion", "")})
 
     # A real tunnel opens its SOCKS port as soon as the Tunnels notice fires;

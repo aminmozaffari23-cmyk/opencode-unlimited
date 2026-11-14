@@ -2065,7 +2065,99 @@ t79_hop_backend_override(){
   finish "t79"
 }
 
-ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions t73_transport_resilience_regressions t74_orphaned_bridge_is_stopped t75_block_normalisation_and_ttl t76_escalation_after_five_warp_failures t77_psiphon_region_round_robin t78_bridge_follows_the_active_backend t79_hop_backend_override"
+t80_tunnel_notice_dialects(){
+  begin "the controller recognises the Tunnels notice in both output dialects"
+  sb
+  # A real tunnel-core line, copied from a live console-mode run on 2026-11-14:
+  # the binary is spawned with -formatNotices, so this is the shape that
+  # actually arrives. Matching only the JSON shape once made a healthy tunnel
+  # look like a timeout and blocked every Psiphon escalation.
+  python3 - <<'PY' > "$T/d.out" 2>&1
+import sys
+sys.path.insert(0, ".")
+import ouc
+console = '2026-11-14T14:35:58.395Z Tunnels {"count":1}'
+console0 = '2026-11-14T14:37:01.490Z Tunnels {"count":0}'
+jsonfmt = '{"data":{"count":1},"noticeType":"Tunnels","timestamp":"2026-11-14T14:35:58.395Z"}'
+decoy = '{"data":{"message":"exiting run tunnels"},"noticeType":"Info"}'
+def hit(line):
+    if not ouc.Psiphon.TUNNEL_RE.search(line):
+        return False
+    m = ouc.Psiphon.COUNT_RE.search(line)
+    return bool(m) and int(m.group(1)) >= 1
+print("console", hit(console))
+print("json", hit(jsonfmt))
+print("console_zero", hit(console0))
+print("decoy", hit(decoy))
+PY
+  check "the console (-formatNotices) shape counts as a tunnel" \
+        "$(sed -n 's/^console //p' "$T/d.out")" "True"
+  check "the default JSON shape still counts as a tunnel" \
+        "$(sed -n 's/^json //p' "$T/d.out")" "True"
+  check "count:0 is a shutdown, not a tunnel" \
+        "$(sed -n 's/^console_zero //p' "$T/d.out")" "False"
+  check "an unrelated mention of 'tunnels' is ignored" \
+        "$(sed -n 's/^decoy //p' "$T/d.out")" "False"
+
+  # The stand-in must speak the same dialect as the real binary when invoked
+  # the way the controller invokes it, otherwise the suite can pass while the
+  # product is broken.
+  python3 - "$T/dialect.json" <<'PY'
+import json, sys
+json.dump({"SponsorId": "1BC527D3D09985CF", "EgressRegion": "US",
+           "RemoteServerListURLs": [{"URL": "https://example.invalid/list"}],
+           "DisableReplay": True, "LocalSocksProxyPort": 0,
+           "DataRootDirectory": "/tmp/sbx-dialect"}, open(sys.argv[1], "w"))
+PY
+  "$HELPER/fake_psiphon.py" -config "$T/dialect.json" -formatNotices \
+      > "$T/dialect.out" 2>&1 &
+  local fp=$!
+  sleep 2
+  kill "$fp" 2>/dev/null || true
+  wait "$fp" 2>/dev/null || true
+  check "the stand-in emits the console dialect under -formatNotices" \
+        "$(grep -cE '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z Tunnels \{' "$T/dialect.out")" "1"
+  check "and never the JSON shape in that mode" \
+        "$(grep -c '"noticeType"' "$T/dialect.out")" "0"
+  finish "t80"
+}
+
+t81_a_daemons_writeonly_stdin_cannot_break_a_child(){
+  begin "a child never inherits the daemon's write-only stdin"
+  sb
+  # The supervisor's fd 0 is its log file, opened O_WRONLY. A child that
+  # inherits it and reads stdin dies with "EBADF: bad file descriptor, read"
+  # before it can do anything — opencode does read stdin, so on a live host
+  # every rotation came back unverifiable. run_child must hand out /dev/null
+  # when fd 0 is not readable.
+  cat > "$T/reader.py" <<'PY'
+import sys
+sys.stdin.readline()          # EBADF when fd 0 is write-only
+open(sys.argv[1], "w").write("READ-OK")
+PY
+  python3 - "$T" > "$T/t81.out" 2>&1 <<'PY'
+import os, sys
+sys.path.insert(0, ".")
+import ouc
+t = sys.argv[1]
+cfg = ouc.Config(); log = ouc.Log(os.path.join(t, "t81.log"))
+logfd = os.open(os.path.join(t, "daemon.log"), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+os.dup2(logfd, 0)             # exactly what daemonize() used to do
+follower = ouc.LogFollower(cfg, ouc.State(cfg))
+marker = os.path.join(t, "read-ok")
+res = ouc.run_child(cfg, [sys.executable, os.path.join(t, "reader.py"), marker],
+                    dict(os.environ), follower, log, cwd=t, emit=False)
+print("RC", res["rc"])
+print("MARKER", os.path.exists(marker))
+PY
+  check "the child exited cleanly instead of dying on fd 0" \
+        "$(sed -n 's/^RC //p' "$T/t81.out")" "0"
+  check "and it actually read stdin (no EBADF)" \
+        "$(sed -n 's/^MARKER //p' "$T/t81.out")" "True"
+  finish "t81"
+}
+
+ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions t73_transport_resilience_regressions t74_orphaned_bridge_is_stopped t75_block_normalisation_and_ttl t76_escalation_after_five_warp_failures t77_psiphon_region_round_robin t78_bridge_follows_the_active_backend t79_hop_backend_override t80_tunnel_notice_dialects t81_a_daemons_writeonly_stdin_cannot_break_a_child"
 REAL_TESTS="t30_real_install t31_real_auto_rotation t32_real_no_deadlock t33_real_hop t34_real_uninstall t45_real_proxy_rotation"
 TEST_TIMEOUT="${TEST_TIMEOUT:-240}"
 
