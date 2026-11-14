@@ -66,7 +66,7 @@ import time
 import urllib.request
 import uuid
 
-VERSION = "2.6.0"
+VERSION = "2.6.1"
 BRAND = "opencode-unlimited"
 DEFAULT_STATE_DIR = "/var/lib/opencode-unlimited"
 UNIT_NAME = "opencode-unlimited.service"
