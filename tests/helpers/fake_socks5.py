@@ -7,9 +7,23 @@ like WARP's proxy port does in proxy mode. Usage:
   python3 fake_socks5.py --port 14000
 """
 import argparse
+import os
 import socket
 import struct
 import threading
+
+from sandbox_scope import fixture_path
+
+# Optional: record every CONNECT so a test can prove *which* upstream carried a
+# request (used by the bridge backend-switch test).
+SOCKS_LOG = fixture_path("FAKE_SOCKS_LOG", optional=True)
+
+
+def record(line: str) -> None:
+    if not SOCKS_LOG:
+        return
+    with open(SOCKS_LOG, "a") as fh:
+        fh.write(line + "\n")
 
 
 def recv_exact(sock, n):
@@ -53,6 +67,7 @@ def handle(conn):
             ln = recv_exact(conn, 1)[0]
             host = recv_exact(conn, ln).decode()
         port = struct.unpack("!H", recv_exact(conn, 2))[0]
+        record("%s:%d" % (host, port))
         upstream = socket.create_connection((host, port), timeout=10)
         conn.sendall(b"\x05\x00\x00\x01" + socket.inet_aton("127.0.0.1") + b"\x00\x00")
         threading.Thread(target=pump, args=(upstream, conn), daemon=True).start()

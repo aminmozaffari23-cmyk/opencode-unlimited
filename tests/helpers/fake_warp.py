@@ -105,7 +105,8 @@ def main():
                 log("rotate-keys failed: no registration")
                 return 1
             if int(st.get("keys_repeat", KEYS_REPEAT)) > 0:
-                st["keys_repeat"] = int(st["keys_repeat"]) - 1
+                # seed from the env var on first use, then count down in state
+                st["keys_repeat"] = int(st.get("keys_repeat", KEYS_REPEAT)) - 1
                 save(st)
                 log("rotate-keys: kept the same block (repeat)")
                 print("Success")

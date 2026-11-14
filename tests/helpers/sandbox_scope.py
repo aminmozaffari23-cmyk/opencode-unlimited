@@ -38,7 +38,10 @@ def assert_config_scope(cfg, root):
              'target_home', 'opencode_log', 'hosts_file', 'user_state_dir',
              'journal_file', 'journal_md', 'run_status_file', 'agent_lock_file',
              'hop_request', 'hop_result', 'hop_fallback_dir',
-             'hop_fallback_request', 'hop_fallback_result')
+             'hop_fallback_request', 'hop_fallback_result',
+             # v2.5.0 Psiphon fallback paths
+             'psiphon_dir', 'psiphon_config', 'psiphon_pid_file',
+             'psiphon_data', 'psiphon_log')
     for name in names:
         checked_path(getattr(cfg, name), root)
     return names
@@ -57,7 +60,8 @@ def main():
     for name in ('UNIT_PATH', 'BIN_PATH', 'LIB_DIR'):
         checked_path(getattr(module, name), root)
     helper_dir = Path(__file__).resolve().parent
-    for name in ('warp_bin', 'iptables', 'ip6tables', 'oc_bin', 'probe_cmd'):
+    for name in ('warp_bin', 'iptables', 'ip6tables', 'oc_bin', 'probe_cmd',
+                 'psiphon_bin'):
         path = Path(getattr(cfg, name)).resolve()
         if helper_dir not in path.parents or not path.name.startswith('fake_'):
             raise RuntimeError(f'offline fixture executable is not a shipped fake: {name}')

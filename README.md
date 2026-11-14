@@ -131,6 +131,45 @@ did not, why it stopped, and the next action.
 Live status while it runs: `~/.local/state/opencode-unlimited/run.json`
 (and `ouc status`).
 
+## What changed in 2.5.0
+
+**Psiphon is now an automatic fallback backend.** WARP is still primary — it
+rotates a `/64` in about 7 seconds — but when the local pool is exhausted it no
+longer ends the run.
+
+The ladder, applied by `hop`, `run`, `resume`, `agent` and the supervisor alike:
+
+1. WARP rotates (rotate-keys, then re-registration).
+2. After `OUC_WARP_FALLBACK_THRESHOLD` failed candidates (default **5**), or if
+   `warp-cli` is missing, the controller escalates to Psiphon by itself.
+3. Psiphon advances its `EgressRegion` round-robin, keeps one persistent
+   datastore, and sets `DisableReplay` so the exit actually changes.
+4. Once the 4-hour blacklist window has passed (WARP blocks replenish) or every
+   region has been tried, the next rotation probes WARP again.
+
+```
+ouc hop                    # follow the ladder
+ouc hop --backend psiphon  # force one side
+OUC_BACKEND_MODE=warp      # pin it
+```
+
+Two details that matter in practice:
+
+* **The bridge follows the backend.** `opencode` keeps talking to
+  `http://127.0.0.1:8080`; the bridge re-reads which SOCKS port is live, so a
+  fallback mid-task does not need opencode restarted.
+* **The IPv6 pin is lifted for Psiphon**, because Psiphon exits are IPv4 and the
+  pin would send opencode down a path the fallback cannot carry.
+
+Both address families share one blacklist: IPv6 as a `/64`, IPv4 as a `/32`,
+one 4-hour TTL. A rotation is never accepted if the "new" egress is the host's
+own address.
+
+Measured on a disposable Codespace (round 2): Psiphon passed real `opencode`
+verification and session continuity on 3 of 3 rotated exits, while Tor and
+VPN Gate rotated fine but were refused by the free tier. That measurement is why
+Psiphon is the fallback and not Tor.
+
 ## What changed in 2.4.0
 
 See the section above; the numbers and the measured chaos results are in

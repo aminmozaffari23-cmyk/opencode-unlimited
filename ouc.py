@@ -66,7 +66,7 @@ import time
 import urllib.request
 import uuid
 
-VERSION = "2.4.2"
+VERSION = "2.5.0"
 BRAND = "opencode-unlimited"
 DEFAULT_STATE_DIR = "/var/lib/opencode-unlimited"
 UNIT_NAME = "opencode-unlimited.service"
@@ -101,6 +101,34 @@ MAX_LOG_READ = 8 * 1024 * 1024
 
 # Hosts whose traffic must leave over IPv6 for the /64 rotation to matter.
 PIN_HOSTS_DEFAULT = "opencode.ai,api.opencode.ai"
+
+# ---- Psiphon fallback backend -------------------------------------------
+# Public bootstrap values shipped inside every public Psiphon client. These are
+# not secrets: they identify the client, and the signature key is what lets the
+# client trust a downloaded server list. A tunnel-core build with placeholders
+# (FFFF...) and no server list cannot fetch any server at all, so it never
+# connects — that is the failure this replaces.
+PSIPHON_PROPAGATION_CHANNEL_ID = "92AACC5BABE0944C"
+PSIPHON_SPONSOR_ID = "1BC527D3D09985CF"
+PSIPHON_SERVER_LIST_SIGNATURE_KEY = (
+    "MIICIDANBgkqhkiG9w0BAQEFAAOCAg0AMIICCAKCAgEAt7Ls+/39r+T6zNW7GiVpJfzq/xvL9SBH5rIFnk0RX"
+    "YEYavax3WS6HOD35eTAqn8AniOwiH+DOkvgSKF2caqk/y1dfq47Pdymtwzp9ikpB1C5OfAysXzBiwVJlCdajBKv"
+    "BZDerV1cMvRzCKvKwRmvDmHgphQQ7WfXIGbRbmmk6opMBh3roE42KcotLFtqp0RRwLtcBRNtCdsrVsjiI1Lqz/lH"
+    "+T61sGjSjQ3CHMuZYSQJZo/KrvzgQXpkaCTdbObxHqb6/+i1qaVOfEsvjoiyzTxJADvSytVtcTjijhPEV6XskJVH"
+    "E1Zgl+7rATr/pDQkw6DPCNBS1+Y6fy7GstZALQXwEDN/qhQI9kWkHijT8ns+i1vGg00Mk/6J75arLhqcodWsdeG"
+    "/M/moWgqQAnlZAGVtJI1OgeF5fsPpXu4kctOfuZlGjVZXQNW34aOzm8r8S0eVZitPlbhcPiR4gT/aSMz/wd8lZlz"
+    "ZYsje/Jr8u/YtlwjjreZrGRmG8KMOzukV3lLmMppXFMvl4bxv6YFEmIuTsOhbLTwFgh7KYNjodLj/LsqRVfwz31P"
+    "gWQFTEPICV7GCvgVlPRxnofqKSjgTWI4mxDhBpVcATvaoBl1L/6WLbFvBsoAUBItWwctO2xalKxF5szhGm8lcco"
+    "c5MZr8kfE0uxMgsxz4er68iCID+rsCAQM=")
+PSIPHON_SERVER_LIST_URLS = (
+    "https://s3.amazonaws.com/psiphon/web/mjr4-p23r-puwl/server_list_compressed",
+    "https://www.blogsfmcancercitizen.com/web/mjr4-p23r-puwl/server_list_compressed",
+    "https://www.herbxdiiincorporated.com/web/mjr4-p23r-puwl/server_list_compressed",
+    "https://www.xydiamonddbexpert.com/web/mjr4-p23r-puwl/server_list_compressed",
+)
+PSIPHON_REGIONS_DEFAULT = "US,DE,NL,CA,GB,FR,JP,SG,CH,AT,SE"
+BACKEND_WARP = "warp"
+BACKEND_PSIPHON = "psiphon"
 PIN_BEGIN = "# BEGIN opencode-unlimited (managed) — do not edit"
 PIN_END = "# END opencode-unlimited"
 
@@ -288,6 +316,42 @@ class Config:
         self.rotation_mode = (os.environ.get("OUC_ROTATION_MODE")
                               or disk.get("rotation_mode") or "auto").lower()
         self.blacklist_ttl = env_int("OUC_BLACKLIST_TTL", int(disk.get("blacklist_ttl", 4 * 3600)))
+
+        # ---- backend ladder: WARP primary, Psiphon fallback (v2.5.0) ------
+        # WARP rotates a /64 in ~7 s; Psiphon is the overflow backend for when
+        # the local WARP pool is exhausted or every fresh block still verifies
+        # as walled. `auto` follows the ladder, the other two pin it.
+        self.backend_mode = (os.environ.get("OUC_BACKEND_MODE")
+                             or disk.get("backend_mode") or "auto").lower()
+        if self.backend_mode not in ("auto", "warp", "psiphon"):
+            self.backend_mode = "auto"
+        self.warp_fallback_threshold = max(1, env_int(
+            "OUC_WARP_FALLBACK_THRESHOLD",
+            int(disk.get("warp_fallback_threshold", 5))))
+        self.psiphon_bin = os.environ.get("OUC_PSIPHON_BIN") or which(
+            "psiphon-tunnel-core", "/usr/local/bin/psiphon-tunnel-core",
+            "/opt/psiphon/psiphon-tunnel-core")
+        self.psiphon_socks_port = env_int(
+            "OUC_PSIPHON_SOCKS_PORT", int(disk.get("psiphon_socks_port", 9060)))
+        self.psiphon_http_port = env_int(
+            "OUC_PSIPHON_HTTP_PORT", int(disk.get("psiphon_http_port", 9061)))
+        self.psiphon_regions = [
+            r.strip().upper() for r in
+            (os.environ.get("OUC_PSIPHON_REGIONS")
+             or disk.get("psiphon_regions") or PSIPHON_REGIONS_DEFAULT).split(",")
+            if r.strip()]
+        self.psiphon_config_seed = (os.environ.get("OUC_PSIPHON_CONFIG_SEED")
+                                    or disk.get("psiphon_config_seed") or "")
+        # Everything Psiphon owns lives under the state dir so the v2.3.1
+        # ownership rules (state dir handed to SUDO_USER) cover it too.
+        self.psiphon_dir = os.path.join(self.state_dir, "psiphon")
+        self.psiphon_config = os.path.join(self.psiphon_dir, "psiphon.config")
+        self.psiphon_pid_file = os.path.join(self.psiphon_dir, "psiphon.pid")
+        self.psiphon_data = os.path.join(self.psiphon_dir, "data")
+        self.psiphon_log = os.path.join(self.psiphon_dir, "psiphon.log")
+        self.psiphon_start_wait = env_int(
+            "OUC_PSIPHON_START_WAIT",
+            max(20, int(disk.get("psiphon_start_wait", 45))))
         # ---- auto-resume: after a quota wall, wait for a working block and
         #      continue the interrupted session instead of starting over ----
         self.auto_resume = env_bool("OUC_AUTO_RESUME",
@@ -497,6 +561,14 @@ class Config:
             "keys_attempts": self.keys_attempts,
             "rotation_mode": self.rotation_mode,
             "blacklist_ttl": self.blacklist_ttl,
+            # backend ladder (v2.5.0)
+            "backend_mode": self.backend_mode,
+            "warp_fallback_threshold": self.warp_fallback_threshold,
+            "psiphon_bin": self.psiphon_bin,
+            "psiphon_socks_port": self.psiphon_socks_port,
+            "psiphon_http_port": self.psiphon_http_port,
+            "psiphon_regions": self.psiphon_regions,
+            "psiphon_dir": self.psiphon_dir,
             # long-run agent (2.4.0): 0 means "no limit"
             "min_rotate_gap": self.min_rotate_gap,
             "rotate_gap_jitter": self.rotate_gap_jitter,
@@ -541,6 +613,14 @@ EMPTY_STATE = {
     "last_error": "",
     "last_hop_request": "",
     "updated": 0,
+    # ---- backend ladder (v2.5.0): WARP primary, Psiphon fallback ----
+    "active_backend": BACKEND_WARP,
+    "active_socks_port": 0,
+    "warp_fail_streak": 0,
+    "fallback_activated_at": 0,
+    "psiphon_region_index": 0,
+    "psiphon_rotations": 0,
+    "pin_lifted_for_backend": "",
 }
 
 
@@ -759,6 +839,54 @@ def norm64(addr: str) -> str:
     except ValueError:
         return ""
     return block
+
+
+def norm_block(addr: str) -> str:
+    """One key space for both backends.
+
+    The quota is keyed on the *source address the service sees*:
+
+      * IPv6 (WARP)     -> the /64 prefix, because a whole /64 is one identity
+      * IPv4 (Psiphon)  -> the single /32 address
+
+    IPv6 keeps the bare four-group form that earlier versions already store
+    ("2a09:bac1:76a0:830") so an existing state.json keeps working; IPv4 is
+    stored as "74.208.85.35/32". `canonical_block` accepts either form back,
+    which is what the blacklist reader uses.
+    """
+    if not addr:
+        return ""
+    raw = str(addr).strip()
+    if not raw:
+        return ""
+    try:
+        import ipaddress
+        # A bare IPv6 block ("2a09:bac1:76a0:830") is not an address: append
+        # the missing groups so it parses as the network it denotes.
+        candidate = raw
+        if candidate.count(":") == 3 and "/" not in candidate:
+            candidate = candidate + "::"
+        if candidate.count(":") == 3 and candidate.endswith("::"):
+            candidate = candidate[:-2] + "::/64"
+        net = ipaddress.ip_network(candidate, strict=False)
+    except ValueError:
+        return norm64(raw)          # last resort: the historical IPv6 path
+    if net.version == 4:
+        return str(ipaddress.ip_network(f"{net.network_address}/32"))
+    # Unpadded lowercase hextets: "2a09:bac1:76a0:830", not "...:0830". The
+    # unpadded form is what this controller has always stored, so an existing
+    # blacklist keeps matching after the upgrade.
+    return ":".join(format(int(g, 16), "x")
+                    for g in net.network_address.exploded.split(":")[:4])
+
+
+def canonical_block(value: str) -> str:
+    """Canonicalise a value that may already be a stored blacklist entry."""
+    return norm_block(value)
+
+
+def block_is_ipv4(value: str) -> bool:
+    return "." in (value or "") and ":" not in (value or "")
 
 
 # --------------------------------------------------------------------------
@@ -1235,15 +1363,58 @@ def _pump(a, b) -> None:
                 pass
 
 
-def run_bridge(listen: str, socks: str, log: "Log | None" = None) -> int:
-    """HTTP CONNECT proxy in front of WARP's SOCKS5 port.
+def _state_dir_default() -> str:
+    return os.environ.get("OUC_STATE_DIR") or DEFAULT_STATE_DIR
+
+
+def bridge_upstream(static: str, cache: "dict | None" = None) -> str:
+    """Resolve the SOCKS5 upstream for the next connection.
+
+    In auto mode the active backend can change *during* a run — WARP is
+    exhausted, Psiphon takes over — and opencode must never have to be
+    restarted with a different HTTPS_PROXY. So the bridge asks state.json which
+    SOCKS port is live right now, with a one-second cache so a busy connection
+    storm does not re-read the file for every socket.
+    """
+    cache = cache if cache is not None else {}
+    stamp = time.monotonic()
+    if cache.get("checked") and stamp - cache["checked"] < 1.0 and cache.get("upstream"):
+        return cache["upstream"]
+    upstream = (static or "").strip()
+    port = 0
+    try:
+        with open(os.path.join(_state_dir_default(), "state.json")) as fh:
+            port = int((json.load(fh) or {}).get("active_socks_port") or 0)
+    except (OSError, ValueError, TypeError):
+        port = 0
+    if port:
+        upstream = f"127.0.0.1:{port}"
+    if not upstream:
+        upstream = f"127.0.0.1:{os.environ.get('OUC_PROXY_SOCKS_PORT') or 40000}"
+    cache["upstream"] = upstream
+    cache["checked"] = stamp
+    return upstream
+
+
+def run_bridge(listen: str, socks: str, log: "Log | None" = None,
+               dynamic: bool = False) -> int:
+    """HTTP CONNECT proxy in front of whichever SOCKS5 backend is active.
 
     opencode's fetch() understands HTTP proxies and rejects socks5:// outright
     ("UnsupportedProxyProtocol"), so this is the adapter that makes proxy mode
     usable by opencode. No dependencies, no root, binds to loopback only.
+
+    With `dynamic` (or no static `socks`), the upstream is re-read from
+    state.json per connection: a mid-task fallback from WARP (40000) to Psiphon
+    (9060) costs the caller nothing.
     """
     lh, lp = listen.rsplit(":", 1)
-    sh, sp = socks.rsplit(":", 1)
+    dynamic = dynamic or not (socks or "").strip()
+    sh = sp = ""
+    if not dynamic:
+        sh, sp = socks.rsplit(":", 1)
+    cache: dict = {}
+    last = {"upstream": ""}
 
     def handle(conn):
         try:
@@ -1261,7 +1432,15 @@ def run_bridge(listen: str, socks: str, log: "Log | None" = None) -> int:
                 conn.sendall(b"HTTP/1.1 405 Method Not Allowed\r\n\r\n")
                 return
             host, _, port = parts[1].rpartition(":")
-            upstream = _socks5_connect(sh, int(sp), host.strip("[]"), int(port))
+            up_h, up_p = sh, sp
+            if dynamic:
+                candidate = bridge_upstream("", cache)
+                up_h, up_p = candidate.rsplit(":", 1)
+                if last["upstream"] != candidate:
+                    last["upstream"] = candidate
+                    if log:
+                        log(f"bridge: upstream now socks5://{candidate}")
+            upstream = _socks5_connect(up_h, int(up_p), host.strip("[]"), int(port))
             conn.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")
             threading.Thread(target=_pump, args=(upstream, conn), daemon=True).start()
             _pump(conn, upstream)
@@ -1288,7 +1467,9 @@ def run_bridge(listen: str, socks: str, log: "Log | None" = None) -> int:
         return 1
     srv.listen(64)
     if log:
-        log(f"bridge listening on http://{listen} -> socks5://{socks}")
+        log(f"bridge listening on http://{listen} -> "
+            + (f"socks5://{socks}" if not dynamic
+               else "socks5://<state.json active_socks_port>"))
     while True:
         try:
             conn, _ = srv.accept()
@@ -1322,9 +1503,10 @@ class Bridge:
         script = os.path.abspath(__file__)
         cmd = [sys.executable, script, "bridge",
                "--listen", f"127.0.0.1:{self.cfg.proxy_http_port}",
-               "--socks", f"127.0.0.1:{self.cfg.proxy_socks_port}"]
+               "--dynamic"]
         env = dict(os.environ, OUC_STATE_DIR=self.cfg.state_dir,
-                   OUC_WARP_MODE="proxy")
+                   OUC_WARP_MODE="proxy",
+                   OUC_PROXY_SOCKS_PORT=str(self.cfg.proxy_socks_port))
         try:
             with open(os.path.join(self.cfg.state_dir, "bridge.log"), "a") as sink:
                 proc = subprocess.Popen(cmd, stdout=sink, stderr=sink,
@@ -1414,8 +1596,16 @@ class Bridge:
 
 
 def cmd_bridge(args, cfg: Config, log: Log) -> int:
-    return run_bridge(args.listen or f"127.0.0.1:{cfg.proxy_http_port}",
-                      args.socks or f"127.0.0.1:{cfg.proxy_socks_port}", log)
+    """Proxy mode's adapter: HTTP CONNECT in, whichever SOCKS5 backend is live.
+
+    With no explicit --socks (or --dynamic) the upstream is re-read from
+    state.json per connection, so a fallback from WARP to Psiphon never
+    requires restarting opencode with a different HTTPS_PROXY.
+    """
+    listen = args.listen or f"127.0.0.1:{cfg.proxy_http_port}"
+    socks = getattr(args, "socks", "") or ""
+    dynamic = bool(getattr(args, "dynamic", False)) or not socks
+    return run_bridge(listen, socks, log, dynamic=dynamic)
 
 
 def probe_egress(cfg: Config) -> str:
@@ -1590,6 +1780,542 @@ class RotationError(RuntimeError):
     pass
 
 
+class PsiphonError(RuntimeError):
+    pass
+
+
+class Psiphon:
+    """Owns the psiphon-tunnel-core process, exactly one at a time.
+
+    Rotation is *not* a bare restart: the datastore is kept (so the verified
+    server list stays cached and a tunnel forms in 8-11 s), `DisableReplay` is
+    set every time (a restart that replays cached dial parameters lands on the
+    same exit), and the region advances every rotation. SIGUSR2 is deliberately
+    never used: in the ConsoleClient it dumps runtime profiles and does not
+    move the exit.
+    """
+
+    TUNNEL_RE = re.compile(r'"noticeType"\s*:\s*"Tunnels"')
+    COUNT_RE = re.compile(r'"count"\s*:\s*(\d+)')
+
+    def __init__(self, cfg: Config, log: "Log | None" = None):
+        self.cfg = cfg
+        self.log = log if log is not None else (lambda *a, **k: None)
+        self._lines: list = []
+        self._connected = threading.Event()
+        self._proc = None
+        self._reader = None
+
+    # -- discovery -------------------------------------------------------
+    def available(self) -> tuple:
+        path = self.cfg.psiphon_bin or ""
+        if not path:
+            return False, "psiphon-tunnel-core not found (set OUC_PSIPHON_BIN)"
+        if not os.path.isfile(path):
+            return False, f"psiphon binary missing: {path}"
+        if not os.access(path, os.X_OK):
+            return False, f"psiphon binary is not executable: {path}"
+        return True, path
+
+    def pid(self) -> int:
+        pid = read_pidfile(self.cfg.psiphon_pid_file)
+        if not pid or not pid_alive(pid):
+            return 0
+        # A recycled PID is not our tunnel. Verify the command line.
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as fh:
+                cmd = fh.read().replace(b"\0", b" ").decode(errors="replace")
+        except OSError:
+            return 0
+        return pid if "psiphon-tunnel-core" in cmd else 0
+
+    def socks_open(self) -> bool:
+        return port_open("127.0.0.1", self.cfg.psiphon_socks_port)
+
+    def socks(self) -> str:
+        return f"127.0.0.1:{self.cfg.psiphon_socks_port}"
+
+    # -- configuration ---------------------------------------------------
+    def _bootstrap(self) -> dict:
+        """The four public bootstrap values, plus the two companion keys."""
+        def url_entry(u: str) -> dict:
+            return {"URL": base64.b64encode(u.encode()).decode(),
+                    "OnlyAfterAttempts": 0, "SkipVerify": False}
+        return {
+            "PropagationChannelId": PSIPHON_PROPAGATION_CHANNEL_ID,
+            "SponsorId": PSIPHON_SPONSOR_ID,
+            "RemoteServerListSignaturePublicKey": PSIPHON_SERVER_LIST_SIGNATURE_KEY,
+            "RemoteServerListURLs": [url_entry(u) for u in PSIPHON_SERVER_LIST_URLS],
+            "ObfuscatedServerListRootURLs": [
+                url_entry(u.replace("/server_list_compressed", "/osl"))
+                for u in PSIPHON_SERVER_LIST_URLS],
+            "ServerEntrySignaturePublicKey": "sHuUVTWaRyh5pZwy4UguSgkwmBe0EHtJJkoF5WrxmvA=",
+            "ExchangeObfuscationKey": "DpXzloJk1Hw6aSzmKKky0xcahsEHubch81Mi6K0XMlU=",
+        }
+
+    def _seed(self) -> dict:
+        """Optional operator seed: a JSON file path or an inline JSON string."""
+        raw = (self.cfg.psiphon_config_seed or "").strip()
+        if not raw:
+            return {}
+        try:
+            if raw.startswith("{"):
+                return json.loads(raw)
+            with open(raw) as fh:
+                return json.load(fh) or {}
+        except Exception as exc:
+            self.log(f"psiphon: ignoring unreadable config seed ({exc})", "WARN")
+            return {}
+
+    def config_dict(self, region: str) -> dict:
+        data = self._bootstrap()
+        data.update(self._seed())
+        data.update({
+            # rotation mechanics (v2.5.0)
+            "EgressRegion": (region or "").upper(),
+            "DisableReplay": True,
+            "LocalSocksProxyPort": self.cfg.psiphon_socks_port,
+            "LocalHttpProxyPort": self.cfg.psiphon_http_port,
+            # the datastore is the cache that makes the next tunnel fast
+            "DataRootDirectory": self.cfg.psiphon_data,
+            "DataStoreDirectory": self.cfg.psiphon_data,
+            "RemoteServerListDownloadFilename": "remote_server_list",
+            "ClientVersion": "3",
+            "ClientPlatform": "Android",
+            "TunnelWholeDevice": 1,
+            "EmitDiagnosticNotices": True,
+            "EstablishTunnelTimeoutSeconds": self.cfg.psiphon_start_wait,
+            "LogFilename": self.cfg.psiphon_log,
+        })
+        return data
+
+    def write_config(self, region: str) -> dict:
+        data = self.config_dict(region)
+        _own_path(self.cfg.psiphon_dir, directory=True)
+        _own_path(self.cfg.psiphon_data, directory=True)
+        atomic_write_json(self.cfg.psiphon_config, data, mode=0o644)
+        return data
+
+    # -- lifecycle -------------------------------------------------------
+    def _orphan_pids(self) -> list:
+        """Tunnels this controller owns, found by config path, not by pidfile.
+
+        The same failure the bridge had (v2.4.2): the pidfile can be missing or
+        stale while the process still holds the SOCKS port, and then every new
+        tunnel fails to bind for reasons that look like a provider problem.
+        Ownership is the evidence: the process must reference *our* config.
+        """
+        mine = os.path.abspath(self.cfg.psiphon_config)
+        found = []
+        try:
+            entries = os.listdir("/proc")
+        except OSError:
+            return found
+        for entry in entries:
+            if not entry.isdigit():
+                continue
+            try:
+                with open(f"/proc/{entry}/cmdline", "rb") as fh:
+                    cmd = fh.read().replace(b"\0", b" ").decode(errors="replace")
+            except OSError:
+                continue
+            if "psiphon-tunnel-core" in cmd and mine in cmd:
+                found.append(int(entry))
+        return found
+
+    def stop(self, timeout: float = 10.0) -> bool:
+        pid = self.pid()
+        if not pid:
+            try:
+                if os.path.exists(self.cfg.psiphon_pid_file):
+                    os.unlink(self.cfg.psiphon_pid_file)
+            except OSError:
+                pass
+            return False
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            return False
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if not pid_alive(pid):
+                break
+            time.sleep(0.2)
+        if pid_alive(pid):
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
+            self.log(f"psiphon: pid {pid} ignored SIGTERM, sent SIGKILL", "WARN")
+            time.sleep(0.3)
+        # Reap anything else of ours that the pidfile did not know about.
+        for extra in self._orphan_pids():
+            if extra == pid:
+                continue
+            try:
+                os.kill(extra, signal.SIGTERM)
+                self.log(f"psiphon: reaped orphaned tunnel pid {extra}")
+            except OSError:
+                pass
+        try:
+            os.unlink(self.cfg.psiphon_pid_file)
+        except OSError:
+            pass
+        self.log(f"psiphon: stopped pid {pid}")
+        return True
+
+    def _pump(self, proc) -> None:
+        """Keep the pipe drained and watch for the Tunnels notice."""
+        try:
+            for raw in iter(proc.stdout.readline, b""):
+                line = raw.decode(errors="replace").rstrip()
+                if not line:
+                    continue
+                self._lines.append(line)
+                del self._lines[:-400]
+                if self.TUNNEL_RE.search(line):
+                    m = self.COUNT_RE.search(line)
+                    if m and int(m.group(1)) >= 1:
+                        self._connected.set()
+        except Exception:
+            return
+
+    def start(self, region: str) -> tuple:
+        """Stop any owned tunnel, write the config, spawn, wait for Tunnels."""
+        ok, detail = self.available()
+        if not ok:
+            return False, detail
+        self.stop()
+        cfg_data = self.write_config(region)
+        argv = [self.cfg.psiphon_bin, "-config", self.cfg.psiphon_config,
+                "-formatNotices"]
+        self._connected.clear()
+        self._lines = []
+        env = dict(os.environ)
+        env.pop("ALL_PROXY", None)
+        env.pop("all_proxy", None)
+        try:
+            proc = subprocess.Popen(argv, stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT,
+                                    stdin=subprocess.DEVNULL, env=env,
+                                    start_new_session=True, bufsize=0)
+        except OSError as exc:
+            return False, f"cannot start psiphon: {exc}"
+        self._proc = proc
+        with open(self.cfg.psiphon_pid_file, "w") as fh:
+            fh.write(str(proc.pid))
+        try:
+            os.chmod(self.cfg.psiphon_pid_file, 0o644)
+        except OSError:
+            pass
+        self._reader = threading.Thread(target=self._pump, args=(proc,), daemon=True)
+        self._reader.start()
+        self.log(f"psiphon: started pid {proc.pid} region={cfg_data.get('EgressRegion') or 'auto'} "
+                 f"(DisableReplay=true, socks {self.cfg.psiphon_socks_port})")
+        deadline = time.monotonic() + self.cfg.psiphon_start_wait
+        while time.monotonic() < deadline:
+            if proc.poll() is not None:
+                tail = " | ".join(self._lines[-3:])
+                return False, f"psiphon exited rc={proc.returncode} {tail}"[:300]
+            if self._connected.wait(0.5):
+                break
+        if not self._connected.is_set():
+            # No Tunnels notice: say what actually happened, do not guess.
+            tail = next((l for l in reversed(self._lines)
+                         if '"error"' in l or "Error" in l), "")
+            return False, (f"no tunnel within {self.cfg.psiphon_start_wait}s"
+                           + (f": {tail[:200]}" if tail else ""))
+        # The notice means the tunnel is up; the SOCKS port follows immediately.
+        for _ in range(40):
+            if self.socks_open():
+                return True, "tunnel up"
+            time.sleep(0.25)
+        return False, "tunnel reported up but the SOCKS port never opened"
+
+    def status(self) -> dict:
+        ok, detail = self.available()
+        pid = self.pid()
+        return {"available": ok, "binary": detail if ok else "",
+                "missing": "" if ok else detail, "running": bool(pid),
+                "pid": pid, "socks": self.socks(),
+                "socks_open": self.socks_open(),
+                "config": self.cfg.psiphon_config,
+                "data_dir": self.cfg.psiphon_data,
+                "regions": self.cfg.psiphon_regions,
+                "last_lines": self._lines[-5:]}
+
+
+def _own_path(path: str, directory: bool = False) -> None:
+    """Create a state path and hand it to the installing user (v2.3.1 rules).
+
+    A root supervisor creates these; an unprivileged `ouc hop`/`run` must still
+    be able to read them, and `ouc config` must not hit PermissionError.
+    """
+    try:
+        if directory:
+            mkdirp(path, 0o755)
+        else:
+            mkdirp(os.path.dirname(path) or ".", 0o755)
+    except OSError:
+        return
+    uid = os.environ.get("SUDO_UID")
+    gid = os.environ.get("SUDO_GID")
+    if os.geteuid() == 0 and uid and gid:
+        try:
+            os.chown(path, int(uid), int(gid))
+            os.chmod(path, 0o775 if directory else 0o644)
+        except OSError:
+            pass
+
+
+def host_direct_ip(cfg: Config) -> str:
+    """The machine's own public address, bypassing every proxy.
+
+    This is the leak guard for §3: a VPN egress that equals this value means no
+    tunnel carried the traffic, so the "new block" is the host itself.
+    """
+    seam = os.environ.get("OUC_HOST_DIRECT_IP")
+    if seam is not None:
+        return seam.strip()      # test seam, same style as OUC_PROBE_CMD
+    if cfg.probe_cmd:
+        return ""
+    try:
+        p = subprocess.run(["curl", "-s", "-m", "8", "--noproxy", "*",
+                            cfg.probe_url], capture_output=True, text=True,
+                           timeout=15)
+        return (p.stdout or "").strip() if p.returncode == 0 else ""
+    except Exception:
+        return ""
+
+
+def choose_backend(cfg: Config, state: "State", requested: str = "",
+                   log: "Log | None" = None) -> str:
+    """Which backend should serve the next rotation.
+
+    Order of authority: explicit request > OUC_BACKEND_MODE > the ladder.
+    `auto` stays on Psiphon while it is the active backend and the WARP pool is
+    still inside the blacklist TTL, then probes WARP again once the burned
+    blocks have had time to replenish.
+    """
+    want = (requested or "").lower()
+    if want in (BACKEND_WARP, BACKEND_PSIPHON):
+        return want
+    if cfg.backend_mode in (BACKEND_WARP, BACKEND_PSIPHON):
+        return cfg.backend_mode
+    st = state.load() if hasattr(state, "load") else dict(state or {})
+    active = st.get("active_backend") or BACKEND_WARP
+    if active != BACKEND_PSIPHON:
+        return BACKEND_WARP
+    psiphon = Psiphon(cfg, log)
+    ok, why = psiphon.available()
+    if not ok:
+        return BACKEND_WARP
+    since = int(st.get("fallback_activated_at") or 0)
+    aged_out = not since or (now() - since) >= cfg.blacklist_ttl
+    regions_done = int(st.get("psiphon_region_index") or 0) >= len(cfg.psiphon_regions)
+    if aged_out or regions_done:
+        if log:
+            log("backend: the WARP blacklist window has elapsed — probing WARP "
+                "again before using Psiphon" if aged_out else
+                "backend: every Psiphon region has been cycled — probing WARP")
+        return BACKEND_WARP
+    return BACKEND_PSIPHON
+
+
+def _bridge_socks_for(cfg: Config, backend: str) -> int:
+    """The SOCKS port the bridge must use for a given backend."""
+    if backend == BACKEND_PSIPHON:
+        return cfg.psiphon_socks_port
+    return cfg.proxy_socks_port
+
+
+def _activate_backend(cfg: Config, state: "State", log: Log, backend: str,
+                      pinner: "Pinner | None" = None) -> None:
+    """Point the bridge and the pin at the backend that is now carrying traffic."""
+    port = _bridge_socks_for(cfg, backend)
+    st = state.load()
+    fields = {"active_backend": backend, "active_socks_port": port}
+    if backend == BACKEND_PSIPHON:
+        if not int(st.get("fallback_activated_at") or 0):
+            fields["fallback_activated_at"] = now()
+        # Psiphon exits are IPv4. An IPv6 /etc/hosts pin would send opencode
+        # down a path the fallback cannot carry, so it must be lifted.
+        if cfg.pin and pinner is not None:
+            try:
+                status = pinner.status()
+                if status.get("installed"):
+                    pinner.remove()
+                    fields["pin_lifted_for_backend"] = BACKEND_PSIPHON
+                    log("pin: lifted the IPv6 /etc/hosts pin — Psiphon exits are "
+                        "IPv4, so the pin would break the fallback path", "WARN")
+            except Exception as exc:
+                log(f"pin: could not lift the pin for Psiphon ({exc})", "WARN")
+    elif backend == BACKEND_WARP:
+        fields.update({"fallback_activated_at": 0, "warp_fail_streak": 0})
+        if cfg.pin and not cfg.proxy_mode and st.get("pin_lifted_for_backend"):
+            try:
+                if pinner is not None:
+                    pinner.install()
+                fields["pin_lifted_for_backend"] = ""
+                log("pin: re-installed the IPv6 pin for the WARP tunnel")
+            except Exception:
+                pass
+    state.update(**fields)
+
+
+def _rotate_psiphon(cfg: Config, log: Log, state: State, why: str,
+                    region: str = "") -> dict:
+    """Rotate the fallback backend and prove it with a real request."""
+    t0 = time.monotonic()
+    result: dict = {"ok": False, "old": "", "new": "", "duration": 0.0, "why": why,
+                    "error": "", "degraded": False, "how": "", "verified": False,
+                    "attempts": [], "backend": BACKEND_PSIPHON, "region": ""}
+    psiphon = Psiphon(cfg, log)
+    lock = StateLock(cfg.rotation_lock, blocking=False, fix_mode=False)
+    try:
+        lock.__enter__()
+    except (BlockingIOError, StateLockError) as exc:
+        result["error"] = ("rotation already in progress"
+                           if isinstance(exc, BlockingIOError) else str(exc))
+        return result
+    try:
+        ok, detail = psiphon.available()
+        if not ok:
+            raise PsiphonError(detail)
+        _wait_rotation_spacing(cfg, log, state)
+        st = state.load()
+        old = (probe_egress(cfg) or "").strip()
+        result["old"] = old
+        old_block = norm_block(old)
+        spent = _spent_blocks(cfg, state)
+        direct = host_direct_ip(cfg)
+        regions = cfg.psiphon_regions or ["US"]
+        index = int(st.get("psiphon_region_index") or 0)
+        order = [region] if region else []
+        order += [regions[(index + i) % len(regions)] for i in range(len(regions))]
+        seen: list = []
+        for candidate_region in order:
+            if candidate_region in seen:
+                continue
+            seen.append(candidate_region)
+            if time.monotonic() - t0 > max(cfg.psiphon_start_wait * 2,
+                                           cfg.rotation_timeout):
+                break
+            entry = {"how": f"psiphon@{candidate_region}", "block": "", "accepted": False}
+            result["attempts"].append(entry)
+            ok, detail = psiphon.start(candidate_region)
+            if not ok:
+                entry["reason"] = detail
+                log(f"psiphon {candidate_region}: {detail}", "WARN")
+                continue
+            result["region"] = candidate_region
+            # The bridge must follow the backend before the probe means anything.
+            state.update(active_backend=BACKEND_PSIPHON,
+                         active_socks_port=cfg.psiphon_socks_port)
+            Bridge(cfg, log).ensure()
+            cand = ""
+            for _ in range(20):
+                cand = (probe_egress(cfg) or "").strip()
+                if cand:
+                    break
+                time.sleep(0.5)
+            entry["block"] = norm_block(cand)
+            if not cand:
+                entry["reason"] = "no egress through the psiphon tunnel"
+                log("psiphon: tunnel up but no egress through the bridge", "WARN")
+                continue
+            if direct and cand == direct:
+                entry["reason"] = "egress equals the host's own address"
+                log("psiphon: LEAK — the probe returned the host's own address; "
+                    "refusing to count this as a rotation", "SECURITY")
+                continue
+            if entry["block"] == old_block:
+                entry["reason"] = "same block"
+                log(f"psiphon: still on {entry['block']} — asking again", "WARN")
+                continue
+            if entry["block"] in spent:
+                entry["reason"] = "already exhausted"
+                log(f"psiphon: {entry['block']} is in our spent list — trying "
+                    "another region", "WARN")
+                continue
+            v = verify_request(cfg, log)
+            entry["verify"] = v
+            if v.get("walled"):
+                entry["reason"] = "verification hit the quota wall"
+                log(f"psiphon: {entry['block']} did not restore the quota "
+                    f"({v.get('detail')}) — trying another region", "WARN")
+                continue
+            if v.get("ok"):
+                result["verified"] = True
+            elif v.get("ran"):
+                entry["reason"] = f"could not be confirmed: {v.get('detail')}"
+                result["failure_class"] = v.get("failure_class") or "unknown"
+                raise PsiphonError(entry["reason"])
+            entry["accepted"] = True
+            result.update(new=cand, how=entry["how"], ok=True)
+            break
+
+        if not result["ok"]:
+            tried = ", ".join(f"{a['how']}={a['block'] or '-'} ({a.get('reason', '')})"
+                              for a in result["attempts"]) or "nothing"
+            raise PsiphonError(f"no working Psiphon exit right now [{tried}]")
+
+        # --- success: record it exactly like a WARP rotation -----------------
+        entries, ts_map = blacklist_state(cfg, state, old_block)
+        st = state.load()
+        next_index = (index + 1) % max(1, len(regions))
+        if not region:
+            next_index = (int(st.get("psiphon_region_index") or 0) + 1) % max(1, len(regions))
+        result["duration"] = round(time.monotonic() - t0, 2)
+        state.update(
+            blacklist=entries, blacklist_ts=ts_map, current=result["new"],
+            hops=int(st.get("hops", 0)) + 1, last_hop=now(),
+            pending_wall=False, pending_since=0, last_error="", degraded=False,
+            active_backend=BACKEND_PSIPHON,
+            active_socks_port=cfg.psiphon_socks_port,
+            fallback_activated_at=int(st.get("fallback_activated_at") or 0) or now(),
+            psiphon_region_index=next_index,
+            psiphon_rotations=int(st.get("psiphon_rotations") or 0) + 1,
+            pin_lifted_for_backend=(BACKEND_PSIPHON if cfg.pin else
+                                    st.get("pin_lifted_for_backend", "")),
+            last_rotation=result)
+        if cfg.pin:
+            try:
+                pinner = Pinner(cfg, log, state)
+                if pinner.status().get("installed"):
+                    pinner.remove()
+            except Exception:
+                pass
+        _activate_backend(cfg, state, log, BACKEND_PSIPHON)
+        log(f"rotation done in {result['duration']}s via {result['how']} "
+            f"(fallback backend): {old_block or '?'} -> {norm_block(result['new'])}"
+            + ("" if not result["verified"] else " (verified with a real request)"))
+        return result
+    except (PsiphonError, RotationError) as exc:
+        result["error"] = str(exc)
+    except Exception as exc:
+        result["error"] = f"unexpected: {exc}"
+        try:
+            log(f"psiphon rotation raised {type(exc).__name__}: {exc}\n"
+                + traceback.format_exc(), "ERROR")
+        except Exception:
+            pass
+    finally:
+        result["duration"] = round(time.monotonic() - t0, 2)
+        if not result["ok"]:
+            log(f"psiphon rotation FAILED after {result['duration']}s: "
+                f"{result['error']}", "ERROR")
+            try:
+                state.update(last_error=result["error"], last_rotation=result)
+            except Exception:
+                pass
+        try:
+            lock.__exit__(None, None, None)
+        except Exception:
+            pass
+    return result
+
+
 def _spent_blocks(cfg: Config, state: State) -> set[str]:
     """Blocks burned recently enough that they are still rate-limited.
 
@@ -1600,7 +2326,7 @@ def _spent_blocks(cfg: Config, state: State) -> set[str]:
     out: set[str] = set()
     ts = st.get("blacklist_ts") or {}
     for b in st.get("blacklist") or []:
-        nb = norm64(b)
+        nb = norm_block(b)
         if not nb:
             continue
         when = int(ts.get(nb) or ts.get(b) or 0)
@@ -1608,6 +2334,35 @@ def _spent_blocks(cfg: Config, state: State) -> set[str]:
             continue                        # old enough to be worth another try
         out.add(nb)
     return out
+
+
+def blacklist_state(cfg: Config, state: "State", old_block: str = "",
+                    with_ts: bool = True) -> tuple:
+    """Read/prune/add the shared blacklist in one place.
+
+    One list holds both key shapes, so a WARP /64 and a Psiphon /32 are skipped
+    by the same rule and expire on the same 4-hour clock.
+    """
+    st = state.load()
+    entries: list = []
+    ts_map: dict = {}
+    for b in st.get("blacklist") or []:
+        nb = norm_block(b)
+        if not nb or nb in entries:
+            continue
+        entries.append(nb)
+        when = int((st.get("blacklist_ts") or {}).get(nb)
+                   or (st.get("blacklist_ts") or {}).get(b) or 0)
+        if when:
+            ts_map[nb] = when
+    if old_block:
+        ob = norm_block(old_block)
+        if ob and ob not in entries:
+            entries.append(ob)
+        if ob:
+            ts_map[ob] = now()
+    entries = entries[-200:]
+    return (entries, ts_map) if with_ts else (entries, {})
 
 
 def _wait_for_egress(cfg: Config, warp: "Warp", old64: str, t0: float) -> str:
@@ -1682,7 +2437,7 @@ def _wait_rotation_spacing(cfg: Config, log: "Log", state: State) -> None:
             _recovery_sleep(cfg, wait)
 
 
-def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
+def _rotate_warp(cfg: Config, log: Log, state: State, why: str) -> dict:
     """Get a fresh IPv6 /64 that actually works, and prove it.
 
     Order (v2.1):
@@ -1848,13 +2603,11 @@ def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
         # 5. success: record it (with timestamps) and close the gate again
         result.pop("_fallback", None)
         st = state.load()
-        blacklist = [norm64(b) for b in st.get("blacklist", []) if norm64(b)]
-        ts_map = {norm64(k): int(v) for k, v in (st.get("blacklist_ts") or {}).items()
-                  if norm64(k)}
-        if old64 and getattr(cfg, 'rotation_quota_evidence', True):
-            if old64 not in blacklist:
-                blacklist.append(old64)
-            ts_map[old64] = now()
+        # One list holds WARP /64s and Psiphon /32s: `blacklist_state` prunes,
+        # de-duplicates and timestamps both shapes, so a Psiphon address is not
+        # dropped the moment WARP rotates again.
+        blacklist, ts_map = blacklist_state(
+            cfg, state, old64 if getattr(cfg, 'rotation_quota_evidence', True) else "")
         # An unresolved transport error is not evidence of exhausted quota.
         result['quota_evidence'] = getattr(cfg, 'rotation_quota_evidence', True)
         blacklist = blacklist[-200:]
@@ -1911,6 +2664,92 @@ def rotate(cfg: Config, log: Log, state: State, why: str) -> dict:
             lock.__exit__(None, None, None)
         except Exception:
             pass
+    return result
+
+
+def rotate(cfg: Config, log: Log, state: State, why: str = "",
+           backend: str = "") -> dict:
+    """Rotate on the escalation ladder: WARP first, Psiphon when WARP is spent.
+
+    Every caller (hop, run, resume, agent, repair, the supervisor) goes through
+    here, so the policy lives in one place:
+
+      1. WARP is tried first while the ladder says WARP.
+      2. Each *failed candidate* counts toward OUC_WARP_FALLBACK_THRESHOLD. When
+         the streak reaches it — or WARP is simply unavailable — the next
+         attempt escalates to Psiphon with no human in the loop.
+      3. Psiphon stays active until its blacklist window elapses (the burned
+         WARP /64s replenish after `blacklist_ttl`) or every region has been
+         cycled, at which point WARP is probed again.
+
+    `backend` forces one side of the ladder for a single call.
+    """
+    forced = (backend or "").lower()
+    if forced not in ("", BACKEND_WARP, BACKEND_PSIPHON):
+        log(f"ignoring unknown backend {backend!r}", "WARN")
+        forced = ""
+    st = state.load()
+    target = choose_backend(cfg, state, forced, log)
+    pinner = Pinner(cfg, log, state)
+
+    if target == BACKEND_PSIPHON:
+        result = _rotate_psiphon(cfg, log, state, why or "rotation")
+        if result.get("ok"):
+            return result
+        # A failed fallback is not the end of the ladder: try WARP once more
+        # unless the operator pinned Psiphon.
+        if forced != BACKEND_PSIPHON and cfg.backend_mode != BACKEND_PSIPHON:
+            log("backend: Psiphon could not produce a working exit — trying WARP",
+                "WARN")
+            state.update(active_backend=BACKEND_WARP,
+                         active_socks_port=_bridge_socks_for(cfg, BACKEND_WARP))
+            alt = _rotate_warp(cfg, log, state, why or "rotation")
+            if alt.get("ok"):
+                _activate_backend(cfg, state, log, BACKEND_WARP, pinner)
+                return alt
+        return result
+
+    # ---- WARP phase -----------------------------------------------------
+    # Point the bridge at WARP before probing: after a fallback episode the
+    # dynamic bridge would otherwise still measure Psiphon's egress and call it
+    # a WARP result.
+    state.update(active_backend=BACKEND_WARP,
+                 active_socks_port=_bridge_socks_for(cfg, BACKEND_WARP))
+    if cfg.proxy_mode:
+        Bridge(cfg, log).ensure()
+    result = _rotate_warp(cfg, log, state, why or "rotation")
+    if result.get("ok"):
+        _activate_backend(cfg, state, log, BACKEND_WARP, pinner)
+        return result
+    if forced == BACKEND_WARP:
+        return result
+
+    # ---- escalation -----------------------------------------------------
+    tried = len(result.get("attempts") or []) or 1
+    st = state.load()
+    streak = int(st.get("warp_fail_streak") or 0) + tried
+    state.update(warp_fail_streak=streak)
+    psiphon = Psiphon(cfg, log)
+    ps_ok, ps_why = psiphon.available()
+    warp_usable = bool(cfg.warp_bin)
+    reason = ""
+    if not warp_usable:
+        reason = "warp-cli is not installed"
+    elif cfg.backend_mode == BACKEND_PSIPHON:
+        reason = f"OUC_BACKEND_MODE={BACKEND_PSIPHON}"
+    elif streak >= cfg.warp_fallback_threshold:
+        reason = (f"{streak} failed WARP attempts "
+                  f"(threshold {cfg.warp_fallback_threshold})")
+    if not reason or not ps_ok:
+        return result
+    log(f"backend: escalating to Psiphon — {reason}", "WARN")
+    state.update(fallback_activated_at=now())
+    escalated = _rotate_psiphon(cfg, log, state, why or "rotation")
+    if escalated.get("ok"):
+        escalated["escalated_from"] = BACKEND_WARP
+        escalated["escalation_reason"] = reason
+        return escalated
+    log("backend: Psiphon did not produce a working exit either", "ERROR")
     return result
 
 
@@ -2165,10 +3004,15 @@ class Supervisor:
         self.last_request = rid
         self.handled_requests = (self.handled_requests + [rid])[-128:]
         self.log(f"hop request {rid} from {req.get('user', '?')}")
-        res = rotate(self.cfg, self.log, self.state, why="manual-hop")
+        res = rotate(self.cfg, self.log, self.state, why="manual-hop",
+                     backend=str(req.get("backend") or ""))
         payload = {"id": rid, "ok": bool(res.get("ok")), "old": res.get("old", ""),
                    "new": res.get("new", ""), "duration": res.get("duration", 0),
-                   "error": res.get("error", ""), "ts": now()}
+                   "error": res.get("error", ""), "ts": now(),
+                   "backend": res.get("backend") or "",
+                   "region": res.get("region") or "",
+                   "escalated_from": res.get("escalated_from") or "",
+                   "escalation_reason": res.get("escalation_reason") or ""}
         result_path = (self.cfg.hop_fallback_result if req_path == self.cfg.hop_fallback_request
                        else self.cfg.hop_result)
         for pth in {result_path, self.cfg.hop_result, self.cfg.hop_fallback_result}:
@@ -2511,14 +3355,17 @@ def cmd_stop(args, cfg: Config, log: Log, quiet: bool = False) -> int:
         Firewall(cfg, log).teardown()
         Pinner(cfg, log).remove()
         Bridge(cfg, log).stop()
+        Psiphon(cfg, log).stop()
         return 0
     pid = read_pidfile(cfg.pid_file)
     if not pid or not pid_alive(pid):
         Firewall(cfg, log).teardown()
         Pinner(cfg, log).remove()
-        # The supervisor is gone, but the bridge runs in its own session and
-        # can easily have outlived it. Stop it here or nothing ever will.
+        # The supervisor is gone, but the bridge and the fallback tunnel run in
+        # their own sessions and can easily have outlived it. Stop them here or
+        # nothing ever will.
         Bridge(cfg, log).stop()
+        Psiphon(cfg, log).stop()
         if not quiet:
             print("not running")
         return 0
@@ -2537,6 +3384,7 @@ def cmd_stop(args, cfg: Config, log: Log, quiet: bool = False) -> int:
             pass
     Firewall(cfg, log).teardown()
     Bridge(cfg, log).stop()
+    Psiphon(cfg, log).stop()
     try:
         os.unlink(cfg.pid_file)
     except OSError:
@@ -2598,13 +3446,14 @@ def cmd_status(args, cfg: Config, log: Log) -> int:
                        "heartbeat_age_s": now() - int(hb.get("ts") or 0) if hb else None},
         "warp": {"connected": warp.connected(), "status": warp.status()},
         "egress": egress_live,
-        "current_block": norm64(state.get("current") or "") or norm64(probe_egress(cfg)),
+        "current_block": norm_block(state.get("current") or "")
+                         or norm_block(probe_egress(cfg)),
         "kill_switch": {"configured": cfg.kill_switch, "reason": cfg.kill_switch_reason,
                         "installed": ks_installed, "verified": ks_verified,
                         "degraded": state.get("degraded")},
         "rotation": {"hops": state.get("hops", 0), "last_hop": state.get("last_hop", 0),
                      "blacklisted_blocks": len([b for b in state.get("blacklist", [])
-                                                if norm64(b)]),
+                                                if norm_block(b)]),
                      "last_block_reused": bool(state.get("last_block_reused"))},
         "warp_mode": cfg.warp_mode,
         "proxy": {"enabled": cfg.proxy_mode,
@@ -2616,6 +3465,7 @@ def cmd_status(args, cfg: Config, log: Log) -> int:
                 "hosts": cfg.pin_hosts, "file": cfg.hosts_file,
                 "addresses": [l.split()[0] for l in pin_block.splitlines() if l.strip()]},
         "ipv6_egress": ipv6_egress(cfg),
+        "backends": backend_report(cfg, State(cfg)),
         "last_rotation": state.get("last_rotation") or {},
         "pending_wall": state.get("pending_wall", False),
         "last_error": state.get("last_error", ""),
@@ -2630,8 +3480,16 @@ def cmd_status(args, cfg: Config, log: Log) -> int:
     print(f"  {ok(alive)} supervisor: {'running (pid %s)' % pid if alive else 'NOT running — ' + why}")
     print(f"  {ok(info['warp']['connected'])} warp tunnel: "
           f"{info['warp']['status'].splitlines()[0] if info['warp']['status'] else 'no warp-cli'}")
-    print(f"  {ok(bool(norm64(info['egress'])))} egress: {info['egress'] or 'unreachable'}"
+    print(f"  {ok(bool(norm_block(info['egress'])))} egress: {info['egress'] or 'unreachable'}"
           f"   block: {info['current_block'] or '?'}")
+    bk = info["backends"]
+    ps = bk["psiphon"]
+    if bk["mode"] == "warp" and not ps["available"]:
+        print(f"  · backend: {bk['active']} (Psiphon fallback not installed)")
+    else:
+        where = "WARP" if bk["active"] == BACKEND_WARP else f"Psiphon ({ps['next_region']} next)"
+        print(f"  · backend: {where}   bridge -> socks5://127.0.0.1:{bk['active_socks_port']}"
+              f"   warp fails {bk['warp']['fail_streak']}/{bk['warp']['fallback_threshold']}")
     ks = info["kill_switch"]
     if not ks["configured"]:
         ks_txt = "off (" + cfg.kill_switch_reason + ")"
@@ -2698,8 +3556,9 @@ def cmd_supervise(args, cfg: Config, log: Log) -> int:
 
 def cmd_hop(args, cfg: Config, log: Log) -> int:
     """Manual rotation. As root: do it now. As a user: ask the supervisor."""
+    backend = (getattr(args, "backend", "") or "").lower()
     if os.geteuid() == 0:
-        res = rotate(cfg, log, State(cfg), why="manual-hop")
+        res = rotate(cfg, log, State(cfg), why="manual-hop", backend=backend)
         _print_hop(res)
         return 0 if res["ok"] else 1
 
@@ -2710,7 +3569,8 @@ def cmd_hop(args, cfg: Config, log: Log) -> int:
               file=sys.stderr)
         return 1
     rid = uuid.uuid4().hex[:12]
-    payload = {"id": rid, "ts": now(), "user": os.environ.get("USER", "")}
+    payload = {"id": rid, "ts": now(), "user": os.environ.get("USER", ""),
+               "backend": backend}
     channels = []
     try:
         mkdirp(cfg.user_state_dir)
@@ -2753,10 +3613,16 @@ def cmd_hop(args, cfg: Config, log: Log) -> int:
 
 def _print_hop(res: dict) -> None:
     res = res or {"ok": False, "error": "rotation did not run"}
-    old64 = norm64(res.get("old", "")) or "?"
-    new64 = norm64(res.get("new", "")) or "?"
-    print(f"  old block: {old64}")
-    print(f"  new block: {new64}")
+    backend = res.get("backend") or BACKEND_WARP
+    block = norm_block(res.get("old", "")) or "?"
+    new_block = norm_block(res.get("new", "")) or "?"
+    print(f"  old block: {block}")
+    print(f"  new block: {new_block}")
+    if backend == BACKEND_PSIPHON:
+        region = res.get("region") or "?"
+        extra = (f" (escalated from WARP: {res['escalation_reason']})"
+                 if res.get("escalated_from") else "")
+        print(f"  backend: psiphon, region {region}{extra}")
     if res.get("ok"):
         print(f"  ✓ rotated in {res.get('duration', '?')}s — resend your message")
     else:
@@ -2774,6 +3640,10 @@ def cmd_rescue(args, cfg: Config, log: Log) -> int:
     """Get the machine back to a working network, whatever state we're in."""
     print("removing the leak guard...")
     Firewall(cfg, log).teardown()
+    if Psiphon(cfg, log).stop():
+        print("stopped the Psiphon fallback tunnel")
+        State(cfg).update(active_backend=BACKEND_WARP,
+                          active_socks_port=cfg.proxy_socks_port)
     warp = Warp(cfg, log)
     if not warp.connected():
         print("reconnecting the tunnel...")
@@ -2820,6 +3690,60 @@ def doctor_proxy(cfg: Config, out: list[str]) -> None:
         out.append(f"  current block        : {norm64(egress)}")
     out.append(f"  opencode env         : opencode must run with "
                f"HTTPS_PROXY={cfg.http_proxy}")
+    rep = backend_report(cfg)
+    ps = rep["psiphon"]
+    out.append("")
+    out.append("backends (WARP primary, Psiphon fallback):")
+    out.append(f"  mode                 : {rep['mode']}   active: {rep['active']}")
+    out.append(f"  bridge upstream      : socks5://127.0.0.1:{rep['active_socks_port']} "
+               f"(followed live from state.json)")
+    out.append(f"  warp fail streak     : {rep['warp']['fail_streak']}"
+               f" / escalate at {rep['warp']['fallback_threshold']}")
+    state_line = "available" if ps["available"] else f"UNAVAILABLE ({ps['problem']})"
+    out.append(f"  psiphon binary       : {state_line}")
+    out.append(f"  psiphon tunnel       : "
+               f"{('running pid ' + str(ps['pid'])) if ps['running'] else 'not running'}"
+               f", socks {ps['socks']} {'open' if ps['socks_open'] else 'CLOSED'}")
+    out.append(f"  psiphon next region  : {ps['next_region']} "
+               f"(index {ps['region_index']} of {len(ps['regions'])})")
+
+
+def backend_report(cfg: Config, state: "State | None" = None) -> dict:
+    """Everything the CLI needs to describe the backend ladder."""
+    st = (state or State(cfg)).load()
+    psiphon = Psiphon(cfg, log=None)
+    ok, detail = psiphon.available()
+    active = st.get("active_backend") or BACKEND_WARP
+    port = int(st.get("active_socks_port") or 0) or _bridge_socks_for(cfg, active)
+    since = int(st.get("fallback_activated_at") or 0)
+    return {
+        "mode": cfg.backend_mode,
+        "active": active,
+        "active_socks_port": port,
+        "warp": {"bin": cfg.warp_bin, "socks_port": cfg.proxy_socks_port,
+                 "fail_streak": int(st.get("warp_fail_streak") or 0),
+                 "fallback_threshold": cfg.warp_fallback_threshold},
+        "psiphon": {"available": ok,
+                    "problem": "" if ok else detail,
+                    "bin": cfg.psiphon_bin,
+                    "running": bool(psiphon.pid()),
+                    "pid": psiphon.pid(),
+                    "socks": psiphon.socks(),
+                    "socks_open": psiphon.socks_open(),
+                    "rotations": int(st.get("psiphon_rotations") or 0),
+                    "region_index": int(st.get("psiphon_region_index") or 0),
+                    "next_region": (cfg.psiphon_regions[
+                        int(st.get("psiphon_region_index") or 0)
+                        % max(1, len(cfg.psiphon_regions))]
+                        if cfg.psiphon_regions else ""),
+                    "regions": cfg.psiphon_regions,
+                    "config": cfg.psiphon_config,
+                    "data_dir": cfg.psiphon_data},
+        "fallback_activated_at": since,
+        "fallback_age_seconds": (now() - since) if since else 0,
+        "warp_probe_at": (since + cfg.blacklist_ttl) if since else 0,
+        "pin_lifted_for_backend": st.get("pin_lifted_for_backend") or "",
+    }
 
 
 def cmd_doctor(args, cfg: Config, log: Log) -> int:
@@ -5075,6 +5999,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = add("hop", cmd_hop, "rotate to a fresh IPv6 /64 now")
     s.add_argument("--wait", type=int, default=90)
+    s.add_argument("--backend", default="", choices=["", "warp", "psiphon"],
+                   help="force one backend for this rotation "
+                        "(default: the configured ladder)")
 
     add("repair", cmd_repair, "repair the tunnel and re-arm the firewall")
     add("rescue", cmd_rescue, "force a working network, whatever the state")
@@ -5085,6 +6012,9 @@ def build_parser() -> argparse.ArgumentParser:
     s = add("bridge", cmd_bridge, "run the HTTP->SOCKS5 bridge for proxy mode")
     s.add_argument("--listen", default="")
     s.add_argument("--socks", default="")
+    s.add_argument("--dynamic", action="store_true",
+                   help="follow state.json active_socks_port (WARP or Psiphon) "
+                        "so a mid-task fallback needs no environment change")
     add("doctor", cmd_doctor, "health check")
     add("config", cmd_config, "print effective configuration")
 

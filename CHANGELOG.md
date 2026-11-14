@@ -1,5 +1,79 @@
 # CHANGELOG — opencode-unlimited
 
+## 2.5.0 — Psiphon as an automatic fallback backend
+
+WARP stays primary. Psiphon becomes the overflow backend for when the local
+`/64` pool is exhausted, so a wall no longer strands a run.
+
+### The escalation ladder
+
+* Every rotation path (`hop`, `run`, `resume`, `agent`, `repair`, the supervisor)
+  goes through one function, so the policy lives in one place.
+* **WARP first.** `rotate-keys`, then full re-registration — unchanged.
+* **Escalation.** Each *failed candidate* counts toward
+  `OUC_WARP_FALLBACK_THRESHOLD` (default 5). At the threshold — or when
+  `warp-cli` is simply absent — the controller escalates to Psiphon inside the
+  same call, with no human in the loop.
+* **Return to WARP.** `fallback_activated_at` is recorded in `state.json`.
+  Once `blacklist_ttl` (4 h) has elapsed, or every configured region has been
+  cycled, the next rotation probes WARP again.
+* **Overrides.** `OUC_BACKEND_MODE=auto|warp|psiphon` (default `auto`) and
+  `ouc hop --backend warp|psiphon` for a single call.
+
+### Psiphon rotation, done properly
+
+* **Real bootstrap values.** The four public parameters (`SponsorId`,
+  `PropagationChannelId`, `RemoteServerListURLs`, and the list's signature
+  public key) are embedded. Placeholder values and a missing server list are
+  what made an earlier attempt "fail to rotate": the client had no server to
+  dial. `OUC_PSIPHON_CONFIG_SEED` can supply an operator config instead.
+* **Not a naive restart.** A restart with the same datastore replays cached dial
+  parameters and lands on the same exit. So: the datastore under
+  `<state>/psiphon/data` is kept (the cached server list is what makes a tunnel
+  form in 8-11 s), `DisableReplay: true` is written on every rotation, and
+  `EgressRegion` advances round-robin across `OUC_PSIPHON_REGIONS`
+  (default `US,DE,NL,CA,GB,FR,JP,SG,CH,AT,SE`), persisted as
+  `psiphon_region_index`.
+* **Lifecycle.** SIGTERM the owned PID, wait, SIGKILL if it sticks, write the
+  config, spawn, and stream stdout until the `Tunnels` notice with `count >= 1`
+  arrives within `OUC_PSIPHON_START_WAIT`. `SIGUSR2` is never used: in the
+  ConsoleClient it dumps runtime profiles and does not move the exit.
+* **Orphan reaping.** `stop()` also scans `/proc` for tunnels referencing our
+  config path, the same lesson v2.4.2 learned from the bridge: a stale owner
+  holding the SOCKS port makes every later tunnel look broken.
+
+### One blacklist, two address families
+
+* `norm_block()` normalises with `ipaddress`: IPv6 to its `/64` prefix, IPv4 to
+  its `/32`. IPv6 keeps the unpadded four-group form this controller has always
+  stored, so an existing `state.json` keeps matching after the upgrade.
+* Both shapes share the one 4-hour TTL list and one `_spent_blocks()` view.
+* **Leak guard.** A rotation probe never accepts the host's own direct public
+  address as a VPN egress.
+
+### Things that had to change with it
+
+* **The bridge follows the active backend.** `ouc bridge --dynamic` re-reads
+  `active_socks_port` from `state.json` per connection (one-second cache), so a
+  mid-task fallback from WARP (`40000`) to Psiphon (`9060`) needs no restart and
+  no change to opencode's `HTTPS_PROXY`.
+* **The IPv6 pin is lifted for Psiphon.** `ouc pin` exists because WARP's quota
+  is keyed on the `/64`; Psiphon exits are IPv4, so the pin is removed when the
+  fallback takes over and re-installed when a WARP tunnel returns.
+* **Ownership.** Everything Psiphon owns lives under the state dir and follows
+  the v2.3.1 rules (state dir handed to `SUDO_USER`), so an unprivileged
+  `hop`/`run`/`config` does not hit `PermissionError`.
+* `status`, `doctor`, `config` and `rescue` report and tear down the fallback;
+  `stop` and `uninstall` stop it too.
+
+### Tests
+
+New offline coverage (no root, no network, no real provider): `t75` block
+normalisation and TTL expiry, `t76` escalation after five exhausted WARP
+attempts, `t77` region round-robin plus `DisableReplay`/datastore invariants,
+`t78` bridge upstream switching, `t79` `--backend` overrides. Suite:
+62 passed / 0 failed / 11 skipped offline; pytest 100 passed.
+
 ## 2.4.2 — unreleased working tree
 
 ### Fixes found by testing on a fresh host

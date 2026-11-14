@@ -69,6 +69,10 @@ assert_lt(){ if [ "$1" -lt "$2" ] 2>/dev/null; then a_ok; else a_fail "expected 
 assert_truthy(){ if [ "$1" = "true" ] || [ "$1" = "1" ] || [ "$1" = "True" ]; then a_ok; else a_fail "expected truthy, got [$1]"; fi; }
 assert_falsy(){ if [ "$1" = "false" ] || [ "$1" = "0" ] || [ "$1" = "" ] || [ "$1" = "False" ]; then a_ok; else a_fail "expected falsy, got [$1]"; fi; }
 
+# named assertion: prints the claim either way, and feeds the test's verdict
+check(){ if [ "$2" = "$3" ]; then printf '  ok   %s\n' "$1";
+         else A_FAILED=1; printf '  FAIL %s: expected [%s], got [%s]\n' "$1" "$3" "$2"; fi; }
+
 count_in(){ local n; n=$(grep -c -- "$1" "$2" 2>/dev/null); echo "${n:-0}"; }
 jget(){ python3 -c "import json,sys;print(eval('d'+sys.argv[2]))" "$1" "$2" 2>/dev/null || echo ""; }
 jq_file(){ python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print(${2})" "$1" 2>/dev/null || echo ""; }
@@ -144,6 +148,13 @@ sb(){ # fresh sandbox for one test
   export OUC_IPTABLES="$HELPER/fake_iptables.py"
   export OUC_IP6TABLES="$HELPER/fake_iptables.py"
   export OUC_PROBE_CMD="$HELPER/fake_probe.sh"
+  # v2.5.0: the fallback backend is always wired to a fake, so no test can reach
+  # a real psiphon-tunnel-core (or a real network) by accident.
+  export OUC_PSIPHON_BIN="$HELPER/fake_psiphon.py"
+  export FAKE_PSIPHON_LOG="$T/psiphon.log"
+  export FAKE_PSIPHON_STATE="$T/psiphon.json"
+  printf '{"ips":["74.208.85.35","172.105.246.108","172.238.125.192"],"index":0}\n' \
+    > "$FAKE_PSIPHON_STATE"
   export OUC_IGNORE_TUN_CHECK=1
   export FAKE_WARP_MIN_SETTLE=$mn_settle
   export OUC_CONNECT_WAIT=6 OUC_EGRESS_WAIT=6
@@ -156,7 +167,10 @@ sb(){ # fresh sandbox for one test
   export OUC_WATCHDOG=0
   unset OUC_MAX_HOURS OUC_MAX_CONSEC_FAIL OUC_MAX_WALLS OUC_MAX_ROTATIONS \
         OUC_RECYCLE_TURNS OUC_STALL_SECONDS OUC_AGENT_ROOT OUC_RESUME_MAX \
-        OUC_RATE_LIMIT_BACKOFF OUC_AGENT_LOCK OUC_V2_FIXTURE 2>/dev/null || true
+        OUC_RATE_LIMIT_BACKOFF OUC_AGENT_LOCK OUC_V2_FIXTURE \
+        OUC_BACKEND_MODE OUC_WARP_FALLBACK_THRESHOLD OUC_PSIPHON_REGIONS \
+        OUC_PSIPHON_SOCKS_PORT OUC_PSIPHON_START_WAIT OUC_HOST_DIRECT_IP \
+        FAKE_PSIPHON_FAIL FAKE_PSIPHON_NO_NOTICE FAKE_SOCKS_LOG 2>/dev/null || true
   # Tunnel-mode behaviour (pin, kill-switch, supervisor repair) must be testable
   # on any host — including a Codespace, where CODESPACES=true would otherwise
   # select proxy mode and turn those tests into false failures. Proxy tests
@@ -1759,7 +1773,299 @@ except OSError:
   finish "74-orphaned-bridge.log"
 }
 
-ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions t73_transport_resilience_regressions t74_orphaned_bridge_is_stopped"
+# ============================================================ v2.5.0 backends
+t75_block_normalisation_and_ttl(){
+  begin "blacklist keys: IPv6 /64 and IPv4 /32 in one list, expiring on one TTL"
+  sb
+  python3 - "$ROOT" <<'PY'
+import importlib.util, json, os, sys, time
+spec = importlib.util.spec_from_file_location("ouc_under_test", sys.argv[1] + "/ouc.py")
+m = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = m
+spec.loader.exec_module(m)
+
+fails = []
+def check(name, cond, detail=""):
+    print(("  ok   " if cond else "  FAIL ") + name + ("" if cond else f"  <- {detail}"))
+    if not cond:
+        fails.append(name)
+
+# ---- normalisation ----------------------------------------------------
+check("IPv6 address -> /64 prefix",
+      m.norm_block("2a09:bac1:76a0:830::1c:31c") == "2a09:bac1:76a0:830")
+check("IPv6 bare block is already canonical",
+      m.norm_block("2a09:bac1:76a0:830") == "2a09:bac1:76a0:830")
+check("IPv6 network form accepted",
+      m.norm_block("2a09:bac1:76a0:830::/64") == "2a09:bac1:76a0:830")
+check("different address, same /64 -> one key",
+      m.norm_block("2a09:bac1:76a0:830::dead:beef") == m.norm_block("2a09:bac1:76a0:830::1"))
+check("IPv4 address -> /32",
+      m.norm_block("74.208.85.35") == "74.208.85.35/32")
+check("IPv4 /32 idempotent",
+      m.norm_block("74.208.85.35/32") == "74.208.85.35/32")
+check("two addresses in one IPv4 /24 stay distinct",
+      m.norm_block("74.208.85.35") != m.norm_block("74.208.85.36"))
+check("junk normalises to empty",
+      m.norm_block("not-an-address") == "" and m.norm_block("") == "")
+check("families never collide",
+      m.norm_block("2a09:bac1:76a0:830::1") != m.norm_block("74.208.85.35"))
+
+# ---- one list, one TTL ------------------------------------------------
+os.environ["OUC_BLACKLIST_TTL"] = "3600"
+cfg = m.Config()
+state = m.State(cfg)
+v6 = m.norm_block("2a09:bac5:cbbe:119::2db:4a")
+v4 = m.norm_block("172.238.125.192")
+state.save({"blacklist": [v6, v4], "blacklist_ts": {v6: int(time.time()) - 10,
+                                                    v4: int(time.time()) - 10}})
+spent = m._spent_blocks(cfg, state)
+check("fresh IPv6 /64 is spent", v6 in spent)
+check("fresh IPv4 /32 is spent in the same list", v4 in spent)
+
+# age one entry past the TTL: it must be a legitimate candidate again
+old = int(time.time()) - 7200
+state.save({"blacklist": [v6, v4], "blacklist_ts": {v6: old, v4: int(time.time())}})
+spent = m._spent_blocks(cfg, state)
+check("aged-out IPv6 /64 is no longer spent", v6 not in spent)
+check("its IPv4 neighbour is still spent", v4 in spent)
+
+# ---- recording keeps both shapes -------------------------------------
+state.save({"blacklist": [v6], "blacklist_ts": {v6: int(time.time())}})
+entries, ts = m.blacklist_state(cfg, state, "74.1.2.3")
+check("adding an IPv4 keeps the stored IPv6", v6 in entries)
+check("the new IPv4 is recorded as /32", "74.1.2.3/32" in entries)
+check("both entries carry a timestamp",
+      all(e in ts for e in entries), f"{entries} vs {ts}")
+
+sys.exit(1 if fails else 0)
+PY
+  finish "t75"
+}
+
+t76_escalation_after_five_warp_failures(){
+  begin "5 failed WARP attempts escalate to Psiphon with no human in the loop"
+  sb
+  export OUC_PSIPHON_BIN="$HELPER/fake_psiphon.py"
+  export FAKE_PSIPHON_LOG="$T/psiphon.log"
+  export FAKE_PSIPHON_STATE="$T/psiphon.json"
+  export OUC_PROBE_CMD="$HELPER/fake_probe_backends.sh"
+  export OUC_WARP_FALLBACK_THRESHOLD=5 OUC_ROTATION_MODE=keys
+  export OUC_KEYS_ATTEMPTS=5 OUC_WARP_MODE=proxy
+  export OUC_PROXY_SOCKS_PORT=14000 OUC_PROXY_HTTP_PORT=18086
+  export FAKE_WARP_KEYS_REPEAT=500          # every key rotation keeps the block
+  printf '{"ips":["74.208.85.35","172.105.246.108"],"index":0}\n' > "$FAKE_PSIPHON_STATE"
+  # proxy mode treats a listening SOCKS port as "the tunnel can carry traffic"
+  python3 "$HELPER/fake_socks5.py" --port 14000 >/dev/null 2>&1 &
+  local socks_pid=$!
+  sleep 1
+
+  out=$(ouc hop --wait 60 2>&1); rc=$?
+  echo "$out" | sed 's/^/    /'
+  [ "$rc" = 0 ] || { fail "hop did not succeed after escalation"; return; }
+
+  local backend port act streak
+  backend=$(state_of "d.get('active_backend')")
+  port=$(state_of "d.get('active_socks_port')")
+  act=$(state_of "d.get('fallback_activated_at')")
+  streak=$(state_of "d.get('warp_fail_streak')")
+  check "active backend is psiphon" "$backend" "psiphon"
+  check "bridge was pointed at Psiphon's SOCKS port" "$port" "9060"
+  check "fallback_activated_at is recorded" "$([ "${act:-0}" -gt 0 ] && echo yes)" "yes"
+  check "the WARP failure streak reached the threshold" \
+        "$([ "${streak:-0}" -ge 5 ] && echo yes)" "yes"
+  check "the hop reported the fallback" \
+        "$(echo "$out" | grep -c 'backend: psiphon')" "1"
+  check "the escalation says why" \
+        "$(echo "$out" | grep -c 'escalated from WARP')" "1"
+
+  # the generated config must be a rotation-capable config, not a naive restart
+  check "generated config sets DisableReplay=true" \
+        "$(grep -c '\"disable_replay\": true' "$FAKE_PSIPHON_LOG")" "1"
+  check "first Psiphon rotation used the first configured region (US)" \
+        "$(grep -o '\"region\": \"[A-Z]*\"' "$FAKE_PSIPHON_LOG" | head -1)" \
+        '"region": "US"'
+  check "config pins LocalSocksProxyPort to 9060" \
+        "$(grep -c '\"socks_port\": 9060' "$FAKE_PSIPHON_LOG")" "1"
+  check "config carries the real public bootstrap values" \
+        "$(grep -c '\"bootstrap_ok\": true' "$FAKE_PSIPHON_LOG")" "1"
+  # the block the ladder walked away from is what gets burned
+  check "the burned WARP /64 was blacklisted" \
+        "$(state_of "any(b.startswith('2a09:') for b in d.get('blacklist',[]))")" "True"
+
+  # a second rotation now starts *from* a Psiphon IPv4 exit, so the list must
+  # gain an IPv4 /32 as well — one TTL, one list, two address families
+  ouc hop --wait 60 > "$T/hop2.out" 2>&1 || fail "second hop failed"
+  check "and the Psiphon exit is recorded as an IPv4 /32" \
+        "$(state_of "any(b.endswith('/32') for b in d.get('blacklist',[]))")" "True"
+  check "the second rotation stayed on the fallback" \
+        "$(state_of "d.get('active_backend')")" "psiphon"
+  check "and advanced to the next region" \
+        "$(grep -o '\"region\": \"[A-Z]*\"' "$FAKE_PSIPHON_LOG" | tail -1)" \
+        '"region": "DE"'
+  kill "$socks_pid" 2>/dev/null || true
+  wait "$socks_pid" 2>/dev/null || true
+  pkill -f "bridge --listen 127.0.0.1:18086" 2>/dev/null || true
+  finish "t76"
+}
+
+t77_psiphon_region_round_robin(){
+  begin "Psiphon advances EgressRegion every rotation and keeps the datastore"
+  sb
+  export OUC_PSIPHON_BIN="$HELPER/fake_psiphon.py"
+  export FAKE_PSIPHON_LOG="$T/psiphon.log"
+  export FAKE_PSIPHON_STATE="$T/psiphon.json"
+  export OUC_PROBE_CMD="$HELPER/fake_probe_backends.sh"
+  export OUC_BACKEND_MODE=psiphon OUC_WARP_MODE=proxy
+  export OUC_PROXY_SOCKS_PORT=14000 OUC_PROXY_HTTP_PORT=18087
+  export OUC_PSIPHON_REGIONS="US,DE,NL"
+  printf '{"ips":["74.208.85.35","172.105.246.108","172.238.125.192"],"index":0}\n' \
+    > "$FAKE_PSIPHON_STATE"
+
+  local i
+  for i in 1 2 3; do
+    ouc hop --backend psiphon --wait 60 > "$T/hop$i.out" 2>&1 \
+      || { fail "hop $i failed"; cat "$T/hop$i.out" | sed 's/^/    /'; finish "t77"; return; }
+  done
+  local regions
+  regions=$(grep -o '"region": "[A-Z]*"' "$FAKE_PSIPHON_LOG" | sed 's/.*: "//;s/"//' \
+            | awk '!seen[$0]++' | tr '\n' ',')
+  check "regions advanced round-robin" "$regions" "US,DE,NL,"
+  check "region index wrapped and persisted" \
+        "$(state_of "d.get('psiphon_region_index')")" "0"
+  check "three rotations counted" "$(state_of "d.get('psiphon_rotations')")" "3"
+  local starts
+  starts=$(grep -c '"event": "start"' "$FAKE_PSIPHON_LOG")
+  check "at least three tunnels were started" "$([ "$starts" -ge 3 ] && echo yes)" "yes"
+  check "every tunnel used the same persistent datastore" \
+        "$(grep -o '"data_root": "[^"]*"' "$FAKE_PSIPHON_LOG" | sort -u | wc -l)" "1"
+  check "every tunnel set DisableReplay" \
+        "$(grep -c '"disable_replay": true' "$FAKE_PSIPHON_LOG")" "$starts"
+  # The blacklist records the block being *left*, so N rotations burn N-1 of
+  # the exits they landed on. What matters is that both families share it.
+  check "both an IPv6 /64 and an IPv4 /32 are in the one blacklist" \
+        "$(state_of "any(':' in b for b in d.get('blacklist',[])) and any(b.endswith('/32') for b in d.get('blacklist',[]))")" "True"
+  check "the pin is not left installed for an IPv4 backend" \
+        "$(state_of "d.get('pin_lifted_for_backend') or ''")" ""
+  cp "$FAKE_PSIPHON_LOG" "$LOGDIR/77-psiphon.log" 2>/dev/null || true
+  cp "$OUC_STATE_DIR/ouc.log" "$LOGDIR/77-ouc.log" 2>/dev/null || true
+  pkill -f "bridge --listen 127.0.0.1:18087" 2>/dev/null || true
+  finish "t77"
+}
+
+t78_bridge_follows_the_active_backend(){
+  begin "the bridge follows active_socks_port, so a fallback needs no env change"
+  sb
+  local pa=14011 pb=14012 lport=18088 target=15099
+  FAKE_SOCKS_LOG="$T/socksA.log" python3 "$HELPER/fake_socks5.py" --port $pa \
+    > "$T/socksA.out" 2>&1 &
+  local pida=$!
+  FAKE_SOCKS_LOG="$T/socksB.log" python3 "$HELPER/fake_socks5.py" --port $pb \
+    > "$T/socksB.out" 2>&1 &
+  local pidb=$!
+  python3 -m http.server $target --bind 127.0.0.1 > "$T/http.out" 2>&1 &
+  local pidh=$!
+  sleep 1.2
+
+  python3 -c "
+import json, sys
+json.dump({'active_backend': 'warp', 'active_socks_port': $pa},
+          open(sys.argv[1], 'w'))" "$OUC_STATE_DIR/state.json"
+  python3 "$ROOT/ouc.py" bridge --listen "127.0.0.1:$lport" --dynamic \
+    > "$T/bridge.out" 2>&1 &
+  local pidbr=$!
+  local i
+  for i in $(seq 1 40); do
+    python3 -c 'import socket,sys
+s=socket.socket(); s.settimeout(0.3)
+try: s.connect(("127.0.0.1", int(sys.argv[1])))
+except OSError: sys.exit(1)' "$lport" && break
+    sleep 0.25
+  done
+
+  # The bridge speaks CONNECT (that is what opencode's fetch() sends), so the
+  # test must too: a plain GET through a proxy would be answered 405 by design.
+  connect_via_bridge(){
+    python3 - "$1" "$2" "$3" <<'PYCONN'
+import socket
+import sys
+port, host, dest = int(sys.argv[1]), sys.argv[2], int(sys.argv[3])
+s = socket.create_connection(("127.0.0.1", port), timeout=8)
+s.sendall(f"CONNECT {host}:{dest} HTTP/1.1\r\nHost: {host}:{dest}\r\n\r\n".encode())
+print(s.recv(200).decode(errors="replace").split("\r\n")[0])
+s.close()
+PYCONN
+  }
+
+  local line
+  line=$(connect_via_bridge "$lport" 127.0.0.1 "$target")
+  sleep 0.4
+  check "the bridge accepted the CONNECT" "$line" "HTTP/1.1 200 Connection Established"
+  check "the first request went through the WARP upstream" \
+        "$([ -s "$T/socksA.log" ] && echo yes || echo no)" "yes"
+  check "and not through the Psiphon upstream" \
+        "$([ -s "$T/socksB.log" ] && echo yes || echo no)" "no"
+
+  # simulate a mid-task fallback: the controller flips active_socks_port
+  python3 -c "
+import json, sys
+json.dump({'active_backend': 'psiphon', 'active_socks_port': $pb},
+          open(sys.argv[1], 'w'))" "$OUC_STATE_DIR/state.json"
+  sleep 1.2                       # the bridge caches the lookup for one second
+  local before
+  before=$(wc -l < "$T/socksA.log" 2>/dev/null || echo 0)
+  connect_via_bridge "$lport" 127.0.0.1 "$target" >/dev/null
+  sleep 0.4
+  check "after the switch the request used the Psiphon upstream" \
+        "$([ -s "$T/socksB.log" ] && echo yes || echo no)" "yes"
+  check "and no longer used the WARP one" \
+        "$(wc -l < "$T/socksA.log" 2>/dev/null || echo 0)" "$before"
+  check "the bridge logged the switch to the WARP upstream" \
+        "$(grep -c "upstream now socks5://127.0.0.1:$pa" "$OUC_STATE_DIR/ouc.log" 2>/dev/null || echo 0)" "1"
+  check "and the switch to the Psiphon upstream" \
+        "$(grep -c "upstream now socks5://127.0.0.1:$pb" "$OUC_STATE_DIR/ouc.log" 2>/dev/null || echo 0)" "1"
+  check "opencode's HTTPS_PROXY never had to change" \
+        "$(grep -c "bridge listening on http://127.0.0.1:$lport" "$OUC_STATE_DIR/ouc.log")" "1"
+
+  kill $pidbr $pida $pidb $pidh >/dev/null 2>&1 || true
+  wait $pidbr $pida $pidb $pidh 2>/dev/null || true
+  finish "t78"
+}
+
+t79_hop_backend_override(){
+  begin "ouc hop --backend forces one side of the ladder"
+  sb
+  export OUC_PSIPHON_BIN="$HELPER/fake_psiphon.py"
+  export FAKE_PSIPHON_LOG="$T/psiphon.log"
+  export FAKE_PSIPHON_STATE="$T/psiphon.json"
+  export OUC_PROBE_CMD="$HELPER/fake_probe_backends.sh"
+  export OUC_WARP_MODE=proxy OUC_PROXY_SOCKS_PORT=14000 OUC_PROXY_HTTP_PORT=18089
+  printf '{"ips":["74.208.85.35","172.105.246.108"],"index":0}\n' > "$FAKE_PSIPHON_STATE"
+  python3 "$HELPER/fake_socks5.py" --port 14000 >/dev/null 2>&1 &
+  local socks_pid=$!
+  sleep 1
+
+  ouc hop --backend psiphon --wait 60 > "$T/sp.out" 2>&1 \
+    || { fail "forced psiphon hop failed"; cat "$T/sp.out" | sed 's/^/    /'; finish "t79"; return; }
+  check "forced rotation used Psiphon" \
+        "$(state_of "d.get('active_backend')")" "psiphon"
+
+  ouc hop --backend warp --wait 60 > "$T/wp.out" 2>&1 \
+    || { fail "forced warp hop failed"; cat "$T/wp.out" | sed 's/^/    /'; finish "t79"; return; }
+  check "forced rotation returned to WARP" \
+        "$(state_of "d.get('active_backend')")" "warp"
+  check "and pointed the bridge back at WARP's SOCKS port" \
+        "$(state_of "d.get('active_socks_port')")" "14000"
+  check "a successful WARP rotation cleared the failure streak" \
+        "$(state_of "d.get('warp_fail_streak')")" "0"
+  check "and cleared the fallback window" \
+        "$(state_of "d.get('fallback_activated_at')")" "0"
+  kill "$socks_pid" 2>/dev/null || true
+  wait "$socks_pid" 2>/dev/null || true
+  pkill -f "bridge --listen 127.0.0.1:18089" 2>/dev/null || true
+  finish "t79"
+}
+
+ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions t73_transport_resilience_regressions t74_orphaned_bridge_is_stopped t75_block_normalisation_and_ttl t76_escalation_after_five_warp_failures t77_psiphon_region_round_robin t78_bridge_follows_the_active_backend t79_hop_backend_override"
 REAL_TESTS="t30_real_install t31_real_auto_rotation t32_real_no_deadlock t33_real_hop t34_real_uninstall t45_real_proxy_rotation"
 TEST_TIMEOUT="${TEST_TIMEOUT:-240}"
 
