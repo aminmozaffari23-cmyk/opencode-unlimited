@@ -2157,7 +2157,46 @@ PY
   finish "t81"
 }
 
-ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions t73_transport_resilience_regressions t74_orphaned_bridge_is_stopped t75_block_normalisation_and_ttl t76_escalation_after_five_warp_failures t77_psiphon_region_round_robin t78_bridge_follows_the_active_backend t79_hop_backend_override t80_tunnel_notice_dialects t81_a_daemons_writeonly_stdin_cannot_break_a_child"
+t82_the_tunnel_outlives_the_command_that_started_it(){
+  begin "a rotation hands over a tunnel that survives the rotation command"
+  sb
+  # A pipe owned by `ouc hop` closes the moment that process exits; the child
+  # then dies of EPIPE and the next request gets 502 from the bridge. The
+  # tunnel therefore writes to its own log file, not to our pipe.
+  export OUC_PSIPHON_BIN="$HELPER/fake_psiphon.py"
+  export FAKE_PSIPHON_LOG="$T/psiphon.log"
+  export FAKE_PSIPHON_STATE="$T/psiphon.json"
+  export OUC_PROBE_CMD="$HELPER/fake_probe_backends.sh"
+  export OUC_WARP_MODE=proxy OUC_PROXY_SOCKS_PORT=14000 OUC_PROXY_HTTP_PORT=18089
+  export OUC_PSIPHON_SOCKS_PORT=14060 OUC_PSIPHON_HTTP_PORT=14061
+  printf '{"ips":["74.208.85.35"],"index":0}\n' > "$FAKE_PSIPHON_STATE"
+  python3 "$HELPER/fake_socks5.py" --port 14000 >/dev/null 2>&1 &
+  local socks_pid=$!
+  sleep 1
+  # rotate in a *separate* process, exactly like a real `ouc hop`
+  ouc hop --backend psiphon --wait 60 > "$T/hop.out" 2>&1 \
+    || { fail "forced psiphon hop failed"; sed 's/^/    /' "$T/hop.out"; finish "t82"; return; }
+  sleep 1
+  local pids
+  pids=$(pgrep -f "fake_psiphon.py" | tr '\n' ' ')
+  check "the tunnel is still running after the hop command exited" \
+        "$([ -n "$pids" ] && echo yes || echo no)" "yes"
+  check "and it still owns its SOCKS port" \
+        "$(python3 -c 'import socket,sys
+s=socket.socket(); s.settimeout(0.5)
+try:
+    s.connect(("127.0.0.1", int(sys.argv[1]))); print("yes")
+except OSError:
+    print("no")' 14060)" "yes"
+  check "the rotation said it wrote its notices to a log file" \
+        "$([ -s "$OUC_STATE_DIR/psiphon/psiphon.log" ] && echo yes || echo no)" "yes"
+  kill "$socks_pid" 2>/dev/null || true
+  wait "$socks_pid" 2>/dev/null || true
+  pkill -f "fake_psiphon.py" 2>/dev/null || true
+  finish "t82"
+}
+
+ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions t73_transport_resilience_regressions t74_orphaned_bridge_is_stopped t75_block_normalisation_and_ttl t76_escalation_after_five_warp_failures t77_psiphon_region_round_robin t78_bridge_follows_the_active_backend t79_hop_backend_override t80_tunnel_notice_dialects t81_a_daemons_writeonly_stdin_cannot_break_a_child t82_the_tunnel_outlives_the_command_that_started_it"
 REAL_TESTS="t30_real_install t31_real_auto_rotation t32_real_no_deadlock t33_real_hop t34_real_uninstall t45_real_proxy_rotation"
 TEST_TIMEOUT="${TEST_TIMEOUT:-240}"
 

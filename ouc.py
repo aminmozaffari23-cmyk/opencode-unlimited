@@ -1820,6 +1820,7 @@ class Psiphon:
         self.cfg = cfg
         self.log = log if log is not None else (lambda *a, **k: None)
         self._lines: list = []
+        self._log_fh = None
         self._connected = threading.Event()
         self._proc = None
         self._reader = None
@@ -1980,21 +1981,61 @@ class Psiphon:
         except OSError:
             pass
         self.log(f"psiphon: stopped pid {pid}")
+        self._close_log()
         return True
 
+    def _close_log(self) -> None:
+        fh, self._log_fh = self._log_fh, None
+        if fh is not None:
+            try:
+                fh.close()
+            except OSError:
+                pass
+
+    def _note(self, line: str) -> None:
+        """Record one notice line and notice when a tunnel comes up."""
+        if not line:
+            return
+        self._lines.append(line)
+        del self._lines[:-400]
+        if self.TUNNEL_RE.search(line):
+            m = self.COUNT_RE.search(line)
+            if m and int(m.group(1)) >= 1:
+                self._connected.set()
+
     def _pump(self, proc) -> None:
-        """Keep the pipe drained and watch for the Tunnels notice."""
+        """Follow this launch's notices in its log file.
+
+        Not a pipe: the tunnel must outlive the command that started it. If the
+        child's stdout is a pipe owned by `ouc hop`, that process exiting
+        closes the read end and the tunnel dies of EPIPE moments after the
+        rotation reports success — which is exactly what happened on a live
+        host (the bridge then answered 502 to every request).
+        """
         try:
-            for raw in iter(proc.stdout.readline, b""):
-                line = raw.decode(errors="replace").rstrip()
-                if not line:
+            # A separate read handle from the offset this launch started at, so
+            # nothing written between spawn and open is missed.
+            fh = open(self.cfg.psiphon_log, "rb")
+            fh.seek(int(getattr(self, "_log_start", 0) or 0))
+        except OSError:
+            return
+        try:
+            while True:
+                if fh is not None:
+                    chunk = fh.read()
+                else:
+                    break
+                if chunk:
+                    for raw in chunk.splitlines():
+                        self._note(raw.decode(errors="replace").rstrip())
                     continue
-                self._lines.append(line)
-                del self._lines[:-400]
-                if self.TUNNEL_RE.search(line):
-                    m = self.COUNT_RE.search(line)
-                    if m and int(m.group(1)) >= 1:
-                        self._connected.set()
+                if proc.poll() is not None:
+                    # drain whatever is left, then stop
+                    rest = fh.read() if fh is not None else b""
+                    for raw in (rest or b"").splitlines():
+                        self._note(raw.decode(errors="replace").rstrip())
+                    return
+                time.sleep(0.2)
         except Exception:
             return
 
@@ -2004,6 +2045,7 @@ class Psiphon:
         if not ok:
             return False, detail
         self.stop()
+        self._close_log()
         cfg_data = self.write_config(region)
         argv = [self.cfg.psiphon_bin, "-config", self.cfg.psiphon_config,
                 "-formatNotices"]
@@ -2013,7 +2055,16 @@ class Psiphon:
         env.pop("ALL_PROXY", None)
         env.pop("all_proxy", None)
         try:
-            proc = subprocess.Popen(argv, stdout=subprocess.PIPE,
+            mkdirp(os.path.dirname(self.cfg.psiphon_log), 0o755)
+            try:
+                self._log_start = os.path.getsize(self.cfg.psiphon_log)
+            except OSError:
+                self._log_start = 0
+            self._log_fh = open(self.cfg.psiphon_log, "ab", buffering=0)
+        except OSError as exc:
+            return False, f"cannot open psiphon log: {exc}"
+        try:
+            proc = subprocess.Popen(argv, stdout=self._log_fh,
                                     stderr=subprocess.STDOUT,
                                     stdin=subprocess.DEVNULL, env=env,
                                     start_new_session=True, bufsize=0)
