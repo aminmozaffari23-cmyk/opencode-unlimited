@@ -2564,6 +2564,23 @@ def _clear_warp_tun_for_psiphon(cfg: Config, state: "State", log: Log,
                     state.update(guard_mode=GUARD_PROXY)
         except Exception as exc:
             log(f"kill-switch: could not switch to proxy mode ({exc})", "WARN")
+    # Lift the IPv6 pin before anything is probed. §2 says the pin goes when
+    # the fallback starts, and "starts" means *before* the first probe: the pin
+    # sends opencode's API host to a WARP IPv6 address, so with WARP's TUN down
+    # every verification inside the rotation connected to an address that no
+    # longer exists — measured live as ECONNREFUSED from opencode, which reads
+    # exactly like a Psiphon failure and is nothing of the sort.
+    if cfg.pin:
+        try:
+            pinner = Pinner(cfg, log, state)
+            if pinner.status().get("installed"):
+                pinner.remove()
+                state.update(pin_lifted_for_backend=BACKEND_PSIPHON)
+                log("pin: lifted the IPv6 /etc/hosts pin before the fallback "
+                    "probe — it points at WARP, which is being taken down",
+                    "WARN")
+        except Exception as exc:
+            log(f"pin: could not lift the pin for Psiphon ({exc})", "WARN")
     st = state.load()
     if st.get("warp_tun_down_for_fallback"):
         return True
@@ -2601,6 +2618,10 @@ def _restore_warp_tun(cfg: Config, state: "State", log: Log,
             if fw.installed() and fw.mode() != GUARD_TUNNEL:
                 fw.install(GUARD_TUNNEL)
                 log("kill-switch re-armed in tunnel mode for the WARP backend")
+        if cfg.pin and state.load().get("pin_lifted_for_backend"):
+            if Pinner(cfg, log, state).install():
+                state.update(pin_lifted_for_backend="")
+                log("pin: re-installed the IPv6 pin for the WARP tunnel")
         W = warp or Warp(cfg, log)
         W.connect()
         for _ in range(max(4, int(cfg.connect_wait / 2))):

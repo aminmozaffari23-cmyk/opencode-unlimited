@@ -46,6 +46,12 @@ found by the tunnel-mode window of the Phase-4 live matrix.
   `proxy_url` and a `strict` flag that refuses to fall back to the direct path
   (a leak check that can answer from the leaking path is not a leak check), and
   the Psiphon candidate probe now goes through the bridge opencode will use.
+* **The pin outlived the probe it invalidates.** §2 says the IPv6 pin goes when
+  the fallback starts; it was being lifted only after a Psiphon exit succeeded.
+  With WARP's TUN down the pin still sent `api.opencode.ai` to a WARP address
+  that no longer existed, so the rotation's own verification failed ECONNREFUSED
+  and the run reported a Psiphon failure that was ours. The pin is now lifted
+  before the first probe and re-installed with the tunnel on the way back.
 * **`ouc hop --backend warp` could not rotate out of a Psiphon episode.**
   The WARP phase probed before restoring WARP's TUN, so it measured the bare
   host route and failed with "no fresh /64 available right now … [nothing]" —
@@ -57,7 +63,7 @@ found by the tunnel-mode window of the Phase-4 live matrix.
 
 ### Tests
 
-* **t95** (17 checks) — the guard arms over an install-time default and records
+* **t95** (19 checks) — the guard arms over an install-time default and records
   its dialect, a real rule reaches the firewall, escalation in tunnel mode takes
   WARP down, the state and the log record it, the return brings WARP back up and
   clears the flag, the guard is proxy-compatible while Psiphon carries traffic

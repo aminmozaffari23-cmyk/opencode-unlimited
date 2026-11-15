@@ -118,11 +118,24 @@ sandbox_pids(){ # $1 = pgrep pattern
 
 kill_sandbox_daemons(){
   local pid st
-  for pid in $(pgrep -f "ouc.py (start|supervise|bridge)" 2>/dev/null); do
+  for pid in $(pgrep -f "ouc.py (start|supervise|bridge|watchdog)" 2>/dev/null); do
     st=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | sed -n 's/^OUC_STATE_DIR=//p' | head -1)
     case "${T:-}" in
       /tmp/ouc-test.*)
-        [ "$st" = "$T/state" ] && kill "$pid" >/dev/null 2>&1 || true ;;
+        # Prefix, not equality: some daemons are given the sandbox itself as the
+        # state dir, and those used to survive every cleanup.
+        case "$st" in
+          "$T"|"$T"/*) ;;
+          *) continue ;;
+        esac
+        kill "$pid" >/dev/null 2>&1 || true
+        # A daemon that ignores SIGTERM is a daemon that follows the next test
+        # around. Escalate, and say so rather than leaking it silently.
+        sleep 0.2
+        if kill -0 "$pid" >/dev/null 2>&1; then
+          kill -9 "$pid" >/dev/null 2>&1 || \
+            echo "  !! could not kill leftover pid $pid ($(tr '\0' ' ' < /proc/$pid/cmdline 2>/dev/null))"
+        fi ;;
       *) : ;;
     esac
   done
@@ -2799,6 +2812,8 @@ t95_fallback_takes_the_tunnel_down(){
         "$(cat "$T/g-hop.out" "$OUC_STATE_DIR/ouc.log" 2>/dev/null | grep -c "took WARP")" "1"
   check "the guard switched to the dialect Psiphon can survive" \
         "$(state_of "d.get('guard_mode')")" "proxy"
+  check "and the pin is recorded as lifted for the fallback (it pointed at WARP)" \
+        "$(state_of "d.get('pin_lifted_for_backend')")" "psiphon"
 
   rc=0
   timeout 120 python3 "$ROOT/ouc.py" hop --backend warp --wait 90 > "$T/w-hop.out" 2>&1 || rc=$?
@@ -2809,6 +2824,8 @@ t95_fallback_takes_the_tunnel_down(){
         "$(state_of "bool(d.get('warp_tun_down_for_fallback'))")" "False"
   check "and the full tunnel-dialect guard is back" \
         "$(state_of "d.get('guard_mode')")" "tunnel"
+  check "and the pin is no longer marked as lifted" \
+        "$(state_of "d.get('pin_lifted_for_backend') or ''")" ""
   check "the guard records which dialect it installed" \
         "$(state_of "d.get('guard_mode')")" "tunnel"
 
