@@ -79,28 +79,30 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
           sudo apt-get update -qq
           sudo apt-get install -y -qq cloudflare-warp
-          # Start the daemon the way a working host does (bare warp-svc) and
-          # judge readiness by the socket it must create. A client subcommand
-          # does not prove the daemon is behind it: --version answers without
-          # one, and `status` raced a socket that did not exist yet.
-          sudo systemctl stop warp-svc >/dev/null 2>&1 || true
-          sudo pkill -f '[w]arp-svc' || true
-          sleep 2
-          sudo nohup warp-svc >/tmp/warp-svc.log 2>&1 &
-          ready=no
-          for i in $(seq 1 45); do
-            if ls /run/cloudflare-warp/*.sock /var/run/cloudflare-warp/*.sock >/dev/null 2>&1; then
-              if ! warp-cli --accept-tos status 2>&1 | grep -qi "unable to connect"; then
-                ready=yes; break
-              fi
+          # The packaged systemd unit is the supported path and it works here.
+          # Readiness needs two gates, both learned from failed dispatches:
+          #   * a client call can succeed against no daemon at all (--version),
+          #   * and an early `status` can print nothing while the socket is still
+          #     being created, which a "did it complain?" check reads as ready.
+          # So: require an actual answer, and treat "unable to connect" or an
+          # empty answer as not-ready.
+          sudo systemctl enable warp-svc >/dev/null 2>&1 || true
+          sudo systemctl restart warp-svc
+          ready=no status_out=""
+          for i in $(seq 1 60); do
+            status_out=$(warp-cli --accept-tos status 2>&1 || true)
+            if [ -n "$status_out" ] \
+               && ! printf '%s' "$status_out" | grep -qi "unable to connect" \
+               && printf '%s' "$status_out" | grep -qiE "status update|registration|connected|disconnected|missing"; then
+              ready=yes; break
             fi
             sleep 2
           done
-          echo "daemon ready: $ready"
-          ls -la /run/cloudflare-warp/ /var/run/cloudflare-warp/ 2>&1 | head -10
+          echo "daemon ready: $ready after $((i*2))s"
+          printf '%s\n' "$status_out"
           if [ "$ready" != yes ]; then
-            echo "--- warp-svc.log"; sudo tail -40 /tmp/warp-svc.log || true
-            echo "--- journal"; sudo journalctl -u warp-svc --no-pager -n 40 || true
+            sudo systemctl status warp-svc --no-pager -l | head -20 || true
+            sudo journalctl -u warp-svc --no-pager -n 30 || true
             exit 1
           fi
           warp-cli --accept-tos registration new | tail -1
