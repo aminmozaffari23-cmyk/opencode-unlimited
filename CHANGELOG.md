@@ -86,6 +86,11 @@ found by the tunnel-mode window of the Phase-4 live matrix.
   eleven regions it knows. The budget now scales with the region list, keeps a
   hard bound (no tight loop), and says out loud when it stops early.
 
+* **`bridge --listen …:0` served a listener nobody could find.** Port 0 asks the
+  kernel to pick, and the result cannot be reached, stopped by port, or
+  attributed later — it is exactly the shape of an orphan. The CLI now refuses
+  it with a message naming the setting; `Bridge.start()` refuses to spawn one.
+
 ### Tests
 
 * **t95** (21 checks) — the guard arms over an install-time default and records

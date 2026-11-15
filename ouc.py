@@ -1766,6 +1766,16 @@ def cmd_bridge(args, cfg: Config, log: Log) -> int:
     requires restarting opencode with a different HTTPS_PROXY.
     """
     listen = args.listen or f"127.0.0.1:{cfg.proxy_http_port}"
+    # Port 0 means "kernel, pick one" — and then nothing can find the bridge,
+    # stop it by port, or attribute it later. Refuse instead of serving a
+    # listener nobody can reach.
+    port = listen.rsplit(":", 1)[-1]
+    if port.strip() in ("", "0"):
+        log("bridge: refusing to listen on port 0 (proxy_http_port is 0) — a "
+            "bridge on an ephemeral port answers nothing and cannot be found "
+            "again", "ERROR")
+        print("bridge: proxy_http_port is 0 — set a real port", file=sys.stderr)
+        return 2
     socks = getattr(args, "socks", "") or ""
     dynamic = bool(getattr(args, "dynamic", False)) or not socks
     return run_bridge(listen, socks, log, dynamic=dynamic)

@@ -193,8 +193,35 @@ def wait_rotation_idle(limit=900):
     return None
 
 
+def listening(port):
+    """True if *that exact* local port is listening.
+
+    `"8080" in ss -lnt` is a substring test over every address, every peer and
+    every other port: it matches :18080, :58080, a peer address, anything. It
+    reported a bridge listening after `ouc stop` on a host where the bridge was
+    gone, which is the kind of false alarm that teaches everyone to ignore the
+    teardown check.
+    """
+    want = int(port)
+    for line in sh("ss -H -ltn").get("out", "").splitlines():
+        cols = line.split()
+        if len(cols) < 4:
+            continue
+        addr = cols[3]
+        pstr = addr.rsplit(":", 1)[-1]
+        if pstr.isdigit() and int(pstr) == want:
+            return True
+    return False
+
+
+def listeners_on(port):
+    """The ss lines (with owning pid where we can see it) for one port."""
+    out = sh(f"ss -H -ltnp 2>/dev/null | grep -E ':{(port)}\\b' || true").get("out", "")
+    return [l.strip() for l in out.splitlines() if l.strip()]
+
+
 def bridge_up():
-    return "8080" in sh("ss -lnt")["out"]
+    return listening(8080)
 
 
 def sup_status():
@@ -314,7 +341,7 @@ def main():
                 tunnel_notice=tunnel_line[:200],
                 errors=[l[:200] for l in log_text.splitlines()
                         if "Error" in l or "error" in l][:6],
-                socks_opened_after=(("9060" in sh("ss -lnt")["out"])),
+                socks_opened_after=listening(9060),
                 tail=log_text[-800:]))
             log(f"  {region}: tunnel={bool(tunnel_line)} rc={run['rc']}")
             sh("sudo pkill -f '[p]siphon-tunnel-core' 2>/dev/null")
@@ -681,7 +708,7 @@ def main():
         time.sleep(2)
         res["after_kill"] = dict(
             psiphon=count_procs("psiphon-tunnel-core"),
-            bridge="8080" in sh("ss -lnt")["out"])
+            bridge=bridge_up())
         log(f"  killed: {res['after_kill']}")
         # no manual command from here on: the supervisor must do the work.
         sup = sup_status()
@@ -692,7 +719,7 @@ def main():
         recovered = False
         while time.time() < deadline:
             time.sleep(5)
-            if ("9060" in sh("ss -lnt")["out"]) and ("8080" in sh("ss -lnt")["out"]):
+            if listening(9060) and bridge_up():
                 recovered = True
                 break
         res["recovered"] = dict(
@@ -716,7 +743,7 @@ def main():
            "s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1);"
            "s.bind(('127.0.0.1',8080));s.listen(4);time.sleep(180)\" &", timeout=20)
         time.sleep(3)
-        res["squatter"] = dict(listening="8080" in sh("ss -lnt")["out"],
+        res["squatter"] = dict(listening=bridge_up(),
                                owner=sh("ss -lntp | grep 8080")["out"].strip())
         # ask the controller to bring the bridge up over it
         r = sh(f"sudo {PY} ouc.py start --portable", timeout=180)
@@ -929,12 +956,18 @@ def main():
         sh(f"sudo pkill -f 's.bind' 2>/dev/null; sudo pkill -f 'ouc.py bridge' 2>/dev/null")
         time.sleep(3)
         ps = sh("ps -eo pid,args | grep 'psiphon-tunnel-core' | grep -v grep")["out"]
-        listeners = sh("ss -lnt")["out"]
         teardown = dict(
             stop_rc=r["rc"],
             psiphon_processes=[l for l in ps.splitlines() if l.strip()],
-            psiphon_port_listening=":9060" in listeners,
-            bridge_listening=":8080" in listeners,
+            psiphon_port_listening=listening(9060),
+            bridge_listening=listening(8080),
+            # identities, not just verdicts: a boolean cannot say who came back
+            psiphon_port_lines=listeners_on(9060),
+            bridge_port_lines=listeners_on(8080),
+            bridge_procs=sh("bash -c \"ps -eo pid,args | grep '[o]uc.py bridge' || true\""
+                            )["out"].strip().splitlines(),
+            ouc_procs=sh("bash -c \"ps -eo pid,args | grep '[o]uc.py' || true\""
+                         )["out"].strip().splitlines(),
             guard_rules=guard_rules(),
             backend_before_stop=before_stop.get("active_backend"),
         )
