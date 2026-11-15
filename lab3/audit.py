@@ -22,6 +22,24 @@ EV = (os.environ.get("OUC_EVIDENCE")
       or os.path.join(os.path.dirname(os.path.abspath(__file__)), "evidence"))
 
 
+def newest_evidence(root):
+    """The run directory to audit.
+
+    `lab3/evidence/` holds one directory per live run. Pointing the audit at it
+    and getting an empty answer ("6/18") was a documentation trap: choose the
+    newest run that actually has the snapshots, and say which one was used.
+    """
+    if os.path.exists(os.path.join(root, "state-pre.json")):
+        return root
+    runs = [os.path.join(root, d) for d in os.listdir(root)
+            if os.path.isdir(os.path.join(root, d))]
+    runs = [r for r in runs if os.path.exists(os.path.join(r, "state-pre.json"))]
+    return max(runs, key=os.path.getmtime) if runs else root
+
+
+EV = newest_evidence(EV)
+
+
 def load(name, default=None):
     try:
         with open(os.path.join(EV, name)) as fh:
