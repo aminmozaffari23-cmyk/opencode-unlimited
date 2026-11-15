@@ -27,12 +27,18 @@ found by the tunnel-mode window of the Phase-4 live matrix.
   now opts a host back in at runtime; `OUC_DISABLE_KILL_SWITCH=1` keeps its
   absolute veto, and `doctor` names which of the two applied.
 
+* **`ouc killswitch on` installed the rules but left `state.json` saying
+  `guard_mode: null`.** The CLI built its `Firewall` without a state handle, so
+  `_record_mode()` no-opped: a live run showed 19 real rules in `iptables` while
+  `status` claimed no guard at all. It now passes the state through.
+
 ### Tests
 
-* **t95** (10 checks) — the guard arms over an install-time default, a real rule
-  reaches the firewall, escalation in tunnel mode takes WARP down, the state and
-  the log record it, the return brings WARP back up and clears the flag, and
-  neither direction prints a traceback.
+* **t95** (15 checks) — the guard arms over an install-time default and records
+  its dialect, a real rule reaches the firewall, escalation in tunnel mode takes
+  WARP down, the state and the log record it, the return brings WARP back up and
+  clears the flag, and a fallback with no usable exit fails loudly *and* leaves
+  WARP's TUN up instead of a host with no tunnel.
 
 ## 2.6.4 — an orphan stops hiding behind a stale pidfile
 

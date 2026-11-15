@@ -2805,6 +2805,22 @@ t95_fallback_takes_the_tunnel_down(){
         "$(jval "$FAKE_WARP_STATE" connected)" "true"
   check "and the flag is cleared" \
         "$(state_of "bool(d.get('warp_tun_down_for_fallback'))")" "False"
+  check "the guard records which dialect it installed" \
+        "$(state_of "d.get('guard_mode')")" "tunnel"
+
+  # A fallback that fails must not leave the host without a tunnel: we are
+  # going back to WARP, so its TUN has to come back up.
+  printf '{"ips":[],"index":0}\n' > "$FAKE_PSIPHON_STATE"
+  rc=0
+  timeout 150 python3 "$ROOT/ouc.py" hop --backend psiphon --wait 60 > "$T/f-hop.out" 2>&1 || rc=$?
+  check "a fallback with no usable exit fails loudly" "$([ "$rc" -ne 0 ] && echo yes)" "yes"
+  check "and WARP's TUN is back up afterwards" \
+        "$(jval "$FAKE_WARP_STATE" connected)" "true"
+  check "the state does not claim WARP is down" \
+        "$(state_of "bool(d.get('warp_tun_down_for_fallback'))")" "False"
+  check "and it says so in plain words" \
+        "$(cat "$T/f-hop.out" "$OUC_STATE_DIR/ouc.log" 2>/dev/null | grep -c "did not take")" "1"
+
   check "no unhandled traceback in either direction" \
         "$(cat "$T"/*.out "$OUC_STATE_DIR/ouc.log" 2>/dev/null | grep -c 'Traceback (most recent call last)')" "0"
   kill "$socks_pid" 2>/dev/null || true

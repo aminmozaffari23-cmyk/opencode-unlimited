@@ -2517,6 +2517,57 @@ def _bridge_socks_for(cfg: Config, backend: str) -> int:
     return cfg.proxy_socks_port
 
 
+def _clear_warp_tun_for_psiphon(cfg: Config, state: "State", log: Log,
+                                warp: "Warp | None" = None) -> bool:
+    """Take WARP's TUN device down so a Psiphon probe measures Psiphon.
+
+    This has to happen *before* the probe, not after it succeeds: with WARP's
+    default route in place the tunnel core's own dial-outs leave through WARP,
+    so every region reports the host's own address and the controller rightly
+    refuses to call any of them a rotation. Measured live: DE, NL and CA all
+    returned the host's WARP IPv6 in one run, and escalation could never
+    succeed in tunnel mode. Returns True if WARP is (now) out of the way.
+    """
+    if cfg.proxy_mode:
+        return False
+    st = state.load()
+    if st.get("warp_tun_down_for_fallback"):
+        return True
+    try:
+        W = warp or Warp(cfg, log)
+        if not W.connected():
+            state.update(warp_tun_down_for_fallback=True)
+            return True
+        W.disconnect()
+    except Exception as exc:
+        log(f"tunnel: could not take WARP down for the fallback ({exc})", "WARN")
+        return False
+    state.update(warp_tun_down_for_fallback=True)
+    log("tunnel: took WARP's TUN down so Psiphon can dial out directly — with "
+        "it up, every exit measures the host's own address and no rotation "
+        "would be real", "WARN")
+    return True
+
+
+def _restore_warp_tun(cfg: Config, state: "State", log: Log,
+                      warp: "Warp | None" = None) -> None:
+    """Bring WARP back up after a fallback attempt that did not take."""
+    if cfg.proxy_mode or not state.load().get("warp_tun_down_for_fallback"):
+        return
+    try:
+        W = warp or Warp(cfg, log)
+        W.connect()
+        for _ in range(max(4, int(cfg.connect_wait / 2))):
+            if W.connected():
+                break
+            time.sleep(2)
+        log("tunnel: WARP is back up — the fallback attempt did not take")
+    except Exception as exc:
+        log(f"tunnel: could not bring WARP back up ({exc})", "WARN")
+        return
+    state.update(warp_tun_down_for_fallback=False)
+
+
 def _activate_backend(cfg: Config, state: "State", log: Log, backend: str,
                       pinner: "Pinner | None" = None,
                       warp: "Warp | None" = None) -> None:
@@ -3176,9 +3227,13 @@ def rotate(cfg: Config, log: Log, state: State, why: str = "",
     pinner = Pinner(cfg, log, state)
 
     if target == BACKEND_PSIPHON:
+        _clear_warp_tun_for_psiphon(cfg, state, log)
         result = _rotate_psiphon(cfg, log, state, why or "rotation")
         if result.get("ok"):
             return result
+        # Psiphon could not carry traffic: WARP is going to, so put its TUN
+        # back before we hand the host back to it.
+        _restore_warp_tun(cfg, state, log)
         # A failed fallback is not the end of the ladder: try WARP once more
         # unless the operator pinned Psiphon.
         if forced != BACKEND_PSIPHON and cfg.backend_mode != BACKEND_PSIPHON:
@@ -3230,11 +3285,15 @@ def rotate(cfg: Config, log: Log, state: State, why: str = "",
     # working exit there is no episode to time out, and a stray timestamp
     # would make `status` claim a fallback that never happened. The rotation
     # sets it itself on success.
+    _clear_warp_tun_for_psiphon(cfg, state, log)
     escalated = _rotate_psiphon(cfg, log, state, why or "rotation")
     if escalated.get("ok"):
         escalated["escalated_from"] = BACKEND_WARP
         escalated["escalation_reason"] = reason
         return escalated
+    # Leaving WARP's TUN down after a failed escalation would be a silent
+    # outage dressed up as a failed rotation.
+    _restore_warp_tun(cfg, state, log)
     log("backend: Psiphon did not produce a working exit either", "ERROR")
     return result
 
@@ -4258,7 +4317,12 @@ def cmd_rescue(args, cfg: Config, log: Log) -> int:
 
 
 def cmd_killswitch(args, cfg: Config, log: Log) -> int:
-    fw = Firewall(cfg, log)
+    # With a state handle the guard records which dialect it installed, so an
+    # unprivileged `status` / `doctor` can say "kill-switch: tunnel" instead of
+    # guessing from the rule list. Without one the install still took effect but
+    # left state.json claiming guard_mode=null — which is exactly what a live
+    # run reported right after a successful `killswitch on`.
+    fw = Firewall(cfg, log, State(cfg))
     if args.action == "on":
         ok = fw.install()
         print("installed" if ok else "could not install (see ouc doctor)")
