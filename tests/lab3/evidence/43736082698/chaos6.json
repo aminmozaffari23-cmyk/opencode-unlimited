@@ -1,0 +1,172 @@
+{
+  "commands": [
+    {
+      "cmd": "status",
+      "rc": 1,
+      "traceback": false
+    },
+    {
+      "cmd": "config",
+      "rc": 0,
+      "traceback": false
+    },
+    {
+      "cmd": "doctor",
+      "rc": 1,
+      "traceback": false
+    },
+    {
+      "cmd": "pin status",
+      "rc": 0,
+      "traceback": false
+    },
+    {
+      "cmd": "status --json",
+      "rc": 0,
+      "traceback": false
+    },
+    {
+      "cmd": "hop --backend nonsense",
+      "rc": 2,
+      "traceback": false
+    },
+    {
+      "cmd": "doctor",
+      "rc": 1,
+      "traceback": false
+    },
+    {
+      "cmd": "status",
+      "rc": 1,
+      "traceback": false
+    },
+    {
+      "cmd": "status",
+      "rc": 1,
+      "traceback": false
+    },
+    {
+      "cmd": "config",
+      "rc": 0,
+      "traceback": false
+    },
+    {
+      "cmd": "doctor",
+      "rc": 1,
+      "traceback": false
+    },
+    {
+      "cmd": "pin status",
+      "rc": 0,
+      "traceback": false
+    },
+    {
+      "cmd": "status --json",
+      "rc": 0,
+      "traceback": false
+    },
+    {
+      "cmd": "hop --backend nonsense",
+      "rc": 2,
+      "traceback": false
+    },
+    {
+      "cmd": "doctor",
+      "rc": 1,
+      "traceback": false
+    },
+    {
+      "cmd": "status",
+      "rc": 1,
+      "traceback": false
+    },
+    {
+      "cmd": "status",
+      "rc": 1,
+      "traceback": false
+    },
+    {
+      "cmd": "config",
+      "rc": 0,
+      "traceback": false
+    },
+    {
+      "cmd": "doctor",
+      "rc": 1,
+      "traceback": false
+    },
+    {
+      "cmd": "pin status",
+      "rc": 0,
+      "traceback": false
+    },
+    {
+      "cmd": "status --json",
+      "rc": 0,
+      "traceback": false
+    },
+    {
+      "cmd": "hop --backend nonsense",
+      "rc": 2,
+      "traceback": false
+    },
+    {
+      "cmd": "doctor",
+      "rc": 1,
+      "traceback": false
+    },
+    {
+      "cmd": "status",
+      "rc": 1,
+      "traceback": false
+    },
+    {
+      "cmd": "status",
+      "rc": 1,
+      "traceback": false
+    },
+    {
+      "cmd": "config",
+      "rc": 0,
+      "traceback": false
+    },
+    {
+      "cmd": "doctor",
+      "rc": 1,
+      "traceback": false
+    },
+    {
+      "cmd": "pin status",
+      "rc": 0,
+      "traceback": false
+    },
+    {
+      "cmd": "status --json",
+      "rc": 0,
+      "traceback": false
+    },
+    {
+      "cmd": "hop --backend nonsense",
+      "rc": 2,
+      "traceback": false
+    },
+    {
+      "cmd": "doctor",
+      "rc": 1,
+      "traceback": false
+    },
+    {
+      "cmd": "status",
+      "rc": 0,
+      "traceback": false
+    }
+  ],
+  "hop_out": "  old block: ?\n  new block: 198.199.94.56/32\n  backend: psiphon, region US\n  \u2713 rotated in 180.7s \u2014 resend your message\n",
+  "hop_rc": 0,
+  "count": 32,
+  "tracebacks": 0,
+  "refusals": 4,
+  "state_valid": true,
+  "config_valid": true,
+  "tunnels": "2"
+}

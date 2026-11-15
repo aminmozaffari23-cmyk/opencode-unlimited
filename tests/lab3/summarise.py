@@ -9,7 +9,7 @@ import json
 import pathlib
 import sys
 
-EV = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "lab3/evidence")
+EV = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "tests/lab3/evidence")
 def verdict(data):
     """Say what the file records, not whether I like it.
 

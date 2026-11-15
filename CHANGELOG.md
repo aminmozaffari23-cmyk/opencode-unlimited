@@ -119,6 +119,62 @@ found by the tunnel-mode window of the Phase-4 live matrix.
   and fully re-armed when WARP takes over again, and a fallback with no usable
   exit fails loudly *and* leaves WARP's TUN up instead of a host with no tunnel.
 
+### Packaging: the installer wires up both engines
+
+A real user running `install.sh` now gets the same dual-engine experience the
+live matrix proved, instead of having to install `psiphon-tunnel-core` by hand.
+
+* **`install.sh --with-psiphon`** (the default) downloads
+  `psiphon-tunnel-core` from Psiphon-Labs, verifies it is a real x86_64 ELF
+  binary, and places it at `/usr/local/bin/psiphon-tunnel-core` (`0755`).
+  `--without-psiphon` opts out; `OUC_PSIPHON_BIN_SRC` copies an
+  operator-supplied binary instead of downloading (air-gapped installs).
+  Upstream publishes x86_64 only, so on `aarch64` the fallback is reported
+  unavailable rather than installing a wrong-arch binary.
+* The installer creates `/var/lib/opencode-unlimited/psiphon/` and its `data/`
+  subdirectory with the v2.3.1 ownership rules (`SUDO_USER`, lock files `0666`),
+  so a non-root `ouc hop --backend psiphon` never hits `PermissionError`.
+* **`ouc doctor`** now checks the Psiphon engine in both tunnel and proxy mode:
+  binary installed and executable, bootstrap config present and well-formed,
+  with the exact fix command when it is missing.
+* **Uninstall** stops any running `psiphon-tunnel-core`, removes the binary
+  only if the installer placed it (an operator-supplied binary is left alone),
+  and cleans `/var/lib/opencode-unlimited/psiphon/`. `install.sh --uninstall`
+  delegates to `uninstall.sh`.
+* **Repo hygiene:** phase reports moved to `docs/reports/`, the live harness
+  moved to `tests/lab3/` (evidence committed under `tests/lab3/evidence/`), and
+  every path reference updated. `tests/helpers/check_links.py` verifies no
+  relative markdown link in the flagship docs is dead.
+
+### Tests
+
+* **t98** — the installer lifecycle end to end, offline: a stub binary is placed
+  at the canonical path with `+x`, the Psiphon state dirs are created with
+  `SUDO_USER` ownership, `ouc doctor` reports the fallback ready, and uninstall
+  removes the binary and state cleanly.
+* **t99** — every relative markdown link in `README.md`, `BEGINNER_GUIDE.md`,
+  `INSTALL.md`, `UNINSTALL.md`, `SECURITY.md` and `CHANGELOG.md` resolves to a
+  real file in the tree.
+
+### Chaos / Monkey resilience (t80–t98)
+
+Six chaos scenarios plus the resilience regressions, all offline and all
+asserting the same invariant: no unhandled traceback, no orphan process, no
+deadlock, no crash.
+
+* **t83** corrupt `state.json`, a recycled PID and a stale `rotation.lock`
+  self-heal with zero tracebacks.
+* **t84** SIGKILL the tunnel and the bridge; both respawn and verify.
+* **t85** a squatter on `9060`/`8080` gets a typed refusal, never a blackhole.
+* **t86** five parallel `ouc hop` serialise on the flock: one tunnel, one
+  bridge, the rest refused.
+* **t87** blacklist saturation skips burned exits and obeys
+  `OUC_ROTATION_TIMEOUT`.
+* **t88** CLI monkey fuzzing leaves state byte-intact with no crashes.
+* **t80–t82, t89–t97** cover notice dialects, write-only daemon stdin, tunnel
+  outliving its command, the tunnel→proxy guard transition, auto-resume,
+  cold bootstrap, orphan reaping, and stop reaping in-flight rotations.
+
 ## 2.6.4 — an orphan stops hiding behind a stale pidfile
 
 ### Fixed
@@ -708,7 +764,7 @@ timeline in `TEST_RESULTS.md`.
 
 - `t23_blacklist_skips_spent_block` — deterministic offline test for the new
   behaviour (seeds a spent block, asserts the rotation skips it).
-- `REAL-OPENCODE-TEST.md` — the real opencode 1.19.5 run, with verdict and limits.
+- `docs/reports/REAL-OPENCODE-TEST.md` — the real opencode 1.19.5 run, with verdict and limits.
 - `tests/real-limit-test.sh` — drives real opencode traffic to the real limit
   and reports detection latency, rotation time and the resulting `/64`, all
   taken from the two logs.

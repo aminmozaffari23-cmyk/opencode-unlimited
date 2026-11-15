@@ -1,0 +1,33 @@
+{
+  "clean_start": {
+    "orphans": "0",
+    "waited_s": 0.0
+  },
+  "order": [
+    "NL",
+    "US",
+    "DE"
+  ],
+  "burned": [
+    "45.56.106.241/32",
+    "194.233.168.134/32"
+  ],
+  "blacklist_now": [
+    "2a09:bac1:76a0:8628",
+    "45.56.106.241/32",
+    "194.233.168.134/32"
+  ],
+  "rotation": {
+    "rc": 0,
+    "seconds": 12.7,
+    "state_after": {
+      "hops": 5,
+      "current": "172.104.238.175",
+      "psiphon_region_index": 2
+    },
+    "tail": "  old block: 194.233.168.134/32\n  new block: 172.104.238.175/32\n  backend: psiphon, region DE\n  \u2713 rotated in 12.52s \u2014 resend your message\n"
+  },
+  "skipped": false,
+  "bounded": true,
+  "honoured_budget": true
+}

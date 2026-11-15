@@ -12,4 +12,5 @@ supervisor.lock
 .ruff_cache/
 
 # live-run artifacts must never dirty the tree under test
-lab3/evidence/
+# (the audited 43736082698 run is force-added and tracked; new runs are ignored)
+tests/lab3/evidence/

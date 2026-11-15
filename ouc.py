@@ -368,6 +368,10 @@ class Config:
         self.psiphon_bin = os.environ.get("OUC_PSIPHON_BIN") or which(
             "psiphon-tunnel-core", "/usr/local/bin/psiphon-tunnel-core",
             "/opt/psiphon/psiphon-tunnel-core")
+        # True only when install.sh placed the binary: uninstall may remove it.
+        # An operator-supplied binary (OUC_PSIPHON_BIN_SRC) is never deleted.
+        self.psiphon_installed_by_ouc = bool(
+            disk.get("psiphon_installed_by_ouc", False))
         self.psiphon_socks_port = env_int(
             "OUC_PSIPHON_SOCKS_PORT", int(disk.get("psiphon_socks_port", 9060)))
         self.psiphon_http_port = env_int(
@@ -2100,6 +2104,35 @@ class Psiphon:
         if not os.access(path, os.X_OK):
             return False, f"psiphon binary is not executable: {path}"
         return True, path
+
+    def config_valid(self) -> tuple:
+        """Is the on-disk bootstrap config present and well-formed?
+
+        The config is (re)written by write_config() on every start, so a
+        missing file is not an error — it is generated on demand. A present
+        but unparsable or key-missing file is: the tunnel would fail to start
+        with a provider-looking error. doctor reports it so the cause is
+        obvious. Returns (ok, detail); ok is True when the config is absent
+        (will be generated) or valid.
+        """
+        path = self.cfg.psiphon_config
+        if not os.path.exists(path):
+            return True, "not yet generated (written on first start)"
+        try:
+            with open(path) as fh:
+                data = json.load(fh)
+        except (OSError, ValueError) as exc:
+            return False, f"unparsable: {exc}"
+        if not isinstance(data, dict):
+            return False, "not a JSON object"
+        required = ("PropagationChannelId", "SponsorId",
+                    "RemoteServerListSignaturePublicKey", "RemoteServerListURLs",
+                    "EgressRegion", "DisableReplay", "LocalSocksProxyPort",
+                    "DataRootDirectory")
+        missing = [k for k in required if k not in data]
+        if missing:
+            return False, f"missing keys: {', '.join(missing)}"
+        return True, f"valid ({path})"
 
     def pid(self) -> int:
         pid = read_pidfile(self.cfg.psiphon_pid_file)
@@ -4583,11 +4616,17 @@ def doctor_proxy(cfg: Config, out: list[str]) -> None:
                f" / escalate at {rep['warp']['fallback_threshold']}")
     state_line = "available" if ps["available"] else f"UNAVAILABLE ({ps['problem']})"
     out.append(f"  psiphon binary       : {state_line}")
+    _ps = Psiphon(cfg, log=None)
+    _cfg_ok, _cfg_detail = _ps.config_valid()
+    out.append(f"  psiphon bootstrap    : "
+               f"{'valid' if _cfg_ok else 'INVALID — ' + _cfg_detail}")
     out.append(f"  psiphon tunnel       : "
                f"{('running pid ' + str(ps['pid'])) if ps['running'] else 'not running'}"
                f", socks {ps['socks']} {'open' if ps['socks_open'] else 'CLOSED'}")
     out.append(f"  psiphon next region  : {ps['next_region']} "
                f"(index {ps['region_index']} of {len(ps['regions'])})")
+    if not ps["available"]:
+        out.append("  fix                  : sudo bash install.sh --with-psiphon")
 
 
 def backend_report(cfg: Config, state: "State | None" = None) -> dict:
@@ -4675,6 +4714,23 @@ def cmd_doctor(args, cfg: Config, log: Log) -> int:
           f"   max {cfg.resume_max} attempt(s), budget {cfg.resume_budget}s")
     bad = [b for b in state.get("blacklist", []) if not norm64(b)]
     print(f"  {ok(not bad)} blacklist hygiene (no empty/invalid blocks)")
+    # psiphon fallback engine: installed, executable, bootstrap config valid.
+    # This runs in both tunnel and proxy mode — the fallback must be ready
+    # before it is needed, not discovered missing mid-escalation.
+    ps = Psiphon(cfg, log)
+    ps_ok, ps_detail = ps.available()
+    ps_cfg_ok, ps_cfg_detail = ps.config_valid()
+    print(f"  {ok(ps_ok and ps_cfg_ok)} psiphon fallback: "
+          + (f"ready ({ps_detail})" if ps_ok else f"UNAVAILABLE ({ps_detail})")
+          + ("" if ps_cfg_ok else f" — bootstrap config {ps_cfg_detail}"))
+    if not ps_ok:
+        problems.append(
+            "psiphon-tunnel-core not installed: run "
+            "'sudo bash install.sh --with-psiphon' (or set OUC_PSIPHON_BIN)")
+    elif not ps_cfg_ok:
+        problems.append(
+            f"psiphon bootstrap config invalid ({ps_cfg_detail}): "
+            "delete it and run 'ouc hop --backend psiphon' to regenerate")
     # advertising check: this build must never plant agent rules
     planted = os.path.join(cfg.target_home, ".opencode/AGENTS.md")
     if os.path.exists(planted):
@@ -4814,6 +4870,22 @@ def cmd_uninstall(args, cfg: Config, log: Log) -> int:
     # without scanning /proc.
     print("  stopping proxy bridge...")
     Bridge(cfg, log).stop()
+
+    # The Psiphon fallback tunnel also outlives the supervisor. Stop it here,
+    # while psiphon.pid still exists, and remove the binary if (and only if)
+    # the installer put it there — an operator-supplied binary is left alone.
+    print("  stopping psiphon fallback tunnel...")
+    Psiphon(cfg, log).stop()
+    if cfg.psiphon_installed_by_ouc:
+        for _bin in (cfg.psiphon_bin,
+                     "/usr/local/bin/psiphon-tunnel-core",
+                     "/opt/psiphon/psiphon-tunnel-core"):
+            if _bin and os.path.isfile(_bin):
+                try:
+                    os.unlink(_bin)
+                    print(f"    removed {_bin}")
+                except OSError:
+                    pass
 
     print("  removing systemd units...")
     if systemd_available():

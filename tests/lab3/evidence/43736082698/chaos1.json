@@ -1,0 +1,51 @@
+{
+  "escalation": [
+    {
+      "try_index": 1,
+      "rc": 0,
+      "backend": "psiphon",
+      "region_index": 0,
+      "tail": "  old block: 172.235.189.143/32\n  new block: 64.227.17.240/32\n  backend: psiphon, region US\n  \u2713 rotated in 20.28s \u2014 resend your message\n"
+    }
+  ],
+  "before": {
+    "psiphon": "9874 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices",
+    "bridge": "9764 /usr/bin/python3 /home/runner/work/opencode-unlimited/opencode-unlimited/ouc.py bridge --listen 127.0.0.1:8080 --dynamic",
+    "egress": "64.227.17.240",
+    "supervisor": {
+      "alive": true,
+      "pid": 9761,
+      "reason": "ok",
+      "heartbeat_age_s": 4
+    }
+  },
+  "after_kill": {
+    "psiphon": "1",
+    "bridge": true
+  },
+  "supervisor_alive": true,
+  "supervisor_pid": 9761,
+  "recovered": {
+    "both_ports": true,
+    "psiphon_count": "1",
+    "bridge_count": "1",
+    "egress": "192.241.225.72",
+    "supervisor": {
+      "alive": true,
+      "pid": 9761,
+      "reason": "ok",
+      "heartbeat_age_s": 1
+    },
+    "verify": {
+      "ran": true,
+      "ok": true,
+      "walled": false,
+      "detail": "opencode answered on the current block",
+      "failure_class": "",
+      "rc": 0,
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "ipv6_egress": "192.241.225.72"
+    },
+    "log": "2026-11-15T16:36:31 INFO  psiphon: started pid 5631 region=DE (DisableReplay=true, socks 9060)\n2026-11-15T16:36:42 INFO  rotation done in 11.67s via psiphon@DE (fallback backend): 164.92.178.241/32 -> 167.99.133.18/32 (verified with a real request)\n2026-11-15T16:36:42 INFO  auto-resume: continuing the last session (pid 5712)\n2026-11-15T16:51:48 INFO  supervisor stopping \u2014 removing kill-switch so nothing is stranded\n2026-11-15T16:51:53 INFO  supervisor up (pid 9761, mode portable, warp proxy, kill-switch disabled at install time)\n2026-11-15T16:51:53 INFO  bridge up on http://127.0.0.1:8080 -> socks5://127.0.0.1:40000\n2026-11-15T16:51:53 INFO  proxy mode: opencode must use HTTP_PROXY=http://127.0.0.1:8080\n2026-11-15T16:51:54 WARN  fallback: the Psiphon tunnel is gone \u2014 restarting it\n2026-11-15T16:51:54 INFO  psiphon: started pid 9768 region=NL (DisableReplay=true, socks 9060)\n2026-11-15T16:51:58 INFO  fallback: tunnel restored on NL\n2026-11-15T16:52:32 INFO  bridge up on http://127.0.0.1:8080 -> socks5://127.0.0.1:40000\n2026-11-15T16:52:32 WARN  fallback: the Psiphon tunnel is gone \u2014 restarting it\n2026-11-15T16:52:32 INFO  psiphon: started pid 10073 region=US (DisableReplay=true, socks 9060)\n2026-11-15T16:52:35 INFO  fallback: tunnel restored on US\n"
+  }
+}

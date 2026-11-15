@@ -5,8 +5,8 @@ Every value is read from the snapshot and phase JSONs the driver wrote on the
 disposable host; nothing is typed in by hand, and a check whose evidence is
 missing reports FAIL with the reason rather than guessing.
 
-Usage: `python3 lab3/audit.py [evidence-dir]`
-(default: lab3/evidence, override: OUC_EVIDENCE)
+Usage: `python3 tests/lab3/audit.py [evidence-dir]`
+(default: tests/lab3/evidence, override: OUC_EVIDENCE)
 
 The 18 core checks cover the host baselines (1-12), code identity (13-14),
 Gap #1 (15-16) and Gap #2 (17-18). The §3 chaos runs follow as six extra
@@ -25,7 +25,7 @@ EV = (os.environ.get("OUC_EVIDENCE")
 def newest_evidence(root):
     """The run directory to audit.
 
-    `lab3/evidence/` holds one directory per live run. Pointing the audit at it
+    `tests/lab3/evidence/` holds one directory per live run. Pointing the audit at it
     and getting an empty answer ("6/18") was a documentation trap: choose the
     newest run that actually has the snapshots, and say which one was used.
     """

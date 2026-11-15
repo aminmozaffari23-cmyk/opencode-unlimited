@@ -1,15 +1,12 @@
-# SECURITY.md — opencode-unlimited
+# SECURITY.md — opencode-unlimited 2.6.5
 
-> Current v2 qualification was **proxy mode only**, with no TUN/firewall/routes/
-> hosts changes in the product Codespace. Read [BEGINNER_GUIDE.md](BEGINNER_GUIDE.md)
-> for the disclosed harness incident, isolation/lock corrections, and measured
-> limits. The agent guardrails are not a security sandbox; proxy environment
-> variables do not guarantee that every arbitrary tool uses the proxy.
->
-> The tunnel/firewall material below is historical design documentation, not
-> evidence that tunnel mode or ten-hour genuine quota recovery was qualified
-> by this branch. No release or permanent installation was performed.
-
+> Dual-engine build: WARP (primary) + Psiphon (automatic fallback). Both
+> tunnel mode and proxy mode are qualified — see `TEST_RESULTS.md` and the
+> live evidence in `tests/lab3/evidence/43736082698/` (18/18 core + 6/6 chaos
+> checks on a fresh root runner). Read [BEGINNER_GUIDE.md](BEGINNER_GUIDE.md)
+> for the plain-English walkthrough. The agent guardrails are not a security
+> sandbox; proxy environment variables do not guarantee that every arbitrary
+> tool uses the proxy.
 
 This file states exactly what this tool does to your machine, what it can
 expose, and how it fails. It is written so you can decide whether the
@@ -52,7 +49,13 @@ entirely (`OUC_DISABLE_KILL_SWITCH=1`): the tool then never touches
 
 ## 2. What the leak guard actually is
 
-Two chains, one jump each. IPv4:
+The guard is a single chain, `OUC_LEAKGUARD`, jumped to from `OUTPUT`, in
+both `iptables` and `ip6tables`. It has **two dialects**, and the active one
+is recorded in `state.json` as `guard_mode`:
+
+### 2.1 `guard_mode=tunnel` (WARP is the active engine)
+
+Traffic may leave only through WARP's TUN device (`CloudflareWARP`). IPv4:
 
 ```
 iptables -N OUC_LEAKGUARD
@@ -71,23 +74,49 @@ iptables -I OUTPUT -j OUC_LEAKGUARD
 IPv6 is the same idea with `fe80::/10` (link-local) and `2606:4700::/32`
 (Cloudflare) allowed, everything else dropped.
 
-Two honest consequences of that allow-list:
+### 2.2 `guard_mode=proxy` (Psiphon is the active engine)
 
-- Traffic to Cloudflare's WARP endpoints is allowed **outside** the tunnel.
-  It must be — otherwise the tunnel could never be re-established. If you
-  point other software at those exact ranges, it would bypass the guard.
+When the tool escalates to Psiphon, WARP's TUN device is brought down
+(`warp-cli mode proxy` — the TUN goes away but warp-svc's resolver stays),
+so the tunnel dialect would block Psiphon's own relays. The guard therefore
+switches dialect **before** the TUN drops:
+
+- egress is scoped to the **local bridge** (`127.0.0.1`, the HTTP↔SOCKS5
+  bridge on port 8080) and to Psiphon's relay traffic, instead of to
+  `CloudflareWARP`;
+- the `/etc/hosts` IPv6 pin for `opencode.ai` is **lifted**, because Psiphon
+  is an IPv4 engine and the pin would force IPv6 that cannot reach it;
+- `state.json` records `guard_mode: "proxy"` and `pin_lifted_for_backend`,
+  so `ouc status` shows exactly which dialect is armed and why.
+
+When WARP recovers, the handoff reverses: the tunnel dialect is re-armed and
+the IPv6 pin is re-installed. The transition is atomic from the guard's point
+of view — there is no moment where both dialects are absent.
+
+### 2.3 Honest consequences of the allow-list
+
+- Traffic to Cloudflare's WARP endpoints is allowed **outside** the tunnel
+  (in tunnel dialect). It must be — otherwise the tunnel could never be
+  re-established. If you point other software at those exact ranges, it would
+  bypass the guard.
 - Link-local and RFC1918 traffic is allowed, so LAN discovery keeps working.
+- In proxy dialect, only loopback (the bridge) and Psiphon's relays are
+  allowed out. Direct egress to the internet is dropped, so a dead Psiphon
+  cannot silently fall back to your real IP.
 
 Nothing is inspected, redirected, modified, NATed or logged, and no other
 chain or table is touched. `ouc killswitch status`,
 `sudo iptables -S OUTPUT | grep OUC` and `ouc status` show exactly what is
-installed.
+installed and which dialect is armed.
 
 The chain is removed by: `ouc stop`, `ouc rescue`, `ouc uninstall`, the
 systemd `ExecStopPost` hook (so a crashed service cannot leave you
 firewalled), the supervisor's `SIGTERM`/`SIGINT` handler, and
 `uninstall.sh`'s final sweep. `t10`, `t11`, `t15`, `t21`, `t32` and `t34`
-all assert this from different angles.
+all assert this from different angles. `ouc rescue` always restores the
+exact baseline firewall and `/etc/hosts` state (verified byte-for-byte in
+the live evidence: `hosts_matches_baseline`, `iptables_matches`,
+`ip6tables_matches`).
 
 ## 3. Privileges
 
@@ -145,19 +174,29 @@ Explicitly, verified by tests:
   of itself;
 - never deletes your WARP registration on uninstall (you may use WARP for
   other things);
+- never deletes a `psiphon-tunnel-core` binary it did not install (an
+  operator-supplied binary is left in place on uninstall);
 - never sends telemetry. The only outbound connections are `warp-cli` to
-  Cloudflare and the egress probe (`https://api64.ipify.org` by default,
-  changeable with `OUC_PROBE_URL` or replaceable by your own command with
-  `OUC_PROBE_CMD`).
+  Cloudflare, `psiphon-tunnel-core` to Psiphon's relays, and the egress probe
+  (`https://api64.ipify.org` by default, changeable with `OUC_PROBE_URL` or
+  replaceable by your own command with `OUC_PROBE_CMD`).
 
 ## 6. Data written
 
 | File | Content | Mode |
 |---|---|---|
-| `state.json` | offsets, hashes, hop counter, blacklisted `/64`s, last error | `0644` |
+| `state.json` | offsets, hashes, hop counter, blacklisted blocks (`/64` + `/32`), last error, active backend, guard dialect | `0644` |
 | `supervisor.log`, `ouc.log` | operational log, rotated, no payloads or prompts | `0644` |
 | `supervisor.pid`, `heartbeat` | pid + timestamp | `0644` |
 | `hop.request` / `hop.result` | request id, old/new block, timing | `0644` |
+| `psiphon/psiphon.config` | Psiphon bootstrap config (public values only, no credentials) | `0644` |
+| `psiphon/psiphon.pid`, `psiphon/psiphon.log` | fallback tunnel pid + log | `0644` |
+| `psiphon/data/` | Psiphon's datastore (server list cache) | `0755` |
+
+Lock files (`state.lock`, `rotation.lock`, `supervisor.lock`) are mode `0666`
+so both the root supervisor and the unprivileged user can flock them. The
+Psiphon config contains only public bootstrap values (propagation channel,
+sponsor id, server-list URLs and keys) — no account, no token, no secret.
 
 No prompts, no completions, no file contents, no tokens, no account
 credentials are ever logged. The only thing read from opencode is the tail
@@ -168,10 +207,13 @@ of its own log, and only to look for the two quota strings.
 | Threat | Covered? |
 |---|---|
 | WARP drops, traffic leaks out of the real interface | Yes, by the leak guard (except during repairs — see §1) |
+| WARP is walled and the machine loses internet | Yes — the supervisor escalates to Psiphon automatically (dual-engine) |
+| Psiphon dies and traffic falls back to the real IP | No — in proxy dialect only the bridge and Psiphon's relays are allowed out; direct egress is dropped |
 | Rotation fails and the machine loses internet | Yes — that is the bug this rewrite exists to fix |
 | A stale firewall rule survives a crash | Yes — `ExecStopPost`, `SIGTERM` handler, uninstall sweep |
 | A local user escalates to root through this tool | Yes — no sudoers, no user-writable root script |
 | Cloudflare links your rotations to one device | No. New registrations can still be correlated by IP, timing or account. This is not an anonymity tool, and rotating does not hide you from Cloudflare. |
+| Psiphon links your exits to one operator | No. Psiphon is a censorship-circumvention tool, not an anonymity guarantee; your exits can be correlated by Psiphon and the relay operators. |
 | Your ISP or a local observer sees the repair window | No — see §1. |
 | Someone reads your `~/.local/share/opencode` logs | Out of scope; those are opencode's own files. |
 

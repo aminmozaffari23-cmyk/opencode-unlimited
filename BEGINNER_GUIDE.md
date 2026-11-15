@@ -1,8 +1,17 @@
 # OpenCode + ouc: the current beginner guide
 
-**Tested native CLI:** OpenCode 2.2.7 · **Controller:** unreleased 2.4.2 · **Tested mode:** WARP proxy mode.
+**Controller:** v2.6.5 · **Engines:** WARP (primary) + Psiphon (automatic fallback) · **Modes:** tunnel mode and proxy mode.
 
 This guide was updated **after the executed follow-up tests, complete MiniMax task, installed Codespace update, and installed smoke tests**. For the detailed chronology, qualifications, and unsuccessful attempts, read the [English execution report](docs/reports/transport-resilience-follow-up.md). The [previous guide](docs/history/opencode-v2-first-qualification-guide.md) is preserved unchanged as historical evidence.
+
+> **The one new idea in v2.6.5, in plain English.** The tool has *two* engines
+> now. **WARP** is the first choice — it gives you a fresh address by rotating
+> to a new IPv6 block. But sometimes WARP itself is blocked (the provider
+> refuses every WARP address). When that happens, the tool automatically
+> switches to **Psiphon**, a completely separate engine, and keeps your
+> session going. You do not have to do anything: it notices WARP is failing,
+> hands over to Psiphon, and hands back when WARP recovers. `ouc status`
+> shows which engine is active right now.
 
 ## 1. The simple daily command
 
@@ -28,7 +37,9 @@ Other shells and non-interactive scripts do not necessarily load this Bash funct
 
 - **OpenCode** talks to a model and uses development tools.
 - **ouc** supervises managed calls, records task progress, and coordinates network recovery.
-- **WARP** supplies the proxy connection. The HTTP bridge adapts OpenCode's HTTP-proxy support to WARP's SOCKS proxy.
+- **WARP** is the primary engine. It supplies the connection and can rotate to a fresh IPv6 block when your quota runs out.
+- **Psiphon** is the fallback engine. If WARP is blocked, ouc switches to Psiphon automatically and keeps the same session alive. You can also force it with `ouc hop --backend psiphon`.
+- The **HTTP bridge** adapts OpenCode's HTTP-proxy support to whichever engine's SOCKS proxy is active (WARP on 40000, Psiphon on 9060), so OpenCode always talks to one local address.
 - A **supervisor** is a background process keeping runtime components healthy.
 - A **session** is a particular model conversation. A model name, project directory, and session ID are different pieces of context.
 - A **journal** is a durable notebook of steps, outcomes, and budgets. A **lock** prevents competing controllers from recovering the same connection simultaneously.
@@ -51,24 +62,25 @@ Proxy settings are applied to the OpenCode subprocess tree only, not globally to
 
 ## 3. Check the installed build
 
-The older installation and the new controller both report `2.4.2`; use the file hash to distinguish them:
-
 ```bash
-ouc --version
-ouc status
-ouc doctor
+ouc --version     # → 2.6.5
+ouc status        # which engine is active, is the supervisor alive
+ouc doctor        # checks BOTH engines: WARP and Psiphon
 sha256sum /usr/local/lib/opencode-unlimited/ouc.py
 ```
 
-The tested installed SHA-256 is:
+`ouc doctor` prints a line for each engine. You want to see:
 
 ```text
-e4b1b802a2697b7cc26f985fc1549549efbc24d40523f2ff9b52c101a1f0bfe2
+  ✓ psiphon fallback: ready (/usr/local/bin/psiphon-tunnel-core)
 ```
 
-Implementation commit: `89ffea83531d68ed309439037d85890b62abaa34`, branch `feat/transport-retry-diagnostics`. This is an approved controlled Codespace update, **not** a new public release or a main-branch merge.
-
-`status` and `doctor` check runtime/connection conditions; they do not establish that every free model is currently available. A model listing, changed IP, successful curl, or successful different model is not proof that your chosen model can complete its task.
+If Psiphon is missing it tells you the exact fix
+(`sudo bash install.sh --with-psiphon`). `status` and `doctor` check
+runtime/connection conditions; they do not establish that every free model is
+currently available. A model listing, changed IP, successful curl, or
+successful different model is not proof that your chosen model can complete
+its task.
 
 An explicit model verification sends a real small provider request:
 
@@ -132,6 +144,26 @@ A diagnostic uses temporary HOME/XDG storage, an empty directory, a fixed prompt
 The diagnostic model defaults to the existing test-model setting—Flint in this installation—and selects a distinct alternative if that would be the primary itself. It never changes the task model. The selected secondary's availability is not guaranteed; live secondary checks during qualification returned typed quota errors, which are retained as failures.
 
 Invocation-only tuning is available through `OUC_TRANSPORT_RETRIES`, `OUC_TRANSPORT_RETRY_DELAY`, `OUC_TRANSPORT_DIAGNOSTIC_MODEL`, and `OUC_TRANSPORT_DIAGNOSTIC_TIMEOUT`. Defaults are three retries, a two-second base retry delay, and a 25-second diagnostic timeout. Do not globally export qualification environments or copy a test profile into your everyday shell.
+
+## 6b. The fallback ladder: when WARP itself is blocked
+
+Rotating WARP blocks only helps if WARP is reachable. If the provider blocks
+*every* WARP address, no amount of rotating will help. That is when the
+second engine takes over:
+
+1. The supervisor counts consecutive WARP failures. At **5** (the default),
+   it decides WARP is walled, not just unlucky.
+2. It **escalates to Psiphon**: it brings WARP's tunnel down, switches the
+   firewall guard to its proxy dialect, starts Psiphon, and points the bridge
+   at Psiphon's SOCKS port. Your session is not dropped.
+3. It verifies Psiphon with a real request before trusting it.
+4. When WARP recovers, it hands back automatically and re-arms the tunnel
+   guard and the IPv6 pin.
+
+You can watch this happen in `ouc status` (it shows the active engine) and in
+the log (`tail -f /var/lib/opencode-unlimited/ouc.log`). To force Psiphon
+right now, run `ouc hop --backend psiphon`. To check both engines are ready,
+run `ouc doctor`.
 
 ## 7. Different failures mean different actions
 

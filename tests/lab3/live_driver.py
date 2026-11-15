@@ -30,7 +30,7 @@ import time
 # (where the repository is checked out somewhere else and there is no
 # /workspace). Nothing else in the file may assume a host layout.
 REPO = pathlib.Path(os.environ.get("OUC_LIVE_REPO", "/workspaces/opencode-unlimited"))
-EV = pathlib.Path(os.environ.get("OUC_LIVE_EV", "/workspace/lab3/evidence"))
+EV = pathlib.Path(os.environ.get("OUC_LIVE_EV", "/workspace/tests/lab3/evidence"))
 EV.mkdir(parents=True, exist_ok=True)
 OC = os.environ.get("OUC_OC_BIN") or os.path.expanduser("~/.opencode/bin/opencode")
 MODEL = "opencode/deepseek-v4.1-flash-free"

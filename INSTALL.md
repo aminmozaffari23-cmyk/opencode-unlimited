@@ -1,4 +1,4 @@
-# INSTALL.md — opencode-unlimited 2.4.1
+# INSTALL.md — opencode-unlimited 2.6.5
 
 A step-by-step install guide that assumes nothing. Every command in the
 Linux and Codespaces sections was **run for real** during the test session
@@ -6,21 +6,25 @@ recorded in `TEST_RESULTS.md` (Debian 13 + GitHub Codespaces, opencode 1.19.5).
 The macOS and Windows sections are the same tool driven through a Linux
 environment; they are marked *not tested* where that is the honest answer.
 
+Since v2.5.0 the tool is **dual-engine**: WARP is the primary engine, and
+Psiphon (`psiphon-tunnel-core`) is the automatic fallback when WARP is walled.
+The installer wires up both, so a fresh clone gets the full experience.
+
 ---
 
 ## 0. What you received
 
 ```
-opencode-unlimited-2.3.1.zip
-├── ouc.py               the whole tool (one Python file, ~2900 lines)
-├── install.sh           installer (root)
-├── uninstall.sh         remover
+opencode-unlimited-2.6.5.zip
+├── ouc.py               the whole tool (one Python file, stdlib only)
+├── install.sh           installer (root) — installs WARP + Psiphon engines
+├── uninstall.sh         remover (also: install.sh --uninstall, ouc uninstall)
 ├── opencode-warp        tiny wrapper: runs opencode through the pinned tunnel
 ├── README.md            what it does + why each design decision was made
 ├── INSTALL.md           ← you are here
-├── UNINSTALL.md         how to remove it cleanly
+├── UNINSTALL.md         how to remove it cleanly (both engines)
 ├── SECURITY.md          what it touches, what it never touches
-├── CHANGELOG.md         2.0.0 → 2.3.1 history
+├── CHANGELOG.md         2.0.0 → 2.6.5 history
 ├── TEST_RESULTS.md      every test, every log, including the real wall
 └── tests/               the test suite (safe offline mode included)
 ```
@@ -47,6 +51,9 @@ machine name. Unzip it anywhere; it installs nothing until you run `install.sh`.
 | **TUN device** (`/dev/net/tun`) | The kernel device a normal VPN needs. Containers often do not have one. |
 | **SOCKS5 / HTTP proxy** | Two ways to say "send my traffic through this local port". |
 | **Kill-switch** | Firewall rules that stop traffic leaking out of your real connection while WARP is up. |
+| **Psiphon** | A second, independent VPN engine (`psiphon-tunnel-core`). When WARP is walled, the tool escalates to Psiphon automatically and keeps the same session alive. |
+| **Fallback / escalation** | Moving from WARP to Psiphon (and back) without dropping your session. |
+| **Bridge** | A small local HTTP↔SOCKS5 proxy the tool runs so opencode can reach whichever engine is active. |
 | **`ouc`** | The command this tool installs (`/usr/local/bin/ouc`). |
 
 ---
@@ -136,8 +143,8 @@ curl -s https://www.cloudflare.com/cdn-cgi/trace | grep -E '^(ip|colo|warp)='
 ## 5. Install the tool
 
 ```bash
-unzip opencode-unlimited-2.3.1.zip
-cd opencode-unlimited-2.3.1      # (the folder the archive creates)
+unzip opencode-unlimited-2.6.5.zip
+cd opencode-unlimited-2.6.5      # (the folder the archive creates)
 sudo bash install.sh
 ```
 
@@ -145,13 +152,165 @@ Options (all optional; the installer is idempotent — running it twice is safe)
 
 | Option | Effect |
 |---|---|
-| *(none)* | systemd service if systemd is usable, otherwise portable mode |
+| *(none)* | systemd service if systemd is usable, otherwise portable mode; installs **both** engines |
 | `--portable` | force the portable supervisor (no systemd at all) |
 | `--proxy` | **proxy mode**: no TUN, no firewall, no routes (Codespaces/Docker/CI) |
 | `--with-warp` | install `cloudflare-warp` via apt/dnf if `warp-cli` is missing |
+| `--with-psiphon` | install `psiphon-tunnel-core` (the fallback engine). **This is the default** — the binary is fetched if missing |
+| `--without-psiphon` | skip Psiphon (WARP-only install) |
 | `--with-opencode` | install the opencode CLI if it is missing |
 | `--wrap` | also point `~/.local/bin/opencode` at the pinned launcher (keeps a backup) |
+| `--uninstall` | remove opencode-unlimited (delegates to `uninstall.sh`) |
 | `-y`, `--yes` | non-interactive |
+
+**Psiphon is installed by default** because it is the fallback engine: when
+WARP is walled (or, in proxy mode, when the WARP proxy dies), the tool
+escalates to Psiphon automatically. The installer downloads
+`psiphon-tunnel-core` from Psiphon-Labs, verifies it is a real x86_64 ELF
+binary, and places it at `/usr/local/bin/psiphon-tunnel-core` (mode `0755`).
+It also creates `/var/lib/opencode-unlimited/psiphon/` and its `data/`
+subdirectory with the right ownership, so a non-root `ouc hop --backend
+psiphon` never hits a permission error.
+
+> Psiphon-Labs publishes an **x86_64** Linux build only. On `aarch64` (ARM)
+> there is no upstream binary, so the installer reports the fallback as
+> unavailable on that architecture instead of installing a wrong-arch binary.
+> `ouc doctor` shows the same status and the exact fix command.
+
+For an air-gapped install, point the installer at a binary you already have:
+
+```bash
+OUC_PSIPHON_BIN_SRC=/path/to/psiphon-tunnel-core sudo -E bash install.sh
+```
+
+### 5A. Normal Linux, tunnel mode (recommended on a real box)
+
+```bash
+sudo bash install.sh
+```
+
+Healthy output looks like this (real run, Debian 13):
+
+```
+  ✓ target user: user  (home: /home/user)
+  ✓ warp-cli: /usr/bin/warp-cli
+  ✓ warp-svc: active
+  ✓ psiphon-tunnel-core: /usr/local/bin/psiphon-tunnel-core
+  ✓ psiphon fallback: ready (/usr/local/bin/psiphon-tunnel-core)
+  ✓ kill-switch available (TUN device + iptables present)
+  ✓ installed /usr/local/bin/ouc
+  mode: systemd
+  ✓ systemd unit installed and started
+  ✓ warp tunnel: connected
+  opencode-unlimited 2.6.5  (mode: systemd)
+  ✓ supervisor: running (pid 32380)
+  ✓ egress: 2a09:bac5:b045:3705::57b:25   block: 2a09:bac5:b045:3705
+  ✓ kill-switch: installed
+  ✓ rotations: 0   blacklisted blocks: 0
+```
+
+Service control:
+
+```bash
+systemctl status opencode-unlimited.service
+sudo journalctl -u opencode-unlimited.service -f
+```
+
+### 5B. Linux without systemd (portable mode)
+
+```bash
+sudo bash install.sh --portable
+sudo ouc start          # daemonise (writes a PID file)
+ouc status              # alive? pid? heartbeat age?
+sudo ouc stop           # stops it and removes the kill-switch
+```
+
+### 5C. Codespaces / Docker / devcontainer / CI — proxy mode
+
+This is the mode the project was built *around* for containers: no TUN device,
+no firewall, no route changes. Psiphon is installed here too — in proxy mode
+it is the fallback when the WARP proxy itself fails.
+
+```bash
+sudo bash install.sh --proxy --portable
+```
+
+What it does, in order:
+
+1. installs Cloudflare WARP if `warp-cli` is absent;
+2. installs `psiphon-tunnel-core` if missing (the fallback engine);
+3. `warp-cli registration new` **only if** no registration exists (an existing
+   one is reused — deleting it just to reconnect is what used to break setups);
+4. `warp-cli mode proxy` + `warp-cli proxy port 40000` — no TUN, no iptables;
+5. `warp-cli connect`, then waits up to ~30 s for `Connected`;
+6. starts the supervisor and the embedded bridge `http://127.0.0.1:8080 → socks5://127.0.0.1:40000`;
+7. leaves the kill-switch and `/etc/hosts` pin **off**, and records why.
+
+Then point opencode at it — either by environment:
+
+```bash
+export HTTPS_PROXY=http://127.0.0.1:8080 HTTP_PROXY=http://127.0.0.1:8080
+opencode run "hello"
+```
+
+…or let the tool do it (recommended; this is the only way to be sure opencode
+does not fall back to a direct connection):
+
+```bash
+ouc lane run "hello"
+```
+
+> `HTTPS_PROXY` is honoured by opencode — verified by pointing it at a dead
+> port and watching it fail with `ECONNREFUSED`. Do **not** rely on
+> `LD_PRELOAD` tricks (torsocks etc.) to redirect opencode; they were measured
+> to be unreliable with a Node-based client.
+
+### 5D. Windows 10/11 → WSL2
+
+Cloudflare ships `warp-cli` for Linux only, so run the tool in WSL2:
+
+```powershell
+wsl --install -d Ubuntu          # once, then reboot if asked
+```
+
+Inside the Ubuntu shell:
+
+```bash
+# WARP's Linux client does not work with WSL's default networking for TUN;
+# use proxy mode, which needs none of it.
+unzip opencode-unlimited-2.6.5.zip && cd opencode-unlimited-2.6.5
+sudo bash install.sh --proxy --portable
+```
+
+Notes for WSL specifically:
+
+* WSL2 may not provide inbound/outbound IPv6 depending on your Windows build —
+  if `ip -6 addr show scope global` is empty, `ouc doctor` will say
+  `egress family: IPv4` and rotation cannot change your quota;
+* opencode must be installed **inside WSL** (`curl -fsSL https://opencode.ai/install | bash`)
+  and run from there, so that it inherits `HTTPS_PROXY`;
+* you can start the whole thing from Windows with
+  `wsl -d Ubuntu -u root /usr/local/bin/ouc start`.
+* *Status: same code path as §5C, which is tested; WSL itself was not part of
+  the test session.*
+
+### 5E. macOS → Docker (or a Linux VM)
+
+There is no Linux `warp-cli` on macOS, so use a Linux container:
+
+```bash
+docker run -it --rm --network host -v "$PWD":/w ubuntu:24.04 bash
+# inside the container:
+apt-get update && apt-get install -y python3 curl unzip
+cd /w && unzip opencode-unlimited-2.6.5.zip && cd opencode-unlimited-2.6.5
+bash install.sh --proxy --portable
+```
+
+With `--network host` the container's ports 40000 (SOCKS5) and 8080 (bridge)
+appear on your Mac, so any client — including opencode run on macOS itself —
+can use `HTTPS_PROXY=http://127.0.0.1:8080`.
+*Status: proxy mode itself is tested in a container; this exact macOS/Docker
+recipe was not part of the test session.*
 
 ### 5A. Normal Linux, tunnel mode (recommended on a real box)
 
@@ -295,6 +454,15 @@ You want, in this order:
 | `egress: 2a09:…  block: 2a09:…` | you have an IPv6 street, and this is its name |
 | `kill-switch: installed` (tunnel mode only) | leaks are blocked |
 | `warp mode: proxy (no TUN)` + `http bridge: http://127.0.0.1:8080` (proxy mode) | container path is wired |
+| `psiphon fallback: ready` (from `ouc doctor`) | the fallback engine is installed and its bootstrap config is valid |
+
+`ouc doctor` verifies **both** engines. If Psiphon is missing it prints the
+exact fix:
+
+```
+  ✗ psiphon fallback: UNAVAILABLE (psiphon-tunnel-core not found ...)
+  ! psiphon-tunnel-core not installed: run 'sudo bash install.sh --with-psiphon'
+```
 
 In tunnel mode also check the pin:
 
@@ -314,16 +482,23 @@ If it says `off`, opencode may reach Cloudflare over IPv4 — where rotating a
 ouc run "your task" # run opencode; on a free limit it waits for a working
                     # block and continues the SAME session (since 2.3.0)
 ouc resume          # do that continuation on demand
-ouc status          # what am I connected to right now?
+ouc status          # what am I connected to right now? (shows the active engine)
 ouc hop             # rotate to a fresh block now (asks the root supervisor)
+ouc hop --backend psiphon   # force the Psiphon fallback engine now
 ouc verify          # one real request: exit 0 = quota works, 1 = still limited
-ouc doctor          # full health check, with a proxy block in proxy mode
+ouc doctor          # full health check for BOTH engines (WARP + Psiphon)
 ouc lane run "hi"   # run opencode with the tunnel guaranteed (proxy mode)
 ```
 
 Nothing needs to run by hand in normal operation: the supervisor detects the
 wall (`Free usage limit reached`) in opencode's log, rotates, and verifies
 with a real request. Measured end-to-end: **wall → working block in 7 s**.
+
+**Automatic fallback:** if WARP keeps failing (5 consecutive failures by
+default), the supervisor escalates to Psiphon on its own — it brings WARP's
+TUN down, switches the leak guard to its proxy dialect, starts Psiphon, and
+keeps your session alive. When WARP recovers, it hands back. You do not need
+to do anything; `ouc status` shows which engine is active.
 
 Useful extras: `ouc repair` (tunnel lost, registration gone),
 `ouc rescue` (panic button: stops the tool, removes every firewall rule it
@@ -343,6 +518,8 @@ added, reconnects WARP), `ouc config` (effective settings),
 | `ouc hop` → *supervisor is not running* | the service really is down | `sudo systemctl start opencode-unlimited` or `sudo ouc start` |
 | `opencode` still says *Free usage limit reached* right after a hop | that block was already spent by other people | `ouc hop` again, then `ouc verify`; expect roughly 1 in 3 rotations to land on a dead block |
 | `port 8080 already in use` (proxy mode) | another local service owns the bridge port | `OUC_PROXY_HTTP_PORT=8081 sudo bash install.sh --proxy`, then use that port |
+| `psiphon fallback: UNAVAILABLE` in `ouc doctor` | `psiphon-tunnel-core` is not installed | `sudo bash install.sh --with-psiphon` (or set `OUC_PSIPHON_BIN`) |
+| `psiphon bootstrap config invalid` in `ouc doctor` | the on-disk Psiphon config is corrupt | delete `/var/lib/opencode-unlimited/psiphon/psiphon.config`, then `ouc hop --backend psiphon` to regenerate |
 | No internet on the whole box | should not happen | `sudo ouc rescue` |
 
 ---
@@ -363,13 +540,15 @@ that deliberately breaks it.
 ## 10. Uninstall
 
 ```bash
-sudo bash uninstall.sh
+sudo bash uninstall.sh          # or: sudo bash install.sh --uninstall
 ```
 
-Removes the unit/daemon, `/usr/local/bin/ouc`, the state directory, the
-kill-switch rules and the `/etc/hosts` pin. **Leaves opencode itself, your
-sessions, and the `cloudflare-warp` package untouched.** Details:
-`UNINSTALL.md`.
+Removes the unit/daemon, `/usr/local/bin/ouc`, the state directory (including
+`/var/lib/opencode-unlimited/psiphon/`), the kill-switch rules and the
+`/etc/hosts` pin. It also stops any running `psiphon-tunnel-core` and removes
+the binary **if the installer placed it** (a binary you installed yourself is
+left alone). **Leaves opencode itself, your sessions, and the
+`cloudflare-warp` package untouched.** Details: `UNINSTALL.md`.
 
 ---
 

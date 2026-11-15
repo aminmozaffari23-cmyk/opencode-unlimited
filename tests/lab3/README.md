@@ -14,6 +14,6 @@ Reproduce:
 ```bash
 gh workflow run live-verify.yml -f "phases=gap1 c1 c2 c3 c4 c5 c6" -f "tunnel_window=true"
 gh run download <run-id> -D /tmp/ev
-OUC_EVIDENCE=/tmp/ev/live-evidence-<run-id> python3 lab3/audit.py
-python3 lab3/status_doc.py /tmp/ev/live-evidence-<run-id> > PHASE4-STATUS.md
+OUC_EVIDENCE=/tmp/ev/live-evidence-<run-id> python3 tests/lab3/audit.py
+python3 tests/lab3/status_doc.py /tmp/ev/live-evidence-<run-id> > PHASE4-STATUS.md
 ```

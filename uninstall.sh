@@ -44,6 +44,16 @@ else
     pkill -f "$LIB_DIR/ouc.py bridge" 2>/dev/null || true
     sleep 1
     pkill -9 -f "$LIB_DIR/ouc.py bridge" 2>/dev/null || true
+    # The Psiphon fallback tunnel outlives the supervisor the same way. Stop it
+    # by its config path (our state dir), never by a bare process name.
+    pkill -f "psiphon-tunnel-core.*$STATE_DIR/psiphon/psiphon.config" 2>/dev/null || true
+    sleep 1
+    pkill -9 -f "psiphon-tunnel-core.*$STATE_DIR/psiphon/psiphon.config" 2>/dev/null || true
+    # Remove the binary only if the installer put it there (config flag).
+    if grep -q '"psiphon_installed_by_ouc": true' "$STATE_DIR/config.json" 2>/dev/null; then
+      rm -f "$PREFIX/bin/psiphon-tunnel-core" /usr/local/bin/psiphon-tunnel-core \
+            /opt/psiphon/psiphon-tunnel-core 2>/dev/null || true
+    fi
     rm -f /etc/sudoers.d/opencode-unlimited
     rm -rf "$LIB_DIR" "$BIN_PATH" "$WARP_WRAPPER"
     rm -rf "$STATE_DIR"
@@ -54,6 +64,7 @@ fi
 # A bridge whose binary we just deleted still shows that path in its cmdline,
 # so this matches even after the removal above.
 pkill -f "$LIB_DIR/ouc.py bridge" 2>/dev/null || true
+pkill -f "psiphon-tunnel-core.*$STATE_DIR/psiphon/psiphon.config" 2>/dev/null || true
 rm -f /etc/sudoers.d/opencode-unlimited 2>/dev/null
 rm -f /usr/local/bin/opencode-unlimited-keeper 2>/dev/null
 rm -rf "$LIB_DIR" 2>/dev/null

@@ -1,17 +1,19 @@
-# UNINSTALL.md — opencode-unlimited 2.4.1
+# UNINSTALL.md — opencode-unlimited 2.6.5
 
 Removal is designed to be complete **and** to leave your network working.
 The automated test `t21_uninstall_complete` checks every path below, and
 `t34_real_uninstall` checks that the machine is still online over IPv6
 afterwards (`egress=2a09:bac1:76e0:dba8::2e9:1f`, zero firewall rules left).
+`t98_installer_psiphon_lifecycle` checks the Psiphon engine lifecycle
+(binary placed, state dirs owned, doctor ready, clean removal).
 
 ---
 
 ## 1. Normal removal
 
 ```bash
-cd opencode-unlimited-2.3.1
-sudo bash uninstall.sh
+cd opencode-unlimited-2.6.5
+sudo bash uninstall.sh          # or: sudo bash install.sh --uninstall
 ```
 
 Expected output:
@@ -19,6 +21,9 @@ Expected output:
 ```
   removing opencode-unlimited ...
   stopping supervisor...
+  stopping proxy bridge...
+  stopping psiphon fallback tunnel...
+    removed /usr/local/bin/psiphon-tunnel-core
   removing systemd units...
     removed /etc/systemd/system/opencode-unlimited.service
   removing firewall...
@@ -46,12 +51,17 @@ What that does, in order:
 1. Stops the service (`systemctl disable --now`) or the portable supervisor
    (SIGTERM to the PID in `/var/lib/opencode-unlimited/supervisor.pid`,
    wait, then SIGKILL if it ignores the first signal).
-2. Removes every firewall rule the tool created — `OUC_LEAKGUARD` in both
+2. Stops the proxy bridge and the Psiphon fallback tunnel (both outlive the
+   supervisor in their own sessions), and removes the `psiphon-tunnel-core`
+   binary **if the installer placed it** — a binary you installed yourself is
+   left in place.
+3. Removes every firewall rule the tool created — `OUC_LEAKGUARD` in both
    `iptables` and `ip6tables` — *before* anything else, so a half-finished
    uninstall can never firewall you in.
-3. Deletes its own files and state.
-4. Re-checks the firewall and removes any rule that survived.
-5. Prints exactly what it did not touch.
+4. Deletes its own files and state (including
+   `/var/lib/opencode-unlimited/psiphon/`).
+5. Re-checks the firewall and removes any rule that survived.
+6. Prints exactly what it did not touch.
 
 ## 2. If `ouc` is already gone
 
@@ -67,7 +77,8 @@ to work.
 | `/etc/systemd/system/opencode-unlimited.service` | the root unit |
 | `/usr/local/lib/opencode-unlimited/` | the program |
 | `/usr/local/bin/ouc`, `/usr/local/bin/opencode-warp` | entry points |
-| `/var/lib/opencode-unlimited/` | state, logs, pidfile, locks |
+| `/usr/local/bin/psiphon-tunnel-core` | the fallback engine — **only if the installer placed it** (see §4) |
+| `/var/lib/opencode-unlimited/` | state, logs, pidfile, locks, and the `psiphon/` subdir (config, datastore, pidfile) |
 | `~/.local/state/opencode-unlimited/` | the hop request channel |
 | `/tmp/opencode-unlimited/` | fallback hop channel |
 | `~/.local/bin/opencode` | **only** if the installer replaced it; the backup `opencode.pre-ouc` is restored |
@@ -103,6 +114,16 @@ anywhere in this version, so the file stays gone.
   If you later reinstall this tool, the installer registers a new device
   automatically.
 
+- **A `psiphon-tunnel-core` binary you installed yourself.** The uninstaller
+  only removes the binary when the installer placed it (recorded as
+  `psiphon_installed_by_ouc` in the config). If you supplied the binary via
+  `OUC_PSIPHON_BIN_SRC` or placed it at `/usr/local/bin/psiphon-tunnel-core`
+  by hand, it is left in place — remove it yourself if you want it gone:
+
+  ```bash
+  sudo rm -f /usr/local/bin/psiphon-tunnel-core
+  ```
+
 - **opencode itself**, your sessions, your logs, your shell configuration.
   Nothing in your shell profile is ever edited by this tool.
 
@@ -110,6 +131,8 @@ anywhere in this version, so the file stays gone.
 
 ```bash
 command -v ouc || echo "ouc gone"
+command -v psiphon-tunnel-core || echo "psiphon gone (if the installer placed it)"
+pgrep -f psiphon-tunnel-core || echo "no psiphon process"
 systemctl status opencode-unlimited.service    # should be "could not be found"
 sudo iptables -S OUTPUT | grep OUC || echo "no v4 rules"
 sudo ip6tables -S OUTPUT | grep OUC || echo "no v6 rules"

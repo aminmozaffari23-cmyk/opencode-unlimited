@@ -3226,7 +3226,68 @@ t88_chaos_cli_monkey(){
   finish "88-chaos-monkey.log"
 }
 
-ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions t73_transport_resilience_regressions t74_orphaned_bridge_is_stopped t75_block_normalisation_and_ttl t76_escalation_after_five_warp_failures t77_psiphon_region_round_robin t78_bridge_follows_the_active_backend t79_hop_backend_override t80_tunnel_notice_dialects t81_a_daemons_writeonly_stdin_cannot_break_a_child t82_the_tunnel_outlives_the_command_that_started_it t89_tunnel_to_proxy_guard_transition t83_chaos_corrupt_state_and_stale_locks t84_chaos_process_assassination t85_chaos_port_squatting t86_chaos_concurrent_hop_stampede t87_chaos_blacklist_saturation t88_chaos_cli_monkey t90_auto_resume_waits_for_a_rotation t91_chaos_every_region_walled t92_cold_bootstrap_is_retried_once t93_stop_reaps_an_orphan_tunnel_with_no_pidfile t94_auto_resume_defaults_to_the_verified_model t95_fallback_takes_the_tunnel_down t96_bridge_refuses_a_port_nobody_can_find t97_stop_reaps_an_inflight_rotation"
+t98_installer_psiphon_lifecycle(){
+  begin "installer wires psiphon-tunnel-core end to end (offline stub)"
+  sb
+  # The sandbox points ouc.py at a fake psiphon so no test reaches a real one
+  # by accident. This test is about the INSTALLER's lifecycle, so point ouc.py
+  # at the binary the installer placed (hermetic: a host binary at
+  # /usr/local/bin could otherwise shadow the sandbox copy via which()).
+  local stub="$T/psiphon-stub"
+  # A stub that passes the installer's ELF integrity check with no network:
+  # a minimal ELF64 header (magic + x86_64 e_machine). ouc.py only needs a
+  # file it can stat and exec-check, which this satisfies.
+  python3 - "$stub" <<'PY_STUB'
+import struct, sys
+e_ident = b"\x7fELF" + bytes([2, 1, 1, 0]) + bytes(8)
+hdr = e_ident + struct.pack("<HHIQQQIHHHHHH", 2, 62, 1, 0, 0, 0, 0, 64, 0, 0, 0, 0, 0)
+open(sys.argv[1], "wb").write(hdr)
+PY_STUB
+  chmod 0755 "$stub"
+  export OUC_PSIPHON_BIN_SRC="$stub"
+  export OUC_PSIPHON_BIN="$OUC_PREFIX/bin/psiphon-tunnel-core"
+
+  bash "$ROOT/install.sh" --portable > "$LOGDIR/98.raw" 2>&1
+  assert_eq "$?" "0"
+  # binary placement and permissions
+  assert_file "$OUC_PREFIX/bin/psiphon-tunnel-core"
+  [ -x "$OUC_PREFIX/bin/psiphon-tunnel-core" ] && a_ok || a_fail "binary not executable"
+  # state dirs exist (v2.3.1 ownership rules)
+  assert_file "$OUC_STATE_DIR/psiphon"
+  assert_file "$OUC_STATE_DIR/psiphon/data"
+  if [ -n "${SUDO_UID:-}" ] && [ "$SUDO_UID" != 0 ]; then
+    assert_eq "$(stat -c %u "$OUC_STATE_DIR/psiphon")" "$SUDO_UID"
+    assert_eq "$(stat -c %u "$OUC_STATE_DIR/psiphon/data")" "$SUDO_UID"
+  fi
+  # the installer records that it placed the binary (uninstall may remove it)
+  assert_eq "$(jq_file "$OUC_STATE_DIR/config.json" "d['psiphon_installed_by_ouc']")" "True"
+  sleep 2
+  # doctor reports the fallback ready
+  local doc
+  doc=$("$OUC_BIN_PATH" doctor 2>&1 || true)
+  assert_contains "$doc" "psiphon fallback: ready"
+  # uninstall stops the tunnel, removes the binary we placed, and the state dir
+  bash "$ROOT/uninstall.sh" >> "$LOGDIR/98.raw" 2>&1
+  assert_no_file "$OUC_PREFIX/bin/psiphon-tunnel-core"
+  assert_no_file "$OUC_STATE_DIR/psiphon"
+  assert_no_file "$OUC_STATE_DIR"
+  sb_cleanup
+  finish "98-installer-psiphon.log"
+}
+
+t99_markdown_link_integrity(){
+  begin "every relative markdown link in the flagship docs resolves"
+  # A flagship repo must not ship dead links. This runs the checker against
+  # the real tree (not a sandbox): the docs link to real files in the repo.
+  local out rc=0
+  out=$(python3 "$HELPER/check_links.py" "$ROOT" 2>&1) || rc=$?
+  printf '%s\n' "$out"
+  assert_eq "$rc" "0"
+  assert_contains "$out" "LINK_CHECK OK"
+  finish "99-link-integrity.log"
+}
+
+ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions t73_transport_resilience_regressions t74_orphaned_bridge_is_stopped t75_block_normalisation_and_ttl t76_escalation_after_five_warp_failures t77_psiphon_region_round_robin t78_bridge_follows_the_active_backend t79_hop_backend_override t80_tunnel_notice_dialects t81_a_daemons_writeonly_stdin_cannot_break_a_child t82_the_tunnel_outlives_the_command_that_started_it t89_tunnel_to_proxy_guard_transition t83_chaos_corrupt_state_and_stale_locks t84_chaos_process_assassination t85_chaos_port_squatting t86_chaos_concurrent_hop_stampede t87_chaos_blacklist_saturation t88_chaos_cli_monkey t90_auto_resume_waits_for_a_rotation t91_chaos_every_region_walled t92_cold_bootstrap_is_retried_once t93_stop_reaps_an_orphan_tunnel_with_no_pidfile t94_auto_resume_defaults_to_the_verified_model t95_fallback_takes_the_tunnel_down t96_bridge_refuses_a_port_nobody_can_find t97_stop_reaps_an_inflight_rotation t98_installer_psiphon_lifecycle t99_markdown_link_integrity"
 REAL_TESTS="t30_real_install t31_real_auto_rotation t32_real_no_deadlock t33_real_hop t34_real_uninstall t45_real_proxy_rotation"
 TEST_TIMEOUT="${TEST_TIMEOUT:-240}"
 

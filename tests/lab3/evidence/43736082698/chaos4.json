@@ -1,0 +1,54 @@
+{
+  "results": [
+    {
+      "rc": 1,
+      "ok": false,
+      "refused": true,
+      "traceback": false,
+      "tail": "  old block: ?\n  new block: ?\n  backend: psiphon, region ?\n  \u2717 rotation failed: rotation already in progress\n    the machine keeps its internet; try again, or run: ouc repair\n"
+    },
+    {
+      "rc": 0,
+      "ok": true,
+      "refused": false,
+      "traceback": false,
+      "tail": "  old block: ?\n  new block: 157.230.26.68/32\n  backend: psiphon, region DE\n  \u2713 rotated in 10.59s \u2014 resend your message\n"
+    },
+    {
+      "rc": 1,
+      "ok": false,
+      "refused": true,
+      "traceback": false,
+      "tail": "  old block: ?\n  new block: ?\n  backend: psiphon, region ?\n  \u2717 rotation failed: rotation already in progress\n    the machine keeps its internet; try again, or run: ouc repair\n"
+    },
+    {
+      "rc": 1,
+      "ok": false,
+      "refused": true,
+      "traceback": false,
+      "tail": "  old block: ?\n  new block: ?\n  backend: psiphon, region ?\n  \u2717 rotation failed: rotation already in progress\n    the machine keeps its internet; try again, or run: ouc repair\n"
+    },
+    {
+      "rc": 1,
+      "ok": false,
+      "refused": true,
+      "traceback": false,
+      "tail": "  old block: ?\n  new block: ?\n  backend: psiphon, region ?\n  \u2717 rotation failed: rotation already in progress\n    the machine keeps its internet; try again, or run: ouc repair\n"
+    }
+  ],
+  "ran": 1,
+  "refused": 4,
+  "tracebacks": 0,
+  "tunnels": "1",
+  "bridges": "2",
+  "bridge_procs": [
+    "11307       1 Sun Nov 15 16:56:21 2026 sudo nohup /usr/bin/python3 ouc.py bridge --listen 127.0.0.1:8080 --dynamic",
+    "  11310   11307 Sun Nov 15 16:56:21 2026 /usr/bin/python3 ouc.py bridge --listen 127.0.0.1:8080 --dynamic"
+  ],
+  "bridge_listeners": [
+    "LISTEN 0      64         127.0.0.1:8080       0.0.0.0:*          ",
+    "LISTEN 0      4096       127.0.0.1:9060       0.0.0.0:*"
+  ],
+  "state_valid": true,
+  "config_valid": true
+}

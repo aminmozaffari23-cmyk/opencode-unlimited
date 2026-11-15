@@ -1,5 +1,64 @@
 # TEST_RESULTS.md — current qualification and historical releases
 
+## v2.6.5 — dual-engine (WARP + Psiphon), qualified live
+
+The current release. Every number below was measured, not typed in by hand.
+
+### Offline suite
+
+```
+bash tests/run_tests.sh --offline
+→ 82 passed / 0 failed / 11 skipped
+```
+
+The 11 skips are the destructive real-WARP tests (explicit disposable-host
+opt-in required). New in this release: `t98` (installer wires up
+`psiphon-tunnel-core` end to end, offline stub) and `t99` (markdown
+link-integrity check across the flagship docs).
+
+### pytest suite
+
+```
+python3 -m pytest tests -q
+→ 104 passed, 11 subtests passed
+```
+
+### Live verification (fresh disposable root runner)
+
+GitHub Actions run **43736082698** — a fresh, ephemeral root runner, all steps
+green, 31m31s. The audit reads only the pulled evidence
+(`tests/lab3/evidence/43736082698/`, 11 JSONs):
+
+```
+python3 tests/lab3/audit.py
+→ 18/18 core checks passed (6/6 chaos checks)
+```
+
+What the live run proved:
+
+* **Gap #2 (kill-switch + tunnel→Psiphon transition):** the guard armed in
+  tunnel dialect (19 rules), escalated to Psiphon (proxy dialect, pin lifted,
+  egress `161.35.185.120` ≠ host), verified with zero deadlock in 4.66 s,
+  returned to WARP (guard re-armed, pin re-installed), and `ouc rescue`
+  restored the exact baseline (`hosts_matches_baseline`,
+  `iptables_matches`, `ip6tables_matches`). Teardown left zero guard rules,
+  zero TUN devices, zero stray processes.
+* **Gap #1 (unattended Psiphon→Psiphon recovery):** a seeded session
+  (`ses_e1feed8f3ffeDixT8hqn3qAOzs`) hit a wall on region 1; the controller
+  blacklisted `164.92.178.241/32`, advanced to region 2 (`167.99.133.18/32`),
+  rewrote the config with `DisableReplay: true`, restarted, verified through
+  the bridge, and **resumed the same session with the same token** —
+  `rotated_unattended=True`, `recalled=True`, zero human intervention.
+* **Chaos/Monkey (6/6):** SIGKILL respawn, port-squatter typed refusal,
+  corrupt-state self-heal (0 tracebacks), 5-way hop stampede serialised to one
+  tunnel + one bridge, blacklist saturation bounded by the rotation budget,
+  and CLI monkey fuzzing with byte-intact state.
+
+Full narrative: **`docs/reports/REAL-OPENCODE-TEST.md`** and the generated
+status doc **`docs/reports/PHASE4-STATUS.md`**.
+
+---
+
 ## Unreleased 2.4.2 / OpenCode 2.2.7
 
 Read [the single beginner guide and full qualification record](BEGINNER_GUIDE.md).
@@ -416,7 +475,7 @@ unspent `/64` left for the device:
 The tunnel stays up, the internet keeps working, and the tool says plainly that
 it could not find fresh quota instead of reporting a success it did not achieve.
 
-Full narrative, verdict and limitations: **`REAL-OPENCODE-TEST.md`**.
+Full narrative, verdict and limitations: **`docs/reports/REAL-OPENCODE-TEST.md`**.
 
 ### The shipped archive was re-verified after extraction
 

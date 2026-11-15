@@ -9,7 +9,7 @@
 set -u
 
 BRAND="opencode-unlimited"
-VERSION="2.4.1"
+VERSION="2.6.5"
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" && pwd)"
 
 PREFIX="${OUC_PREFIX:-/usr/local}"
@@ -17,9 +17,16 @@ LIB_DIR="${OUC_LIB_DIR:-$PREFIX/lib/$BRAND}"
 BIN_PATH="${OUC_BIN_PATH:-$PREFIX/bin/ouc}"
 UNIT_DIR="${OUC_UNIT_DIR:-/etc/systemd/system}"
 STATE_DIR="${OUC_STATE_DIR:-/var/lib/$BRAND}"
+# The Psiphon fallback engine lives next to `ouc` so ouc.py's own discovery
+# (which("psiphon-tunnel-core")) finds it with no extra configuration.
+PSIPHON_BIN_PATH="${OUC_PSIPHON_BIN_PATH:-$PREFIX/bin/psiphon-tunnel-core}"
+# Operator-supplied binary (air-gapped installs, tests): copy this file instead
+# of downloading from Psiphon-Labs.
+PSIPHON_BIN_SRC="${OUC_PSIPHON_BIN_SRC:-}"
 
 WANT_WARP=0
 WANT_OPENCODE=0
+WANT_PSIPHON=2   # 2 = default (install if missing), 1 = explicit, 0 = never
 FORCE_PORTABLE=0
 FORCE_SYSTEMD=0
 WRAP=0
@@ -35,10 +42,16 @@ for arg in "$@"; do
   case "$arg" in
     --with-warp)       WANT_WARP=1 ;;
     --with-opencode)   WANT_OPENCODE=1 ;;
+    --with-psiphon)    WANT_PSIPHON=1 ;;
+    --without-psiphon) WANT_PSIPHON=0 ;;
     --portable)        FORCE_PORTABLE=1 ;;
     --systemd)         FORCE_SYSTEMD=1 ;;
     --proxy)           FORCE_PROXY=1 ;;
     --wrap)            WRAP=1 ;;
+    --uninstall)
+      # delegate to the uninstaller (same overrides, same root requirement)
+      [ "$(id -u)" = 0 ] || die "run me with root (sudo bash install.sh --uninstall)"
+      exec bash "$SRC/uninstall.sh" ;;
     -y|--yes)          ASSUME_YES=1 ;;
     -h|--help)
       cat <<EOF
@@ -46,6 +59,10 @@ usage: install.sh [options]
 
   --with-warp        install cloudflare-warp if warp-cli is missing
   --with-opencode    install the opencode CLI if it is missing
+  --with-psiphon     install psiphon-tunnel-core, the fallback engine used when
+                     WARP is walled. This is the default: the binary is fetched
+                     if it is missing. Use --without-psiphon to skip it.
+  --without-psiphon  do not install psiphon-tunnel-core (WARP-only install)
   --portable         force no-systemd mode (daemon + pidfile)
   --systemd          force systemd mode (writes the unit even if this machine has
                      no running systemd, e.g. while building a container image)
@@ -54,7 +71,12 @@ usage: install.sh [options]
                      through a local HTTP proxy instead.
   --wrap             also point ~/.local/bin/opencode at the IPv6-pinned launcher
                      (a backup of the previous entry point is kept)
+  --uninstall        remove opencode-unlimited (delegates to uninstall.sh)
   -y, --yes          non-interactive
+
+environment:
+  OUC_PSIPHON_BIN_SRC  copy psiphon-tunnel-core from this local file instead of
+                       downloading it (air-gapped installs, tests)
 EOF
       exit 0 ;;
     *) die "unknown option: $arg" ;;
@@ -160,6 +182,79 @@ fi
 [ -x "$OC_BIN" ] && ok "opencode: $OC_BIN" \
   || warn "opencode CLI not found at $OC_BIN (install it, or keep using your own)"
 
+# ------------------------------------------------------------- psiphon engine
+# psiphon-tunnel-core is the fallback engine: when WARP is walled (or, in proxy
+# mode, when the WARP proxy dies) ouc escalates to Psiphon and keeps the same
+# session alive. It is installed by default so a fresh clone gets the full
+# dual-engine experience; --without-psiphon opts out.
+#
+# Upstream (Psiphon-Labs/psiphon-tunnel-core-binaries) publishes an x86_64 Linux
+# build only. On other architectures there is nothing to download, so the
+# fallback is reported unavailable instead of installing a wrong-arch binary.
+PSIPHON_INSTALLED_BY_OUC=0
+PSIPHON_ARCH="$(uname -m 2>/dev/null || echo unknown)"
+# ELF integrity check: magic bytes + (for downloads) the x86_64 machine type.
+# $1 = path, $2 = "strict" (downloads) or "lenient" (operator-supplied).
+elf_check(){
+  python3 - "$1" "$2" <<'PY_ELF' 2>/dev/null
+import struct, sys
+path, mode = sys.argv[1], sys.argv[2]
+try:
+    with open(path, "rb") as fh:
+        head = fh.read(20)
+except OSError:
+    sys.exit(1)
+if len(head) < 20 or head[:4] != b"\x7fELF":
+    sys.exit(1)
+if mode == "strict":
+    # e_machine: 62 = EM_X86_64, the only build Psiphon-Labs publishes for Linux
+    if struct.unpack("<H", head[18:20])[0] != 62:
+        sys.exit(1)
+sys.exit(0)
+PY_ELF
+}
+if [ "$WANT_PSIPHON" != 0 ]; then
+  if [ -x "$PSIPHON_BIN_PATH" ]; then
+    ok "psiphon-tunnel-core: $PSIPHON_BIN_PATH (already present)"
+  elif [ -n "$PSIPHON_BIN_SRC" ]; then
+    # operator-supplied binary (air-gapped / test): copy, do not download
+    if [ -f "$PSIPHON_BIN_SRC" ]; then
+      mkdir -p "$(dirname "$PSIPHON_BIN_PATH")"
+      install -m 0755 "$PSIPHON_BIN_SRC" "$PSIPHON_BIN_PATH" \
+        && PSIPHON_INSTALLED_BY_OUC=1 \
+        && ok "psiphon-tunnel-core: installed from $PSIPHON_BIN_SRC" \
+        || warn "could not install psiphon-tunnel-core from $PSIPHON_BIN_SRC"
+      if [ "$PSIPHON_INSTALLED_BY_OUC" = 1 ] && ! elf_check "$PSIPHON_BIN_PATH" lenient; then
+        warn "$PSIPHON_BIN_PATH is not an ELF binary — the fallback may not start"
+      fi
+    else
+      warn "OUC_PSIPHON_BIN_SRC=$PSIPHON_BIN_SRC does not exist — psiphon skipped"
+    fi
+  elif [ "$PSIPHON_ARCH" = "x86_64" ]; then
+    say "installing psiphon-tunnel-core (fallback engine)"
+    _psiphon_tmp="$(mktemp 2>/dev/null || echo /tmp/psiphon-core.$$)"
+    if curl -fsSL --max-time 240 -o "$_psiphon_tmp" \
+         https://github.com/Psiphon-Labs/psiphon-tunnel-core-binaries/raw/master/linux/psiphon-tunnel-core-x86_64 2>/dev/null \
+       && elf_check "$_psiphon_tmp" strict; then
+      mkdir -p "$(dirname "$PSIPHON_BIN_PATH")"
+      install -m 0755 "$_psiphon_tmp" "$PSIPHON_BIN_PATH" \
+        && PSIPHON_INSTALLED_BY_OUC=1 \
+        && ok "psiphon-tunnel-core: $PSIPHON_BIN_PATH" \
+        || warn "could not install psiphon-tunnel-core"
+    else
+      warn "psiphon-tunnel-core download failed or failed the integrity check — fallback unavailable"
+      warn "  retry with: sudo bash install.sh --with-psiphon"
+    fi
+    rm -f "$_psiphon_tmp" 2>/dev/null || true
+  else
+    warn "psiphon-tunnel-core has no $PSIPHON_ARCH build upstream — fallback unavailable on this architecture"
+  fi
+else
+  say "psiphon skipped (--without-psiphon)"
+fi
+[ -x "$PSIPHON_BIN_PATH" ] && ok "psiphon fallback: ready ($PSIPHON_BIN_PATH)" \
+  || warn "psiphon fallback: unavailable — 'ouc doctor' shows the fix"
+
 # ---------------------------------------------------------------- capabilities
 TUN_OK=0; [ -e /dev/net/tun ] && TUN_OK=1
 IPT_OK=0; { command -v iptables >/dev/null 2>&1 || [ -x /usr/sbin/iptables ]; } \
@@ -224,24 +319,30 @@ done
 
 # ---------------------------------------------------------------- install files
 mkdir -p "$LIB_DIR" "$(dirname "$BIN_PATH")" "$STATE_DIR"
+# Psiphon owns its config, pidfile, log and datastore under the state dir
+# (v2.3.1 ownership rules). Create them now so a fresh install never hits a
+# PermissionError on the first `ouc hop --backend psiphon`.
+mkdir -p "$STATE_DIR/psiphon/data"
 
 # The daily commands (ouc run / resume / hop / status) run as the *user*, while
 # the supervisor runs as root.  The state directory therefore has to stay
 # writable by the invoking user: atomic_write_json() creates a temp file next to
 # state.json and renames it, so directory ownership — not file ownership — is
 # what decides whether `ouc run` works without sudo.  Root keeps full access.
+# The same rule covers the psiphon subdirs, and ouc.py chmods its lock files
+# 0666 so both the root supervisor and the unprivileged user can flock them.
 if [ "$(id -u)" = 0 ]; then
   _OWNER="${SUDO_UID:-}"
   _GROUP="${SUDO_GID:-${SUDO_UID:-}}"
   if [ -n "$_OWNER" ] && [ "$_OWNER" != 0 ] && id -un "$_OWNER" >/dev/null 2>&1; then
     chown "$_OWNER:$_GROUP" "$STATE_DIR" 2>/dev/null || true
     chown -R "$_OWNER:$_GROUP" "$STATE_DIR" 2>/dev/null || true
-    chmod 0755 "$STATE_DIR" 2>/dev/null || true
+    chmod 0755 "$STATE_DIR" "$STATE_DIR/psiphon" "$STATE_DIR/psiphon/data" 2>/dev/null || true
     ok "state dir owned by $(id -un "$_OWNER") — daily commands work without sudo"
   else
     # installed as real root (not via sudo): keep it usable by everyone who can
     # already read the state, and never leave a lock only root can open.
-    chmod 0755 "$STATE_DIR" 2>/dev/null || true
+    chmod 0755 "$STATE_DIR" "$STATE_DIR/psiphon" "$STATE_DIR/psiphon/data" 2>/dev/null || true
   fi
 fi
 install -m 0755 "$SRC/ouc.py" "$LIB_DIR/ouc.py" || die "could not copy ouc.py"
@@ -254,7 +355,8 @@ install -m 0755 "$SRC/opencode-warp" "$(dirname "$BIN_PATH")/opencode-warp" 2>/d
 ok "installed $BIN_PATH"
 
 # what the supervisor needs to know: whose log to watch
-WARP_MODE_INSTALL="$WARP_MODE" python3 - "$STATE_DIR/config.json" "$TARGET_HOME" "$KILL_SWITCH" <<'PY'
+WARP_MODE_INSTALL="$WARP_MODE" PSIPHON_BY_OUC="$PSIPHON_INSTALLED_BY_OUC" \
+  python3 - "$STATE_DIR/config.json" "$TARGET_HOME" "$KILL_SWITCH" <<'PY'
 import json, sys, os
 path, home, ks = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
 cfg = {}
@@ -262,11 +364,17 @@ if os.path.exists(path):
     try: cfg = json.load(open(path))
     except Exception: cfg = {}
 proxy = os.environ.get("WARP_MODE_INSTALL", "warp") == "proxy"
+# psiphon_installed_by_ouc: only remove the binary on uninstall if we put it
+# there. A binary the operator placed themselves is never deleted.
+psiphon_by_ouc = os.environ.get("PSIPHON_BY_OUC", "0") == "1"
+if not psiphon_by_ouc:
+    psiphon_by_ouc = bool(cfg.get("psiphon_installed_by_ouc"))
 cfg.update({"target_home": home, "kill_switch": ks, "version": "$VERSION",
             "settle": max(8, int(cfg.get("settle", 9))), "cooldown": int(cfg.get("cooldown", 90)),
             "pin": False if proxy else bool(cfg.get("pin", True)),
             "verify": bool(cfg.get("verify", True)),
             "rotation_mode": "auto", "blacklist_ttl": int(cfg.get("blacklist_ttl", 14400)),
+            "psiphon_installed_by_ouc": psiphon_by_ouc,
             "warp_mode": os.environ.get("WARP_MODE_INSTALL", "auto")})
 json.dump(cfg, open(path, "w"), indent=2, sort_keys=True)
 PY
@@ -424,7 +532,9 @@ echo ""
 ok "done. Commands:"
 say "  sudo ouc status      # health"
 say "  ouc hop              # rotate to a fresh /64 now (asks the supervisor)"
+say "  ouc hop --backend psiphon   # force the Psiphon fallback engine"
 say "  sudo ouc rescue      # emergency: make the network work again"
+say "  ouc doctor           # verify WARP + Psiphon readiness"
 echo ""
 if [ "$WARP_MODE" = "proxy" ]; then
   say "Proxy mode: opencode must use the local bridge. Either run it through the"

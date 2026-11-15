@@ -1,0 +1,22 @@
+{
+  "squatter": {
+    "listening": true,
+    "owner": "LISTEN 0      4          127.0.0.1:8080       0.0.0.0:*"
+  },
+  "refusal": {
+    "start_rc": 0,
+    "said_security": true,
+    "named_owner": true,
+    "log": "2026-11-15T16:51:53 INFO  supervisor up (pid 9761, mode portable, warp proxy, kill-switch disabled at install time)\n2026-11-15T16:51:53 INFO  bridge up on http://127.0.0.1:8080 -> socks5://127.0.0.1:40000\n2026-11-15T16:51:53 INFO  proxy mode: opencode must use HTTP_PROXY=http://127.0.0.1:8080\n2026-11-15T16:51:54 WARN  fallback: the Psiphon tunnel is gone \u2014 restarting it\n2026-11-15T16:51:54 INFO  psiphon: started pid 9768 region=NL (DisableReplay=true, socks 9060)\n2026-11-15T16:51:58 INFO  fallback: tunnel restored on NL\n2026-11-15T16:52:32 INFO  bridge up on http://127.0.0.1:8080 -> socks5://127.0.0.1:40000\n2026-11-15T16:52:32 WARN  fallback: the Psiphon tunnel is gone \u2014 restarting it\n2026-11-15T16:52:32 INFO  psiphon: started pid 10073 region=US (DisableReplay=true, socks 9060)\n2026-11-15T16:52:35 INFO  fallback: tunnel restored on US\n2026-11-15T16:52:47 INFO  supervisor stopping \u2014 removing kill-switch so nothing is stranded\n2026-11-15T16:53:17 INFO  supervisor up (pid 10405, mode portable, warp proxy, kill-switch disabled at install time)\n2026-11-15T16:53:17 SECURITY bridge: port 8080 is held by pid 10317 ('python3 -c import socket,time;s=socket.socket();s.setsockopt(socket.SOL_SOCKET,s') \u2014 refusing to route through an unowned listener\n2026-11-15T16:53:17 INFO  proxy mode: opencode must use HTTP_PROXY=http://127.0.0.1:8080\n2026-11-15T16:53:17 SECURITY bridge: port 8080 is held by pid 10317 ('python3 -c import socket,time;s=socket.socket();s.setsockopt(socket.SOL_SOCKET,s') \u2014 refusing to route through an unowned listener\n2026-11-15T16:53:17 WARN  fallback: the Psiphon tunnel is gone \u2014 restarting it\n2026-11-15T16:53:17 INFO  psiphon: started pid 10409 region=US (DisableReplay=true, socks 9060)\n2026-11-15T16:53:20 INFO  fallback: tunnel restored on US\n2026-11-15T16:53:22 SECURITY bridge: port 8080 is held by pid 10317 ('python3 -c import socket,time;s=socket.socket();s.setsockopt(socket.SOL_SOCKET,s') \u2014 refusing to route through an unowned listener\n2026-11-15T16:53:24 SECURITY bridge: port 8080 is held by pid 10317 ('python3 -c import socket,time;s=socket.socket();s.setsockopt(socket.SOL_SOCKET,s') \u2014 refusing to route through an unowned listener\n",
+    "verify": {
+      "ran": true,
+      "ok": false,
+      "walled": false,
+      "detail": "native network error: AI_APICallError: Cannot connect to API: ETIMEDOUT: Unable to connect. Is the computer able to access the url? (cause: TypeError: ETIMEDOUT: Unable to connect. Is the computer able to access the url?)",
+      "failure_class": "network",
+      "rc": -15,
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "ipv6_egress": "108.175.6.189"
+    }
+  }
+}
