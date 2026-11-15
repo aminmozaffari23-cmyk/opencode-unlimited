@@ -66,7 +66,7 @@ import time
 import urllib.request
 import uuid
 
-VERSION = "2.6.3"
+VERSION = "2.6.4"
 BRAND = "opencode-unlimited"
 DEFAULT_STATE_DIR = "/var/lib/opencode-unlimited"
 UNIT_NAME = "opencode-unlimited.service"
@@ -2166,49 +2166,80 @@ class Psiphon:
                     cmd = fh.read().replace(b"\0", b" ").decode(errors="replace")
             except OSError:
                 continue
-            if "psiphon-tunnel-core" in cmd and mine in cmd:
+            # Ownership is the config path, not the binary's name. A tunnel is
+            # ours when it was told to run our config — that is true of the real
+            # psiphon-tunnel-core and of any stand-in a test uses, and it stays
+            # true if the binary is ever renamed or wrapped.
+            if mine in cmd and "-config" in cmd:
                 found.append(int(entry))
         return found
 
     def stop(self, timeout: float = 10.0) -> bool:
+        """Stop our tunnel — and keep looking even if the pidfile lies.
+
+        Measured live: a tunnel that had been SIGKILLed earlier left a stale
+        pidfile, and `ouc stop` returned here without ever reaching the orphan
+        sweep below, so the *next* tunnel (started by a chaos phase, then by
+        `ouc hop`) survived the teardown. The audit found one orphan process
+        and a listening SOCKS port after a clean stop. A missing pidfile is a
+        reason to look harder, never a reason to stop looking.
+        """
         pid = self.pid()
-        if not pid:
+        stopped = False
+        if pid:
+            try:
+                os.kill(pid, signal.SIGTERM)
+                stopped = True
+            except OSError:
+                stopped = False
+        if not stopped and not self._orphan_pids():
             try:
                 if os.path.exists(self.cfg.psiphon_pid_file):
                     os.unlink(self.cfg.psiphon_pid_file)
             except OSError:
                 pass
-            return False
-        try:
-            os.kill(pid, signal.SIGTERM)
-        except OSError:
+            self._close_log()
             return False
         deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
+        while pid and time.monotonic() < deadline:
             if not pid_alive(pid):
                 break
             time.sleep(0.2)
-        if pid_alive(pid):
+        if pid and pid_alive(pid):
             try:
                 os.kill(pid, signal.SIGKILL)
             except OSError:
                 pass
             self.log(f"psiphon: pid {pid} ignored SIGTERM, sent SIGKILL", "WARN")
             time.sleep(0.3)
-        # Reap anything else of ours that the pidfile did not know about.
-        for extra in self._orphan_pids():
-            if extra == pid:
-                continue
+        # Reap anything else of ours that the pidfile did not know about, and
+        # wait for it to actually go. A sweep that fires SIGTERM and returns
+        # leaves a process that is still exiting when the caller checks, which
+        # is how a stopped tunnel looked like a surviving one to the audit.
+        orphans = [p for p in self._orphan_pids() if p != pid]
+        for extra in orphans:
             try:
                 os.kill(extra, signal.SIGTERM)
                 self.log(f"psiphon: reaped orphaned tunnel pid {extra}")
             except OSError:
                 pass
+        if orphans:
+            deadline = time.monotonic() + timeout
+            while time.monotonic() < deadline and any(pid_alive(p) for p in orphans):
+                time.sleep(0.2)
+            for extra in orphans:
+                if pid_alive(extra):
+                    try:
+                        os.kill(extra, signal.SIGKILL)
+                    except OSError:
+                        pass
+            time.sleep(0.2)
         try:
             os.unlink(self.cfg.psiphon_pid_file)
         except OSError:
             pass
-        self.log(f"psiphon: stopped pid {pid}")
+        if pid:
+            self.log(f"psiphon: stopped pid {pid}")
         self._close_log()
         return True
 
@@ -5227,7 +5258,13 @@ def cmd_resume(args, cfg: Config, log: Log) -> int:
         return 1
     state = State(cfg)
     session = getattr(args, 'session', '') or ''
-    model = getattr(args, 'model', '') or cfg.resume_model or cfg.agent_model or ''
+    # A continuation started by the daemon has no CLI flags, so it needs a
+    # default. Measured live: the supervisor spawned its auto-resume child,
+    # the child refused with "cannot verify an unspecified interrupted model",
+    # and the session the daemon had just rotated for was dropped a second
+    # time — by a different code path than the v2.6.1 lock fix.
+    model = (getattr(args, 'model', '') or cfg.resume_model or cfg.agent_model
+             or cfg.test_model or '')
     prompt = getattr(args, 'prompt', '') or cfg.resume_prompt
     cwd = os.getcwd()
     deadline = time.monotonic()+cfg.max_hours*3600

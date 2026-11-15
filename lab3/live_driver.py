@@ -447,10 +447,13 @@ def main():
             recalled = token in cblob
             log(f"  manual continuity: recalled={recalled}")
 
+        rl = pathlib.Path("/var/lib/opencode-unlimited/resume.log")
         step("continuity", recalled=recalled, session=session,
              token=token, backend=state().get("active_backend"),
              block=ident(egress() or ""),
-             resumes=state().get("resumes"))
+             resumes=state().get("resumes"),
+             auto_resume_log=(rl.read_text(errors="replace")[-1500:] if rl.exists() else ""),
+             auto_resume_pid=state().get("auto_resume_pid"))
         save("gap1.json", res)
 
     # =========================================== GAP 2
@@ -762,6 +765,18 @@ def main():
         log("C5: two burned regions, then a clean one")
         res = {}
         ouc(["stop"], timeout=120)
+        # A leftover tunnel keeps psiphon's datastore locked, and the next launch
+        # then fails in 2 s with "openDataStore: timeout" — which looks exactly
+        # like a provider refusal and is not one. Wait for the lock to clear.
+        waited = 0.0
+        while waited < 120:
+            left = count_procs("psiphon-tunnel-core")
+            if left == "0":
+                break
+            time.sleep(5)
+            waited += 5
+        res["clean_start"] = dict(orphans=count_procs("psiphon-tunnel-core"),
+                                  waited_s=waited)
         ensure_bridge()
         # burn the exits of the two regions the round-robin will try first
         st = state()
@@ -812,9 +827,13 @@ def main():
         res = {"commands": []}
         ouc(["stop"], timeout=120)
         ensure_bridge()
-        hop = subprocess.Popen([PY, "ouc.py", "hop", "--backend", "psiphon", "--wait", "200"],
-                               cwd=str(REPO), env=ouc_env(), stdout=subprocess.PIPE,
-                               stderr=subprocess.STDOUT, text=True, start_new_session=True)
+        # Root: an unprivileged `hop` only writes a request file, and a monkey
+        # storm around a rotation that never started proves nothing.
+        hop = subprocess.Popen(
+            sudo_cmd(["hop", "--backend", "psiphon", "--wait", "300"],
+                     {"OUC_PSIPHON_REGIONS": "US,DE,NL"}),
+            cwd=str(REPO), env=ouc_env(), stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT, text=True, start_new_session=True)
         seq = [["status"], ["config"], ["doctor"], ["pin", "status"], ["status", "--json"],
                ["hop", "--backend", "nonsense"], ["doctor"], ["status"]]
         for i in range(32):
