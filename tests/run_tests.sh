@@ -2797,6 +2797,8 @@ t95_fallback_takes_the_tunnel_down(){
         "$(state_of "bool(d.get('warp_tun_down_for_fallback'))")" "True"
   check "the log says it in plain words" \
         "$(cat "$T/g-hop.out" "$OUC_STATE_DIR/ouc.log" 2>/dev/null | grep -c "took WARP")" "1"
+  check "the guard switched to the dialect Psiphon can survive" \
+        "$(state_of "d.get('guard_mode')")" "proxy"
 
   rc=0
   timeout 120 python3 "$ROOT/ouc.py" hop --backend warp --wait 90 > "$T/w-hop.out" 2>&1 || rc=$?
@@ -2805,6 +2807,8 @@ t95_fallback_takes_the_tunnel_down(){
         "$(jval "$FAKE_WARP_STATE" connected)" "true"
   check "and the flag is cleared" \
         "$(state_of "bool(d.get('warp_tun_down_for_fallback'))")" "False"
+  check "and the full tunnel-dialect guard is back" \
+        "$(state_of "d.get('guard_mode')")" "tunnel"
   check "the guard records which dialect it installed" \
         "$(state_of "d.get('guard_mode')")" "tunnel"
 

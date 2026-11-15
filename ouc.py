@@ -2530,6 +2530,24 @@ def _clear_warp_tun_for_psiphon(cfg: Config, state: "State", log: Log,
     """
     if cfg.proxy_mode:
         return False
+    # Order matters: switch the guard to its owner-scoped dialect *first*. The
+    # tunnel-dialect rules scope egress to WARP's interface, so a Psiphon probe
+    # launched under them measures nothing at all — measured live as
+    # `psiphon@DE=-` (empty egress) with the core logging "shutdown by
+    # controller" a second later. The long-running supervisor has always done
+    # this in enforce_firewall(); a one-shot `ouc hop` never did, so a
+    # command-line escalation dialled into a guard that blocked its relays.
+    if cfg.kill_switch and not cfg.proxy_mode:
+        try:
+            fw = Firewall(cfg, log, state)
+            if fw.installed() and fw.mode() != GUARD_PROXY:
+                if fw.install(GUARD_PROXY):
+                    log("kill-switch switched to proxy-compatible mode so the "
+                        "Psiphon tunnel core can dial out (egress scoped to the "
+                        "account that runs opencode)")
+                    state.update(guard_mode=GUARD_PROXY)
+        except Exception as exc:
+            log(f"kill-switch: could not switch to proxy mode ({exc})", "WARN")
     st = state.load()
     if st.get("warp_tun_down_for_fallback"):
         return True
@@ -2555,6 +2573,11 @@ def _restore_warp_tun(cfg: Config, state: "State", log: Log,
     if cfg.proxy_mode or not state.load().get("warp_tun_down_for_fallback"):
         return
     try:
+        if cfg.kill_switch:
+            fw = Firewall(cfg, log, state)
+            if fw.installed() and fw.mode() != GUARD_TUNNEL:
+                fw.install(GUARD_TUNNEL)
+                log("kill-switch re-armed in tunnel mode for the WARP backend")
         W = warp or Warp(cfg, log)
         W.connect()
         for _ in range(max(4, int(cfg.connect_wait / 2))):
