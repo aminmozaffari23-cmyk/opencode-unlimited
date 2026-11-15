@@ -38,6 +38,19 @@ def step(doc, name):
     return {}
 
 
+def num(value, default=-1):
+    """A shell-derived count, as an int.
+
+    `count_procs()` returns what `pgrep -c` printed, i.e. a string. Comparing
+    `"1" == 1` is False, so a check written against an int silently reports a
+    product failure that is really a type error in the audit.
+    """
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+
+
 def norm_iptables(lines):
     """Drop counters and timestamps so two `iptables-save` runs can be compared."""
     out = []
@@ -150,7 +163,7 @@ def main():
     check(18, "the window leaves the host exactly as it found it",
           bool(left.get("iptables_matches")) and bool(left.get("ip6tables_matches"))
           and bool(left.get("hosts_matches_baseline")) and bool(left.get("routes4_matches"))
-          and left.get("tun_devices") == 0 and bool(left.get("egress_ok"))
+          and num(left.get("tun_devices")) == 0 and bool(left.get("egress_ok"))
           and bool(rsc.get("rules_clean")),
           f"iptables {left.get('iptables_matches')}, ip6tables {left.get('ip6tables_matches')}, "
           f"hosts baseline {left.get('hosts_matches_baseline')}, routes4 {left.get('routes4_matches')}, "
@@ -170,12 +183,12 @@ def main():
                   f"sq_rc {(c2.get('squatter') or {}).get('rc')}"))
     c3 = load("chaos3.json")
     chaos.append((21, "corrupt state, pid 999999 and a stale lock self-heal",
-                  c3.get("tracebacks") == 0 and bool(c3.get("state_valid_after")),
+                  num(c3.get("tracebacks"), -1) == 0 and bool(c3.get("state_valid_after")),
                   f"tracebacks {c3.get('tracebacks')}, state valid {c3.get('state_valid_after')}"))
     c4 = load("chaos4.json")
     listeners_8080 = [l for l in (c4.get("bridge_listeners") or []) if ":8080" in l]
     chaos.append((22, "five parallel hops give one tunnel, one bridge, no orphans",
-                  c4.get("tunnels") == 1 and c4.get("tracebacks") == 0
+                  num(c4.get("tunnels")) == 1 and num(c4.get("tracebacks"), -1) == 0
                   and bool(c4.get("state_valid"))
                   and len(listeners_8080) <= 1,
                   f"ran {c4.get('ran')} refused {c4.get('refused')}, tunnels {c4.get('tunnels')}, "
@@ -187,7 +200,7 @@ def main():
                   f"{(c5.get('rotation') or {}).get('seconds')}s, bounded {c5.get('bounded')}"))
     c6 = load("chaos6.json")
     chaos.append((24, "monkey fuzzing during a rotation leaves state byte-intact",
-                  c6.get("tracebacks") == 0 and bool(c6.get("state_valid"))
+                  num(c6.get("tracebacks"), -1) == 0 and bool(c6.get("state_valid"))
                   and bool(c6.get("config_valid")),
                   f"{c6.get('count')} commands, tracebacks {c6.get('tracebacks')}, "
                   f"state valid {c6.get('state_valid')}"))

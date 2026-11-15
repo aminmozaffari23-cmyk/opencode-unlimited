@@ -488,7 +488,10 @@ def main():
             save("gap2.json", res)
             log(f"  step {name}")
 
-        MARKER = str(EV.parent / "gap2-done")
+        # Outside the repo: a marker inside the tree makes `git status` dirty
+        # and turns the audit's "clean committed tree" check into a lie about
+        # the code rather than a truth about the harness.
+        MARKER = "/tmp/gap2-done"
         if os.path.exists(MARKER):
             os.unlink(MARKER)
 
