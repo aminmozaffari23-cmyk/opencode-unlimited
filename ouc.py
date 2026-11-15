@@ -4856,11 +4856,26 @@ def wall_from_chunk(chunk: bytes) -> "dict | None":
 
 
 def opencode_env(cfg: Config, cwd: "str | None" = None) -> dict:
-    """Process-only proxy settings and a PWD matching the actual launch cwd."""
+    """Process-only proxy settings and a PWD matching the actual launch cwd.
+
+    Proxy settings are needed whenever the bridge is the way out: always in
+    proxy mode, and in tunnel mode whenever Psiphon holds the traffic. That
+    second case is not cosmetic. A tunnel-mode fallback leaves opencode with no
+    proxy configured while the guard's owner-scoped rules drop its direct
+    egress, so every request fails from inside a working tunnel — measured live
+    as `ECONNREFUSED` from opencode during a rotation that had already found a
+    good exit, which reads as a provider failure and is nothing of the sort.
+    """
     env = dict(os.environ)
     env.setdefault("PATH", "/usr/local/bin:/usr/bin:/bin")
     env["PWD"] = os.path.realpath(cwd or os.getcwd())
-    if cfg.proxy_mode:
+    via_bridge = cfg.proxy_mode
+    if not via_bridge:
+        try:
+            via_bridge = State(cfg).load().get("active_backend") == BACKEND_PSIPHON
+        except Exception:
+            via_bridge = False
+    if via_bridge:
         for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
             env[key] = cfg.http_proxy
         # Inherited '*' / provider-domain bypasses defeat the whole bridge.

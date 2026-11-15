@@ -52,6 +52,12 @@ found by the tunnel-mode window of the Phase-4 live matrix.
   that no longer existed, so the rotation's own verification failed ECONNREFUSED
   and the run reported a Psiphon failure that was ours. The pin is now lifted
   before the first probe and re-installed with the tunnel on the way back.
+* **In tunnel mode opencode was launched with no proxy at all.** Correct while
+  WARP owns the traffic, fatal while Psiphon does: the guard's owner-scoped
+  rules drop opencode's direct egress, so a rotation that had already found a
+  good exit then failed its own verification with `ECONNREFUSED` from opencode.
+  `opencode_env()` now follows the active backend and hands opencode the bridge
+  whenever Psiphon is carrying traffic, and only then.
 * **`ouc hop --backend warp` could not rotate out of a Psiphon episode.**
   The WARP phase probed before restoring WARP's TUN, so it measured the bare
   host route and failed with "no fresh /64 available right now … [nothing]" —
@@ -63,7 +69,7 @@ found by the tunnel-mode window of the Phase-4 live matrix.
 
 ### Tests
 
-* **t95** (19 checks) — the guard arms over an install-time default and records
+* **t95** (21 checks) — the guard arms over an install-time default and records
   its dialect, a real rule reaches the firewall, escalation in tunnel mode takes
   WARP down, the state and the log record it, the return brings WARP back up and
   clears the flag, the guard is proxy-compatible while Psiphon carries traffic

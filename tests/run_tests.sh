@@ -2814,6 +2814,28 @@ t95_fallback_takes_the_tunnel_down(){
         "$(state_of "d.get('guard_mode')")" "proxy"
   check "and the pin is recorded as lifted for the fallback (it pointed at WARP)" \
         "$(state_of "d.get('pin_lifted_for_backend')")" "psiphon"
+  # In tunnel mode opencode is normally launched with no proxy at all, which is
+  # correct while WARP holds the traffic and fatal while Psiphon does: the
+  # owner-scoped guard drops opencode's direct egress, so a working tunnel looks
+  # like ECONNREFUSED. The launch env has to follow the active backend.
+  export OUC_HTTP_PROXY="http://127.0.0.1:${OUC_PROXY_HTTP_PORT}"
+  check "the launch env hands opencode the bridge while Psiphon carries traffic" \
+        "$(OUC_STATE_DIR="$OUC_STATE_DIR" OUC_STATE_DIR="$OUC_STATE_DIR" python3 -c "
+import json,sys
+sys.path.insert(0, '$ROOT')
+p='$OUC_STATE_DIR/state.json'
+d=json.load(open(p)); d['active_backend']='psiphon'; json.dump(d, open(p,'w'))
+import ouc
+print(ouc.opencode_env(ouc.Config()).get('HTTPS_PROXY',''))")" \
+        "$OUC_HTTP_PROXY"
+  check "and does not when WARP is back in charge" \
+        "$(python3 -c "
+import json,sys
+sys.path.insert(0, '$ROOT')
+p='$OUC_STATE_DIR/state.json'
+d=json.load(open(p)); d['active_backend']='warp'; json.dump(d, open(p,'w'))
+import ouc
+print(ouc.opencode_env(ouc.Config()).get('HTTPS_PROXY',''))")" ""
 
   rc=0
   timeout 120 python3 "$ROOT/ouc.py" hop --backend warp --wait 90 > "$T/w-hop.out" 2>&1 || rc=$?
