@@ -1650,6 +1650,13 @@ class Bridge:
         self.start()
 
     def start(self) -> bool:
+        # A bridge on an ephemeral port is a bridge nobody can find: it answers
+        # nothing, cannot be stopped by port, and shows up later as an orphan.
+        # Refusing is the only honest outcome.
+        if int(self.cfg.proxy_http_port or 0) <= 0:
+            self.log("bridge: no listen port configured (proxy_http_port is 0) — "
+                     "refusing to start a listener nothing can reach", "ERROR")
+            return False
         owner, cmd = self.in_use_by_foreign()
         if owner:
             self.log(f"bridge: port {self.cfg.proxy_http_port} is held by pid {owner} "

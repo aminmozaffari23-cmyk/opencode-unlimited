@@ -788,6 +788,15 @@ def main():
         res["tracebacks"] = sum(1 for r in res["results"] if r["traceback"])
         res["tunnels"] = count_procs("psiphon-tunnel-core")
         res["bridges"] = count_procs("ouc.py bridge")
+        # Record *what* each bridge is, not just how many. "bridges=2" sat in the
+        # evidence for a day because a bare count cannot say which of them is the
+        # supervisor's, which is the hop's, and which is a listener nobody can
+        # reach. A count without identities is a number, not a finding.
+        res["bridge_procs"] = sh([
+            "bash", "-c",
+            "ps -eo pid,ppid,lstart,args | grep '[o]uc.py bridge' || true"])["out"].strip().splitlines()
+        res["bridge_listeners"] = sh([
+            "bash", "-c", "ss -ltnp 2>/dev/null | grep -E ':(8080|9060)\\b' || true"])["out"].strip().splitlines()
         try:
             json.loads(pathlib.Path(STATE).read_text())
             res["state_valid"] = True
