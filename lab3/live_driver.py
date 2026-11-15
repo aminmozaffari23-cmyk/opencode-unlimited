@@ -209,6 +209,23 @@ def sup_status():
     return (r["json"] or {}).get("supervisor") or {}
 
 
+def norm_rules(lines):
+    """Drop counters, comments and timestamps so two saves are comparable.
+
+    Comparing `iptables-save` output verbatim can only ever be False: every
+    save carries its own timestamp and per-chain packet counters. The audit
+    pass has done this correctly for a while; the live driver had not, so its
+    "iptables unchanged" check was guaranteed to fail and was ignored.
+    """
+    out = []
+    for line in lines or []:
+        line = re.sub(r"\[[0-9]+:[0-9]+\]", "", line)
+        line = re.sub(r"^# .*$", "", line).rstrip()
+        if line:
+            out.append(line)
+    return sorted(out)
+
+
 def count_procs(pattern):
     """Count with a bracketed pattern and without matching our own shell.
 
@@ -474,6 +491,8 @@ def main():
         ensure_bridge()
         time.sleep(2)
         base = snapshot()
+        base["iptables_norm"] = norm_rules(base["iptables"])
+        base["ip6tables_norm"] = norm_rules(base["ip6tables"])
         g2("baseline", hosts_sha=base["hosts"], guard_rule_count=len(base["guard_rules"]),
            direct_ip=base["direct_ip"], iptables_lines=len(base["iptables"]),
            warp=sh("warp-cli --accept-tos settings | head -3")["out"],
@@ -493,6 +512,14 @@ def main():
            guard_procs=sh("pgrep -cf warp_revert_guard.sh")["out"].strip())
 
         os.environ["OUC_LIVE_WARP_MODE"] = "warp"
+        # install.sh --proxy records pin=false on disk. Tunnel mode needs the
+        # pin: Firewall.install() refuses to arm without it (a guard over an
+        # unpinned resolver would block the very request it protects), so the
+        # arming calls ask for it explicitly rather than inheriting a proxy-era
+        # default. Found live: both `pin on` and `killswitch on` returned 1 with
+        # "no IPv6 address resolved, or pinning disabled", the guard never
+        # armed, and the "no deadlock" step below proved nothing at all.
+        TUN = {"OUC_WARP_MODE": "warp", "OUC_PIN": "1"}
         tun_up = {}
         sh("warp-cli --accept-tos disconnect", timeout=60)
         sh("warp-cli --accept-tos mode warp", timeout=60)
@@ -511,11 +538,13 @@ def main():
         log(f"  tun window: up={bool(tun_up)}")
 
         # arm the guard and the pin exactly as an installed tunnel-mode host does
-        pin = ouc(["pin", "on"], extra={"OUC_WARP_MODE": "warp"})
-        ks = ouc(["killswitch", "on"], extra={"OUC_WARP_MODE": "warp"})
+        pin = ouc(["pin", "on"], extra=TUN)
+        ks = ouc(["killswitch", "on"], extra=TUN)
         st = state()
+        doc = ouc(["doctor"], timeout=200, extra=TUN)
         g2("armed", pin_rc=pin["rc"], pin_out=(pin["out"] + pin["err"])[-300:],
            ks_rc=ks["rc"], ks_out=(ks["out"] + ks["err"])[-300:],
+           doctor=(doc["out"] + doc["err"])[-1200:],
            guard_mode=st.get("guard_mode"), guard_rules=guard_rules(),
            hosts_pinned="opencode.ai" in hosts(),
            dialect_tunnel=any("-o CloudflareWARP" in r for r in guard_rules()))
@@ -527,7 +556,7 @@ def main():
            f"d=json.loads(p.read_text());d.update(active_backend='warp',warp_fail_streak=0,"
            f"fallback_activated_at=0);p.write_text(json.dumps(d,indent=2))\"", timeout=60)
         rot = ouc(["hop", "--backend", "psiphon", "--wait", "240"],
-                  extra={"OUC_WARP_MODE": "warp"}, timeout=400)
+                  extra=TUN, timeout=400)
         time.sleep(2)
         st = state()
         rules_now = guard_rules()
@@ -542,7 +571,7 @@ def main():
             f"pinned={'opencode.ai' in hosts()} egress={egress()}")
 
         # deadlock proof: a real request through the bridge while armed
-        v = ouc(["verify", "-m", MODEL], timeout=420, extra={"OUC_WARP_MODE": "warp"})
+        v = ouc(["verify", "-m", MODEL], timeout=420, extra=TUN)
         g2("no_deadlock", verify=(v["json"] or {}), rc=v["rc"], seconds=v["seconds"],
            ssh_alive=True)
         log(f"  no deadlock: verify ok={(v['json'] or {}).get('ok')}")
@@ -552,7 +581,7 @@ def main():
         sh("warp-cli --accept-tos connect", timeout=60)
         time.sleep(10)
         back = ouc(["hop", "--backend", "warp", "--wait", "240"],
-                   extra={"OUC_WARP_MODE": "warp"}, timeout=400)
+                   extra=TUN, timeout=400)
         st = state()
         rules_now = guard_rules()
         g2("returned", rc=back["rc"], backend=st.get("active_backend"),
@@ -567,7 +596,7 @@ def main():
         sh(f"sudo python3 -c \"import json,pathlib;p=pathlib.Path('{STATE}');"
            f"d=json.loads(p.read_text());d.update(active_backend='psiphon');"
            f"p.write_text(json.dumps(d,indent=2))\"", timeout=60)
-        rs = ouc(["rescue"], timeout=300, extra={"OUC_WARP_MODE": "warp"})
+        rs = ouc(["rescue"], timeout=300, extra=TUN)
         time.sleep(2)
         st = state()
         after = snapshot()
@@ -576,7 +605,8 @@ def main():
            hosts_matches_baseline=(after["hosts"] == base["hosts"]),
            backend=st.get("active_backend"),
            rules_clean=(len(guard_rules()) == 0),
-           iptables_matches=after["iptables"] == base["iptables"],
+           iptables_matches=norm_rules(after["iptables"]) == base["iptables_norm"],
+           ip6tables_matches=norm_rules(after["ip6tables"]) == base["ip6tables_norm"],
            out=(rs["out"] + rs["err"])[-700:])
         log(f"  rescued: guard_rules={len(guard_rules())} "
             f"iptables_back={after['iptables'] == base['iptables']}")
@@ -591,7 +621,8 @@ def main():
         g2("left_window", warp_mode=sh("warp-cli --accept-tos settings | head -3")["out"],
            egress=egress(), tun_devices=sh("ip -o link show | grep -c CloudflareWARP || true")["out"].strip(),
            hosts_matches_baseline=(finish["hosts"] == base["hosts"]),
-           iptables_matches=finish["iptables"] == base["iptables"],
+           iptables_matches=norm_rules(finish["iptables"]) == base["iptables_norm"],
+           ip6tables_matches=norm_rules(finish["ip6tables"]) == base["ip6tables_norm"],
            routes4_matches=finish["routes4"] == base["routes4"],
            guard_rules=finish["guard_rules"],
            egress_ok=bool(egress() and egress() != "ERROR"))
