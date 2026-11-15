@@ -233,6 +233,7 @@ binaries on a disposable Codespace.
 | — | A killed tunnel leaves a stale pidfile | `ouc stop` still finds and reaps it | `t93` |
 | — | The daemon spawns its own continuation | it verifies with a real model instead of refusing for lack of one | `t94` |
 | — | A bridge is asked to listen on port 0 | refused: an ephemeral port cannot be found, stopped or attributed | `t96` |
+| — | A foreground `hop` outlives its caller | `ouc stop` reaps it, releases the rotation lock, and says what it stopped | `t97` |
 | — | Tunnel mode falls back to Psiphon | WARP's TUN is taken down via `mode proxy` (resolver kept), pin lifted before the probe, opencode handed the bridge, full tunnel guard re-armed on return; a failed fallback leaves WARP up | `t95` |
 
 The live half of this table is run by `.github/workflows/live-verify.yml` on a

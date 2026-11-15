@@ -91,6 +91,16 @@ found by the tunnel-mode window of the Phase-4 live matrix.
   attributed later — it is exactly the shape of an orphan. The CLI now refuses
   it with a message naming the setting; `Bridge.start()` refuses to spawn one.
 
+* **`ouc stop` left foreground rotations running.** Stop stopped the
+  supervisor, the bridge and the tunnel — and nothing else. A `hop` that
+  outlived its caller (the ordinary result of a wrapper timing out and killing
+  `sudo` but not the python child) kept the rotation lock for **forty minutes**
+  on a real runner, made the next phase fail with "rotation already in
+  progress", and re-created a bridge after teardown. Stop now reaps in-flight
+  controllers for this state dir (`hop`, `watchdog`, `supervise`, `run`,
+  `resume`), waits, escalates, logs what it stopped, and re-stops the bridge
+  afterwards in case a dying rotation re-ensured one.
+
 ### Tests
 
 * **t95** (21 checks) — the guard arms over an install-time default and records

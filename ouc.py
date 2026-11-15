@@ -4088,6 +4088,97 @@ def cmd_start(args, cfg: Config, log: Log) -> int:
     return daemonize(cfg, ["supervise"])
 
 
+def _controller_pids(cfg: Config, subcmds: tuple) -> list:
+    """Our own controller processes for *this* state dir, excluding ourselves.
+
+    `ouc stop` used to stop the supervisor, the bridge and the tunnel, and
+    leave anything else running. A foreground `ouc hop` that outlived its
+    caller — the ordinary result of a wrapper timing out and killing only
+    `sudo`, not the python child — then held the rotation lock for forty
+    minutes on a real runner and made the *next* phase fail with "rotation
+    already in progress". Stop has to mean stop: nothing of ours keeps running
+    and keeps resurrecting a bridge we just removed.
+    """
+    mine = os.path.realpath(cfg.state_dir)
+    skip = {os.getpid(), os.getppid()}
+    try:
+        entries = os.listdir("/proc")
+    except OSError:
+        return []
+    found = []
+    for entry in entries:
+        if not entry.isdigit():
+            continue
+        pid = int(entry)
+        if pid in skip:
+            continue
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as fh:
+                argv = [a.decode("utf-8", "replace") for a in fh.read().split(b"\0") if a]
+        except OSError:
+            continue
+        if not any(a in argv for a in subcmds):
+            continue
+        if not any("ouc" in a for a in argv):
+            continue                       # someone else's `hop`/`watchdog`
+        try:
+            with open(f"/proc/{pid}/environ", "rb") as fh:
+                env = fh.read().decode("utf-8", "replace").split("\0")
+        except OSError:
+            continue
+        stated = ""
+        for item in env:
+            if item.startswith("OUC_STATE_DIR="):
+                stated = item.split("=", 1)[1]
+                break
+        if stated and os.path.realpath(stated) != mine:
+            continue                       # another sandbox's controller
+        found.append(pid)
+    return found
+
+
+def _reap(pids: list, grace: float = 5.0) -> list:
+    """SIGTERM, wait, SIGKILL. Returns the pids that refused to die."""
+    for pid in pids:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            pass
+    deadline = time.time() + grace
+    while time.time() < deadline and any(pid_alive(p) for p in pids):
+        time.sleep(0.1)
+    stuck = [p for p in pids if pid_alive(p)]
+    for pid in stuck:
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except OSError:
+            pass
+    time.sleep(0.2)
+    return [p for p in stuck if pid_alive(p)]
+
+
+def _stop_inflight(cfg: Config, log: Log, quiet: bool) -> None:
+    """Stop foreground rotations and watchdog runs that belong to this host."""
+    pids = _controller_pids(cfg, ("hop", "watchdog", "supervise", "run", "resume"))
+    if not pids:
+        return
+    if not quiet:
+        print(f"stopping {len(pids)} in-flight controller process(es): "
+              f"{' '.join(map(str, pids))}")
+    survived = _reap(pids)
+    if survived:
+        log(f"stop: pid(s) {survived} ignored SIGKILL — check by hand", "WARN")
+    else:
+        log(f"stop: reaped in-flight process(es) {pids}")
+    # Once a rotation owner is gone its flock is gone too, but the *results*
+    # it half-wrote must not be mistaken for a live run.
+    try:
+        Bridge(cfg, log).stop()          # a dying hop may have re-ensured it
+        Psiphon(cfg, log).stop()
+    except Exception:
+        pass
+
+
 def cmd_stop(args, cfg: Config, log: Log, quiet: bool = False) -> int:
     if cfg.mode == "systemd" and systemd_available() and not args.portable:
         rc, out = systemctl("stop", UNIT_NAME)
@@ -4109,6 +4200,7 @@ def cmd_stop(args, cfg: Config, log: Log, quiet: bool = False) -> int:
         # nothing ever will.
         Bridge(cfg, log).stop()
         Psiphon(cfg, log).stop()
+        _stop_inflight(cfg, log, quiet)
         if not quiet:
             print("not running")
         return 0
@@ -4128,6 +4220,7 @@ def cmd_stop(args, cfg: Config, log: Log, quiet: bool = False) -> int:
     Firewall(cfg, log).teardown()
     Bridge(cfg, log).stop()
     Psiphon(cfg, log).stop()
+    _stop_inflight(cfg, log, quiet)
     try:
         os.unlink(cfg.pid_file)
     except OSError:
