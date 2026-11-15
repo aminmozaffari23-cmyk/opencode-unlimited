@@ -519,7 +519,12 @@ def main():
         # default. Found live: both `pin on` and `killswitch on` returned 1 with
         # "no IPv6 address resolved, or pinning disabled", the guard never
         # armed, and the "no deadlock" step below proved nothing at all.
-        TUN = {"OUC_WARP_MODE": "warp", "OUC_PIN": "1", "OUC_KILLSWITCH": "1"}
+        TUN = {"OUC_WARP_MODE": "warp", "OUC_PIN": "1", "OUC_KILLSWITCH": "1",
+               # Any single region can burn a minute proving a quota wall before
+               # the next one is tried; the default budget expired one region in
+               # and the window reported "no working Psiphon exit" when it had
+               # only asked one exit.
+               "OUC_ROTATION_TIMEOUT": "600"}
         tun_up = {}
         sh("warp-cli --accept-tos disconnect", timeout=60)
         sh("warp-cli --accept-tos mode warp", timeout=60)
@@ -625,7 +630,10 @@ def main():
            ip6tables_matches=norm_rules(finish["ip6tables"]) == base["ip6tables_norm"],
            routes4_matches=finish["routes4"] == base["routes4"],
            guard_rules=finish["guard_rules"],
-           egress_ok=bool(egress() and egress() != "ERROR"))
+           # `ouc rescue` deliberately stops the bridge, so probing through it
+           # after the fact says nothing about the host. Ask the direct path.
+           egress_ok=bool(direct_ip() and direct_ip() != "ERROR"),
+           egress_direct=direct_ip())
         pathlib.Path(MARKER).write_text("done\n")
         save("gap2.json", res)
         ouc(["stop"], timeout=120)

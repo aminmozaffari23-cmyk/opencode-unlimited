@@ -2804,12 +2804,17 @@ t95_fallback_takes_the_tunnel_down(){
   local rc=0
   timeout 120 python3 "$ROOT/ouc.py" hop --backend psiphon --wait 90 > "$T/g-hop.out" 2>&1 || rc=$?
   check "the escalation succeeded in tunnel mode" "$rc" "0"
+  # `mode proxy` rather than `disconnect`: the TUN device is what has to go, the
+  # resolver that lives in warp-svc must not. (A plain disconnect took DNS with
+  # it, and every name lookup inside the fallback failed with EAI_AGAIN.)
   check "and it took WARP's TUN down to make the rotation real" \
-        "$(jval "$FAKE_WARP_STATE" connected)" "false"
+        "$(jval "$FAKE_WARP_STATE" mode)" "proxy"
+  check "without disconnecting the service that also resolves its names" \
+        "$(jval "$FAKE_WARP_STATE" connected)" "true"
   check "the state records why" \
         "$(state_of "bool(d.get('warp_tun_down_for_fallback'))")" "True"
   check "the log says it in plain words" \
-        "$(cat "$T/g-hop.out" "$OUC_STATE_DIR/ouc.log" 2>/dev/null | grep -c "took WARP")" "1"
+        "$(cat "$T/g-hop.out" "$OUC_STATE_DIR/ouc.log" 2>/dev/null | grep -c "took WARP's TUN down")" "1"
   check "the guard switched to the dialect Psiphon can survive" \
         "$(state_of "d.get('guard_mode')")" "proxy"
   check "and the pin is recorded as lifted for the fallback (it pointed at WARP)" \
@@ -2840,8 +2845,8 @@ print(ouc.opencode_env(ouc.Config()).get('HTTPS_PROXY',''))")" ""
   rc=0
   timeout 120 python3 "$ROOT/ouc.py" hop --backend warp --wait 90 > "$T/w-hop.out" 2>&1 || rc=$?
   check "the return to WARP succeeded" "$rc" "0"
-  check "WARP is connected again" \
-        "$(jval "$FAKE_WARP_STATE" connected)" "true"
+  check "WARP is back in TUN mode and connected" \
+        "$(jval "$FAKE_WARP_STATE" mode)$(jval "$FAKE_WARP_STATE" connected)" "warptrue"
   check "and the flag is cleared" \
         "$(state_of "bool(d.get('warp_tun_down_for_fallback'))")" "False"
   check "and the full tunnel-dialect guard is back" \
@@ -2857,7 +2862,9 @@ print(ouc.opencode_env(ouc.Config()).get('HTTPS_PROXY',''))")" ""
   rc=0
   timeout 150 python3 "$ROOT/ouc.py" hop --backend psiphon --wait 60 > "$T/f-hop.out" 2>&1 || rc=$?
   check "a fallback with no usable exit fails loudly" "$([ "$rc" -ne 0 ] && echo yes)" "yes"
-  check "and WARP's TUN is back up afterwards" \
+  check "and WARP is back in TUN mode afterwards" \
+        "$(jval "$FAKE_WARP_STATE" mode)" "warp"
+  check "and connected" \
         "$(jval "$FAKE_WARP_STATE" connected)" "true"
   check "the state does not claim WARP is down" \
         "$(state_of "bool(d.get('warp_tun_down_for_fallback'))")" "False"

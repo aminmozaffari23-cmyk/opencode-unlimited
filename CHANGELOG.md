@@ -52,6 +52,12 @@ found by the tunnel-mode window of the Phase-4 live matrix.
   that no longer existed, so the rotation's own verification failed ECONNREFUSED
   and the run reported a Psiphon failure that was ours. The pin is now lifted
   before the first probe and re-installed with the tunnel on the way back.
+* **Taking WARP down took the resolver with it.** `disconnect` removed the TUN
+  device *and* the DNS service, so once the tunnel was out of the way every name
+  lookup inside the fallback failed (`getaddrinfo EAI_AGAIN opencode.ai` on a
+  real runner) — a working tunnel that nothing could reach through. The
+  fallback now puts WARP into `mode proxy`, which removes the default route and
+  keeps `warp-svc`'s resolver, and restores `mode warp` on the way back.
 * **In tunnel mode opencode was launched with no proxy at all.** Correct while
   WARP owns the traffic, fatal while Psiphon does: the guard's owner-scoped
   rules drop opencode's direct egress, so a rotation that had already found a

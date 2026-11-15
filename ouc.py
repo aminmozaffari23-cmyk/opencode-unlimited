@@ -2589,14 +2589,25 @@ def _clear_warp_tun_for_psiphon(cfg: Config, state: "State", log: Log,
         if not W.connected():
             state.update(warp_tun_down_for_fallback=True)
             return True
-        W.disconnect()
+        # `mode proxy` instead of `disconnect`: it removes WARP's TUN device —
+        # which is the thing standing between Psiphon and the internet — while
+        # leaving warp-svc and its DNS resolver running. A plain disconnect took
+        # the resolver with it and every name lookup inside the fallback failed
+        # (EAI_AGAIN for opencode.ai on a real runner), so the tunnel was fine
+        # and nothing could be reached through it.
+        W._run("mode", "proxy", timeout=15)
+        for _ in range(10):          # let the kernel drop the interface
+            if not tun_exists(cfg.tun_iface):
+                break
+            time.sleep(0.5)
+        state.update(warp_mode_saved_for_fallback=True)
     except Exception as exc:
         log(f"tunnel: could not take WARP down for the fallback ({exc})", "WARN")
         return False
     state.update(warp_tun_down_for_fallback=True)
-    log("tunnel: took WARP's TUN down so Psiphon can dial out directly — with "
-        "it up, every exit measures the host's own address and no rotation "
-        "would be real", "WARN")
+    log("tunnel: took WARP's TUN down (mode proxy, resolver left up) so Psiphon "
+        "can dial out directly — with it up, every exit measures the host's own "
+        "address and no rotation would be real", "WARN")
     return True
 
 
@@ -2623,6 +2634,9 @@ def _restore_warp_tun(cfg: Config, state: "State", log: Log,
                 state.update(pin_lifted_for_backend="")
                 log("pin: re-installed the IPv6 pin for the WARP tunnel")
         W = warp or Warp(cfg, log)
+        if state.load().get("warp_mode_saved_for_fallback"):
+            W.mode_warp()          # back to TUN mode, this deployment's shape
+            state.update(warp_mode_saved_for_fallback=False)
         W.connect()
         for _ in range(max(4, int(cfg.connect_wait / 2))):
             if W.connected():
@@ -2652,18 +2666,13 @@ def _activate_backend(cfg: Config, state: "State", log: Log, backend: str,
     st = state.load()
     fields = {"active_backend": backend, "active_socks_port": port}
     if backend == BACKEND_PSIPHON:
-        if not cfg.proxy_mode:
-            try:
-                W = warp or Warp(cfg, log)
-                if W.connected():
-                    W.disconnect()
-                    fields["warp_tun_down_for_fallback"] = True
-                    log("tunnel: took WARP's TUN down so Psiphon can dial out "
-                        "directly — with it up, every exit measures the same "
-                        "address and no rotation would be real", "WARN")
-            except Exception as exc:
-                log(f"tunnel: could not take WARP down for the fallback ({exc})",
-                    "WARN")
+        # The normal path has already done this before probing (it has to: with
+        # WARP's TUN up every exit measures the host's own address). This is the
+        # belt-and-braces call for activations that arrived another way — one
+        # implementation, one log line, no double disconnect.
+        if not cfg.proxy_mode and not st.get("warp_tun_down_for_fallback"):
+            _clear_warp_tun_for_psiphon(cfg, state, log, warp)
+            st = state.load()
         if not int(st.get("fallback_activated_at") or 0):
             fields["fallback_activated_at"] = now()
         # Psiphon exits are IPv4. An IPv6 /etc/hosts pin would send opencode
