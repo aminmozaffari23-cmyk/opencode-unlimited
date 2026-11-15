@@ -55,7 +55,8 @@ jobs:
           set -x
           python3 --version
           sudo apt-get update -qq
-          sudo apt-get install -y -qq curl jq iproute2 procps iptables ip6tables conntrack
+          # ip6tables is shipped inside the iptables package on 24.04, not as its own
+          sudo apt-get install -y -qq curl jq iproute2 procps iptables conntrack
           ls -l /dev/net/tun || true
           id
           echo "HOME=$HOME"
