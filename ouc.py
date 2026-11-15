@@ -66,7 +66,7 @@ import time
 import urllib.request
 import uuid
 
-VERSION = "2.6.1"
+VERSION = "2.6.2"
 BRAND = "opencode-unlimited"
 DEFAULT_STATE_DIR = "/var/lib/opencode-unlimited"
 UNIT_NAME = "opencode-unlimited.service"
@@ -2319,19 +2319,51 @@ class Psiphon:
         self._reader.start()
         self.log(f"psiphon: started pid {proc.pid} region={cfg_data.get('EgressRegion') or 'auto'} "
                  f"(DisableReplay=true, socks {self.cfg.psiphon_socks_port})")
+        def failed(detail: str) -> tuple:
+            """A launch that did not become a usable tunnel owns nothing.
+
+            Measured on a disposable host: when every region was walled, each
+            failed attempt left its child running, so `ouc hop` returned a
+            failure while two walled tunnels were still holding memory and
+            fighting over the SOCKS port. The next attempt would SIGTERM the
+            pidfile's pid and leave the other one behind — an orphan per
+            failed region, which is exactly what the "zero orphans" promise
+            forbids. If we did not get a tunnel, we do not keep the process.
+            """
+            try:
+                if proc.poll() is None:
+                    proc.terminate()
+                    for _ in range(25):
+                        if proc.poll() is not None:
+                            break
+                        time.sleep(0.2)
+                    if proc.poll() is None:
+                        proc.kill()
+                        time.sleep(0.2)
+            except OSError:
+                pass
+            self._close_log()
+            try:
+                os.unlink(self.cfg.psiphon_pid_file)
+            except OSError:
+                pass
+            self.log(f"psiphon: launch did not produce a tunnel — pid {proc.pid} "
+                     f"stopped ({detail[:120]})", "WARN")
+            return False, detail
+
         deadline = time.monotonic() + self.cfg.psiphon_start_wait
         while time.monotonic() < deadline:
             if proc.poll() is not None:
                 tail = " | ".join(self._lines[-3:])
-                return False, f"psiphon exited rc={proc.returncode} {tail}"[:300]
+                return failed(f"psiphon exited rc={proc.returncode} {tail}"[:300])
             if self._connected.wait(0.5):
                 break
         if not self._connected.is_set():
             # No Tunnels notice: say what actually happened, do not guess.
             tail = next((l for l in reversed(self._lines)
                          if '"error"' in l or "Error" in l), "")
-            return False, (f"no tunnel within {self.cfg.psiphon_start_wait}s"
-                           + (f": {tail[:200]}" if tail else ""))
+            return failed(f"no tunnel within {self.cfg.psiphon_start_wait}s"
+                          + (f": {tail[:200]}" if tail else ""))
         # The notice means the tunnel is up; the SOCKS port follows immediately.
         # Someone else may bind it in that window, so check the owner, not just
         # the fact that something is listening.
@@ -2342,11 +2374,11 @@ class Psiphon:
                     self.log(f"psiphon: SOCKS port {self.cfg.psiphon_socks_port} was "
                              f"taken by pid {owner} ({cmd[:60]!r}) during startup",
                              "SECURITY")
-                    return False, (f"the SOCKS port was taken by pid {owner} "
-                                   f"({cmd[:60] or 'unknown'}) during startup")
+                    return failed(f"the SOCKS port was taken by pid {owner} "
+                                  f"({cmd[:60] or 'unknown'}) during startup")
                 return True, "tunnel up"
             time.sleep(0.25)
-        return False, "tunnel reported up but the SOCKS port never opened"
+        return failed("tunnel reported up but the SOCKS port never opened")
 
     def status(self) -> dict:
         ok, detail = self.available()
@@ -2602,6 +2634,12 @@ def _rotate_psiphon(cfg: Config, log: Log, state: State, why: str,
                     pinner.remove()
             except Exception:
                 pass
+        try:
+            prev = (state.load().get("active_backend") or BACKEND_WARP)
+            if prev != BACKEND_PSIPHON:
+                state.update(backend_before_fallback=prev)
+        except Exception:
+            pass
         _activate_backend(cfg, state, log, BACKEND_PSIPHON)
         if cfg.kill_switch and not cfg.proxy_mode:
             fw = Firewall(cfg, log, state)
@@ -2631,8 +2669,25 @@ def _rotate_psiphon(cfg: Config, log: Log, state: State, why: str,
         if not result["ok"]:
             log(f"psiphon rotation FAILED after {result['duration']}s: "
                 f"{result['error']}", "ERROR")
+            # A failed escalation must hand the machine back in a state we can
+            # describe. Two things were wrong when every region was walled:
+            # the last tunnel kept running (holding the SOCKS port and the
+            # "zero orphans" promise) and active_backend still said Psiphon,
+            # so `ouc status` described traffic that was not moving.
             try:
-                state.update(last_error=result["error"], last_rotation=result)
+                psiphon_cleanup = Psiphon(cfg, log)
+                if psiphon_cleanup.pid():
+                    psiphon_cleanup.stop()
+                    log("psiphon: stopped the failed fallback tunnel", "WARN")
+            except Exception:
+                pass
+            try:
+                st = state.load()
+                previous = (st.get("backend_before_fallback") or BACKEND_WARP)
+                state.update(active_backend=previous,
+                             active_socks_port=_bridge_socks_for(cfg, previous),
+                             backend_after_failed_fallback=previous,
+                             last_error=result["error"], last_rotation=result)
             except Exception:
                 pass
         try:
