@@ -1,5 +1,55 @@
 # CHANGELOG — opencode-unlimited
 
+## 2.6.2 — a failed escalation owns up, and stops what it started
+
+### Fixed
+
+* **A launch that failed left its process running.** `Psiphon.start()` returned
+  `False` on all four failure paths (child exited, no `Tunnels` notice, SOCKS
+  port taken during startup, port never opened) without terminating the child it
+  had just spawned. With three regions out of quota that is up to three walled
+  tunnels alive while `ouc hop` reports failure, each still holding the SOCKS
+  port the next attempt needs. Every failure path now stops the process, removes
+  the pidfile and logs the launch as not-a-tunnel.
+* **A failed escalation left `active_backend` claiming Psiphon.** `ouc status`
+  described traffic that was not moving. The failure path now stops the last
+  walled tunnel and restores `active_backend` (and the bridge's upstream) to the
+  backend recorded in `backend_before_fallback` before the escalation started.
+
+### Tests
+
+* `t91_chaos_every_region_walled` — every configured region is walled at once;
+  the hop must fail honestly, record one attempt per region, stay inside
+  `OUC_ROTATION_TIMEOUT`, leave no tunnel behind, and not claim Psiphon.
+  Fails on 0115fb8, passes here.
+
+## 2.6.1 — the daemon can resume the session it just rotated for
+
+Found live, during Phase-4 Gap #1, on a disposable Codespace: the supervisor
+detected a quota wall while Psiphon carried the traffic, escalated through
+DE/US/NL, fell back to WARP, rotated two `/64`s — and then the auto-resume child
+it spawned was refused by the rotation lock the same tick still held:
+
+```
+resume.log: another managed run owns recovery; refusing a duplicate
+```
+
+The wall had already been marked handled, so nothing retried: the session the
+daemon had rotated for was silently dropped while the supervisor log reported
+recovery. Four `pytest` cases and `t90` pin the behaviour.
+
+### Fixed
+
+* `ManagedRunLease.acquire(wait=)` — a foreground command still fails fast, but
+  a child spawned by the supervisor's own tick waits `OUC_WAIT_FOR_RECOVERY`
+  (240 s in the spawned child) for the rotation lock instead of giving up.
+* `OUC_AUTO_RESUME_WINDOW` (default 900 s) replaces a hardcoded 120 s window
+  that expired in the middle of a legitimate multi-region escalation.
+* `supervisor_auto_resume` releases `resume.lock` when the child starts;
+  leaving it to interpreter teardown fenced off every later attempt.
+
+## 2.6.0 — the fallback survives tunnel mode
+
 ## 2.5.1 — the fallback becomes reachable on a real host
 
 2.5.0 was written against a fake tunnel. Running it on a disposable Codespace
