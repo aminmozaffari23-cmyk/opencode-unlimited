@@ -1764,8 +1764,18 @@ def cmd_bridge(args, cfg: Config, log: Log) -> int:
     return run_bridge(listen, socks, log, dynamic=dynamic)
 
 
-def probe_egress(cfg: Config) -> str:
-    """Return the address the outside world sees (usually the WARP IPv6)."""
+def probe_egress(cfg: Config, proxy_url: str = "", strict: bool = False) -> str:
+    """Return the address the outside world sees (usually the WARP IPv6).
+
+    `proxy_url` asks for the probe to go *through* that proxy, which is what a
+    fallback check needs: in tunnel mode this function otherwise tests the
+    host's own route, so a Psiphon rotation was comparing the host against
+    itself and refusing itself as a leak. Measured live, twice: all regions
+    "matched the host" — first WARP's IPv6, then the bare IPv4 once WARP was
+    down. With `strict`, a probe that cannot use the proxy returns nothing
+    instead of quietly answering from the direct path, because a leak check
+    that can fall back to the leaking path is not a leak check.
+    """
     if cfg.probe_cmd:
         try:
             p = subprocess.run(cfg.probe_cmd, shell=True, capture_output=True,
@@ -1773,7 +1783,10 @@ def probe_egress(cfg: Config) -> str:
             return (p.stdout or "").strip()
         except Exception:
             return ""
-    proxy = ["-x", cfg.http_proxy] if cfg.proxy_mode else []
+    if proxy_url:
+        proxy = ["-x", proxy_url]
+    else:
+        proxy = ["-x", cfg.http_proxy] if cfg.proxy_mode else []
     try:
         p = subprocess.run(["curl", "-s", "-m", "8", *proxy, cfg.probe_url],
                            capture_output=True, text=True, timeout=15)
@@ -1781,12 +1794,15 @@ def probe_egress(cfg: Config) -> str:
             return (p.stdout or "").strip()
     except Exception:
         pass
+    if strict:
+        return ""
     # stdlib fallback
     try:
         import urllib.request
-        if cfg.proxy_mode:
+        if proxy_url or cfg.proxy_mode:
             handler = urllib.request.ProxyHandler(
-                {"http": cfg.http_proxy, "https": cfg.http_proxy})
+                {"http": proxy_url or cfg.http_proxy,
+                 "https": proxy_url or cfg.http_proxy})
             opener = urllib.request.build_opener(handler)
             with opener.open(cfg.probe_url, timeout=10) as r:
                 return r.read().decode().strip()
@@ -2568,8 +2584,15 @@ def _clear_warp_tun_for_psiphon(cfg: Config, state: "State", log: Log,
 
 
 def _restore_warp_tun(cfg: Config, state: "State", log: Log,
-                      warp: "Warp | None" = None) -> None:
-    """Bring WARP back up after a fallback attempt that did not take."""
+                      warp: "Warp | None" = None, why: str = "") -> None:
+    """Bring WARP's TUN back up and say honestly why it went down.
+
+    Called from two very different places — the return leg of a *successful*
+    fallback, and the cleanup after one that failed — so it takes the reason
+    rather than asserting one. (It used to say "the fallback attempt did not
+    take" on the success path too, which is the kind of log line that teaches
+    an operator to stop reading the logs.)
+    """
     if cfg.proxy_mode or not state.load().get("warp_tun_down_for_fallback"):
         return
     try:
@@ -2584,7 +2607,7 @@ def _restore_warp_tun(cfg: Config, state: "State", log: Log,
             if W.connected():
                 break
             time.sleep(2)
-        log("tunnel: WARP is back up — the fallback attempt did not take")
+        log(f"tunnel: WARP is back up — {why or 'the Psiphon episode is over'}")
     except Exception as exc:
         log(f"tunnel: could not bring WARP back up ({exc})", "WARN")
         return
@@ -2722,8 +2745,12 @@ def _rotate_psiphon(cfg: Config, log: Log, state: State, why: str,
                          active_socks_port=cfg.psiphon_socks_port)
             Bridge(cfg, log).ensure()
             cand = ""
+            # Through the bridge, because that is the path we are proposing to
+            # hand traffic to. A direct probe here measures the host and calls
+            # the result a fallback.
+            via = f"http://127.0.0.1:{cfg.proxy_http_port}"
             for _ in range(20):
-                cand = (probe_egress(cfg) or "").strip()
+                cand = (probe_egress(cfg, proxy_url=via, strict=True) or "").strip()
                 if cand:
                     break
                 time.sleep(0.5)
@@ -3256,7 +3283,7 @@ def rotate(cfg: Config, log: Log, state: State, why: str = "",
             return result
         # Psiphon could not carry traffic: WARP is going to, so put its TUN
         # back before we hand the host back to it.
-        _restore_warp_tun(cfg, state, log)
+        _restore_warp_tun(cfg, state, log, why="the fallback attempt did not take")
         # A failed fallback is not the end of the ladder: try WARP once more
         # unless the operator pinned Psiphon.
         if forced != BACKEND_PSIPHON and cfg.backend_mode != BACKEND_PSIPHON:
@@ -3271,6 +3298,11 @@ def rotate(cfg: Config, log: Log, state: State, why: str = "",
         return result
 
     # ---- WARP phase -----------------------------------------------------
+    # If a fallback episode left WARP's TUN down, put it back *before* probing.
+    # Measured live: `ouc hop --backend warp` from a Psiphon episode rotated
+    # nothing and failed with "no fresh /64 available" because the probe was
+    # reading the bare host route — there was no tunnel to measure.
+    _restore_warp_tun(cfg, state, log)
     # Point the bridge at WARP before probing: after a fallback episode the
     # dynamic bridge would otherwise still measure Psiphon's egress and call it
     # a WARP result.
@@ -3316,7 +3348,7 @@ def rotate(cfg: Config, log: Log, state: State, why: str = "",
         return escalated
     # Leaving WARP's TUN down after a failed escalation would be a silent
     # outage dressed up as a failed rotation.
-    _restore_warp_tun(cfg, state, log)
+    _restore_warp_tun(cfg, state, log, why="the fallback attempt did not take")
     log("backend: Psiphon did not produce a working exit either", "ERROR")
     return result
 

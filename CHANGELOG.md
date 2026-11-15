@@ -37,6 +37,19 @@ found by the tunnel-mode window of the Phase-4 live matrix.
   §2 handoff itself — proxy-compatible rules before the probe, full
   tunnel-dialect guard re-armed on the way back — and records the dialect in
   `state.json` where `status` and `ouc doctor` can report it.
+* **The fallback check measured the host, not the fallback.** In tunnel mode
+  `probe_egress()` probed **directly**, never through the bridge, so every
+  Psiphon candidate returned whatever address the host was already using —
+  WARP's IPv6 in one run, the bare IPv4 in the next once WARP was down — and the
+  controller refused its own measurement as a leak ("egress equals the host's
+  own address"). Fixed twice over: `probe_egress()` takes an explicit
+  `proxy_url` and a `strict` flag that refuses to fall back to the direct path
+  (a leak check that can answer from the leaking path is not a leak check), and
+  the Psiphon candidate probe now goes through the bridge opencode will use.
+* **`ouc hop --backend warp` could not rotate out of a Psiphon episode.**
+  The WARP phase probed before restoring WARP's TUN, so it measured the bare
+  host route and failed with "no fresh /64 available right now … [nothing]" —
+  there was no tunnel to measure. The return leg now restores WARP first.
 * **`ouc killswitch on` installed the rules but left `state.json` saying
   `guard_mode: null`.** The CLI built its `Firewall` without a state handle, so
   `_record_mode()` no-opped: a live run showed 19 real rules in `iptables` while
