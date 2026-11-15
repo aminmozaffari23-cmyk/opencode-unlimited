@@ -8,8 +8,8 @@ Rotate a Cloudflare WARP `/64`, and when that pool is exhausted, hand the same
 session to Psiphon — automatically, verified, and without the conversation
 starting over.
 
-[![Version](https://img.shields.io/badge/version-2.6.2-1f6feb?style=flat-square)](CHANGELOG.md)
-[![Offline suite](https://img.shields.io/badge/offline%20suite-74%20passed%20%7C%200%20failed-2ea043?style=flat-square)](tests/run_tests.sh)
+[![Version](https://img.shields.io/badge/version-2.6.3-1f6feb?style=flat-square)](CHANGELOG.md)
+[![Offline suite](https://img.shields.io/badge/offline%20suite-75%20passed%20%7C%200%20failed-2ea043?style=flat-square)](tests/run_tests.sh)
 [![pytest](https://img.shields.io/badge/pytest-104%20passed-2ea043?style=flat-square)](tests/test_runner_v2.py)
 [![Backends](https://img.shields.io/badge/backends-WARP%20%2B%20Psiphon%20fallback-8957e5?style=flat-square)](#how-the-dual-engine-works)
 [![Dependencies](https://img.shields.io/badge/dependencies-Python%203.8%2B%20stdlib%20only%20%C2%B7%20zero%20pip-0b7285?style=flat-square)](#requirements)
@@ -229,6 +229,7 @@ binaries on a disposable Codespace.
 | — | Tunnel mode ⇄ Psiphon guard handover | no deadlock, pin lifted, guard dialect recorded, `rescue` restores baseline | `t89` |
 | — | A rotation holds the lock while the daemon wants to resume | the daemon's child waits it out; a foreground command still answers instantly | `t90` |
 | — | Every Psiphon region is out of quota at once | failure reported, loop bounded, tunnel stopped, backend state honest | `t91` |
+| — | Psiphon's first launch is still fetching its server list | one retry of the same region with a longer budget; regions are not burned | `t92` |
 
 The live half of this table is run by `.github/workflows/live-verify.yml` on a
 disposable root runner (real `iptables`, real `warp-cli`, real
@@ -377,6 +378,7 @@ absent file means "not run", not "passed".
 
 | Version | Headline |
 | --- | --- |
+| **2.6.3** | A cold Psiphon bootstrap is retried once with a longer budget instead of being reported as a provider failure |
 | **2.6.2** | A failed escalation hands the machine back honestly: the last walled tunnel is stopped instead of left running, and `active_backend` returns to what was actually carrying traffic |
 | **2.6.1** | The daemon can now resume the session it rotated for: a spawned auto-resume waits for the rotation lock instead of refusing it, the resume window covers a full multi-region escalation (`OUC_AUTO_RESUME_WINDOW`, 900 s), and `resume.lock` is released when the child starts |
 | **2.6.0** | Tunnel mode ⇄ Psiphon handover fixed (guard dialects, pin handover, fallback respawn); chaos suite `t83`–`t88` |

@@ -31,6 +31,8 @@ LOG = fixture_path("FAKE_PSIPHON_LOG", optional=True)
 FORMAT_NOTICES = "-formatNotices" in sys.argv
 FAIL = os.environ.get("FAKE_PSIPHON_FAIL", "")
 NO_NOTICE = os.environ.get("FAKE_PSIPHON_NO_NOTICE", "")
+SLOW_FIRST = int(os.environ.get("FAKE_PSIPHON_SLOW_FIRST", "0") or 0)
+START_COUNTER = os.environ.get("FAKE_PSIPHON_START_COUNTER", "")
 NOTICE_DELAY = float(os.environ.get("FAKE_PSIPHON_NOTICE_DELAY", "0.2"))
 
 
@@ -101,6 +103,26 @@ def main() -> int:
         # Stay alive but never claim a tunnel: the controller must time out.
         while True:
             time.sleep(0.2)
+    if SLOW_FIRST and START_COUNTER:
+        # A cold bootstrap: the first N launches never get a tunnel. Measured
+        # on a real runner, where the tunnel core spent >45 s fetching its
+        # server list before the first successful tunnel.
+        seen = 0
+        try:
+            with open(START_COUNTER) as fh:
+                seen = int(fh.read().strip() or 0)
+        except (OSError, ValueError):
+            seen = 0
+        seen += 1
+        try:
+            with open(START_COUNTER, "w") as fh:
+                fh.write(str(seen))
+        except OSError:
+            pass
+        if seen <= SLOW_FIRST:
+            record({"event": "bootstrap", "attempt": seen})
+            while True:
+                time.sleep(0.2)
     time.sleep(NOTICE_DELAY)
     if FORMAT_NOTICES:
         stamp = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())

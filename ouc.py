@@ -66,7 +66,7 @@ import time
 import urllib.request
 import uuid
 
-VERSION = "2.6.2"
+VERSION = "2.6.3"
 BRAND = "opencode-unlimited"
 DEFAULT_STATE_DIR = "/var/lib/opencode-unlimited"
 UNIT_NAME = "opencode-unlimited.service"
@@ -2267,7 +2267,7 @@ class Psiphon:
         except Exception:
             return
 
-    def start(self, region: str) -> tuple:
+    def start(self, region: str, wait: float | None = None) -> tuple:
         """Stop any owned tunnel, write the config, spawn, wait for Tunnels."""
         ok, detail = self.available()
         if not ok:
@@ -2351,7 +2351,8 @@ class Psiphon:
                      f"stopped ({detail[:120]})", "WARN")
             return False, detail
 
-        deadline = time.monotonic() + self.cfg.psiphon_start_wait
+        budget = float(self.cfg.psiphon_start_wait if wait is None else wait)
+        deadline = time.monotonic() + budget
         while time.monotonic() < deadline:
             if proc.poll() is not None:
                 tail = " | ".join(self._lines[-3:])
@@ -2362,7 +2363,7 @@ class Psiphon:
             # No Tunnels notice: say what actually happened, do not guess.
             tail = next((l for l in reversed(self._lines)
                          if '"error"' in l or "Error" in l), "")
-            return failed(f"no tunnel within {self.cfg.psiphon_start_wait}s"
+            return failed(f"no tunnel within {budget:.0f}s"
                           + (f": {tail[:200]}" if tail else ""))
         # The notice means the tunnel is up; the SOCKS port follows immediately.
         # Someone else may bind it in that window, so check the owner, not just
@@ -2552,6 +2553,18 @@ def _rotate_psiphon(cfg: Config, log: Log, state: State, why: str,
             entry = {"how": f"psiphon@{candidate_region}", "block": "", "accepted": False}
             result["attempts"].append(entry)
             ok, detail = psiphon.start(candidate_region)
+            if not ok and _bootstrap_failure(detail) and not entry.get("retried"):
+                # Measured live on a fresh runner: the first launch of a cold
+                # tunnel core spends more than the start budget fetching its
+                # server list ("untunneled DSL fetch failed", or no Tunnels
+                # notice at all). Failing the region on that evidence alone
+                # reports a provider problem that does not exist. One retry of
+                # the same region, with a longer budget, is the honest test.
+                entry["retried"] = True
+                longer = min(180, max(90, int(cfg.psiphon_start_wait) * 2))
+                log(f"psiphon {candidate_region}: {detail} — cold bootstrap, "
+                    f"retrying the same region with a {longer}s budget", "WARN")
+                ok, detail = psiphon.start(candidate_region, wait=longer)
             if not ok:
                 entry["reason"] = detail
                 log(f"psiphon {candidate_region}: {detail}", "WARN")
@@ -2695,6 +2708,22 @@ def _rotate_psiphon(cfg: Config, log: Log, state: State, why: str,
         except Exception:
             pass
     return result
+
+
+BOOTSTRAP_MARKERS = ("no tunnel within", "DSL fetch", "untunneled",
+                     "openDataStore", "datastore", "server list")
+
+
+def _bootstrap_failure(detail: str) -> bool:
+    """Is this a cold-start failure rather than a verdict about the exit?
+
+    A provider that refuses us answers with something about the exit (a
+    handshake, a region, a quota). These markers are all about the tunnel core
+    not being ready yet, and they were observed on a machine where the very
+    next attempt produced a working tunnel in 8.1 s.
+    """
+    text = (detail or "").lower()
+    return any(marker.lower() in text for marker in BOOTSTRAP_MARKERS)
 
 
 def _spent_blocks(cfg: Config, state: State) -> set[str]:
