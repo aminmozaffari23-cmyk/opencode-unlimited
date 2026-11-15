@@ -8,9 +8,9 @@ Rotate a Cloudflare WARP `/64`, and when that pool is exhausted, hand the same
 session to Psiphon — automatically, verified, and without the conversation
 starting over.
 
-[![Version](https://img.shields.io/badge/version-2.6.0-1f6feb?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.6.1-1f6feb?style=flat-square)](CHANGELOG.md)
 [![Offline suite](https://img.shields.io/badge/offline%20suite-72%20passed%20%7C%200%20failed-2ea043?style=flat-square)](tests/run_tests.sh)
-[![pytest](https://img.shields.io/badge/pytest-100%20passed-2ea043?style=flat-square)](tests/test_runner_v2.py)
+[![pytest](https://img.shields.io/badge/pytest-104%20passed-2ea043?style=flat-square)](tests/test_runner_v2.py)
 [![Backends](https://img.shields.io/badge/backends-WARP%20%2B%20Psiphon%20fallback-8957e5?style=flat-square)](#how-the-dual-engine-works)
 [![Dependencies](https://img.shields.io/badge/dependencies-Python%203.8%2B%20stdlib%20only%20%C2%B7%20zero%20pip-0b7285?style=flat-square)](#requirements)
 [![Environment](https://img.shields.io/badge/environment-Linux%20VM%20%C2%B7%20GitHub%20Codespaces%20%C2%B7%20Docker%20(see%20note)-57606a?style=flat-square)](#docker)
@@ -24,6 +24,12 @@ starting over.
 > each move with a real request, so a quota wall costs you seconds instead of
 > your conversation. It is a queue-jumping tool, not a security product: read
 > [Honest limitations](#honest-limitations) before trusting it with anything.
+
+> **What is measured, and what is not.** Everything below marked *measured*
+> comes from a command that ran on a disposable root machine, with the
+> transcript in this repository's evidence files. Everything marked *offline*
+> is reproducible here with fakes. Where a claim still needs a live run, it
+> says so — this README does not get to be more confident than its evidence.
 
 ## Table of contents
 
@@ -212,16 +218,21 @@ Both transitions are handled and covered by `t89`.
 Every row is a test in `tests/run_tests.sh` **and** was re-run against the real
 binaries on a disposable Codespace.
 
-| # | Attack | Expected behaviour | Offline | Live |
-| --- | --- | --- | --- | --- |
-| 1 | `kill -9` the tunnel and the bridge | next supervisor tick respawns both; traffic flows again | `t84` | ✅ |
-| 2 | Squatter binds the SOCKS or bridge port | refuse, name the owning pid, never route into it | `t85` | ✅ |
-| 3 | Corrupt `state.json`, bogus PIDs, stale locks | self-heal, zero tracebacks, state rebuilt valid | `t83` | ✅ |
-| 4 | Five simultaneous `hop`s | `flock` serialises; exactly one tunnel + one bridge survive | `t86` | ✅ |
-| 5 | Two burned regions in a row | skip them by name, stay inside `OUC_ROTATION_TIMEOUT`, never spin | `t87` | ✅ |
-| 6 | 40 random CLI calls during a rotation | no crash, no starvation, no torn writes | `t88` | ✅ |
-| — | Tunnel mode ⇄ Psiphon guard handover | no deadlock, pin lifted, guard dialect recorded, `rescue` restores baseline | `t89` | ✅ |
-| — | Wall arrives *while Psiphon carries traffic* | unattended rotation to another region, same session recalled | — | ✅ |
+| # | Attack | Expected behaviour | Offline suite |
+| --- | --- | --- | --- |
+| 1 | `kill -9` the tunnel and the bridge | next supervisor tick respawns both; traffic flows again | `t84` |
+| 2 | Squatter binds the SOCKS or bridge port | refuse, name the owning pid, never route into it | `t85` |
+| 3 | Corrupt `state.json`, bogus PIDs, stale locks | self-heal, zero tracebacks, state rebuilt valid | `t83` |
+| 4 | Five simultaneous `hop`s | `flock` serialises; exactly one tunnel + one bridge survive | `t86` |
+| 5 | Two burned regions in a row | skip them by name, stay inside `OUC_ROTATION_TIMEOUT`, never spin | `t87` |
+| 6 | 40 random CLI calls during a rotation | no crash, no starvation, no torn writes | `t88` |
+| — | Tunnel mode ⇄ Psiphon guard handover | no deadlock, pin lifted, guard dialect recorded, `rescue` restores baseline | `t89` |
+
+The live half of this table is run by `.github/workflows/live-verify.yml` on a
+disposable root runner (real `iptables`, real `warp-cli`, real
+`psiphon-tunnel-core`); the job uploads its evidence JSON as an artifact rather
+than asserting success in prose. Row 1–6 live results are whatever that run
+measured, not what this table hopes.
 
 ## CLI reference
 
@@ -261,6 +272,9 @@ Environment always wins over `config.json`. The ones that matter for the ladder:
 | `OUC_PSIPHON_HTTP_PORT` | `9061` | Psiphon's own HTTP port (unused by opencode) |
 | `OUC_PSIPHON_START_WAIT` | `45` | Seconds to wait for `Tunnels {"count":1}` |
 | `OUC_PSIPHON_CONFIG_SEED` | — | Extra JSON for the generated `psiphon.config` |
+| `OUC_AUTO_RESUME` | `0` | `1` lets the supervisor continue the session itself after a wall clears |
+| `OUC_AUTO_RESUME_WINDOW` | `900` | Seconds after a wall during which that continuation may still start |
+| `OUC_WAIT_FOR_RECOVERY` | `0` | Seconds a managed command waits for a foreign rotation instead of refusing |
 | `OUC_ROTATION_TIMEOUT` | `45` | Hard budget for one rotation (never an infinite loop) |
 | `OUC_ROTATION_MODE` | `auto` | `keys` (fast) · `register` (different pool) · `auto` (both) |
 | `OUC_BLACKLIST_TTL` | `14400` | Seconds a burned block stays burned (4 h) |
@@ -301,9 +315,15 @@ if you build one:
    `proxy` mode the guard blocks *that account's* direct egress; it does not
    sandbox other users or root. Enforcing that would mean a namespace or a
    dedicated uid for the tunnel, which this version does not create.
-3. **A wall that arrives while Psiphon is carrying traffic** is handled and was
-   verified live, but only against *injected* wall events plus real rotations —
-   not against a genuine multi-hour wall storm.
+3. **A wall that arrives while Psiphon is carrying traffic** was measured live,
+   but against an *injected* wall event (the exact line opencode writes) plus
+   real rotations — not against a genuine multi-hour wall storm.
+   That run produced the most useful result in this project's history: the
+   supervisor rotated unattended, and then its own auto-resume child was
+   refused by the rotation lock it had just taken, so the continuation was
+   dropped while the log claimed recovery. `v2.6.1` fixes exactly that (see
+   [release notes](#release-notes)); the fix is pinned by four pytest cases but
+   its live re-run is still owed.
 4. **The 10-hour soak was not run.** Longest continuous live session so far:
    ~4 h wall-clock, 20 rotations, 17 of them on Psiphon.
 5. **Stacked transports are acknowledged.** WARP over a host that itself sits
@@ -317,8 +337,11 @@ if you build one:
 
 ## Evidence
 
-Every claim above traces to a file, produced by a command that ran on the
-machine — never typed in by hand:
+Every claim above traces to a file produced by a command that ran on a real
+machine — never a number typed in by hand. The live harness lives in `lab3/`
+(driver, provisioning, and the dead-man's switch that puts the machine back if
+a tunnel test severs it); the JSON it writes is uploaded as a workflow
+artifact and copied into `lab3/evidence/` for inspection:
 
 ```
 lab3/evidence/
@@ -330,6 +353,9 @@ lab3/evidence/
 ├── supervisor.log                     what the daemon actually said
 └── git-verify.json                    tested file == pushed commit
 ```
+
+A phase that fails writes its failure into the same JSON with the reason, so an
+absent file means "not run", not "passed".
 
 ### Preservation audit (18 checks, before vs after)
 
@@ -349,6 +375,7 @@ lab3/evidence/
 
 | Version | Headline |
 | --- | --- |
+| **2.6.1** | The daemon can now resume the session it rotated for: a spawned auto-resume waits for the rotation lock instead of refusing it, the resume window covers a full multi-region escalation (`OUC_AUTO_RESUME_WINDOW`, 900 s), and `resume.lock` is released when the child starts |
 | **2.6.0** | Tunnel mode ⇄ Psiphon handover fixed (guard dialects, pin handover, fallback respawn); chaos suite `t83`–`t88` |
 | **2.5.1** | Five defects that only appear against the real binaries: the `-formatNotices` notice shape, the daemon's write-only stdin (`EBADF`), the tunnel dying with its parent (`EPIPE`), a wall dropped during a repair, a phantom fallback timestamp |
 | **2.5.0** | Psiphon as an automatic fallback backend: the escalation ladder, region round-robin, `DisableReplay`, unified `/64`+`/32` blacklist |
