@@ -1,0 +1,160 @@
+name: live-verify
+
+# The live half of the test matrix: a disposable root machine with real
+# iptables, real warp-cli and real psiphon-tunnel-core.
+#
+# It exists because Codespaces ran out of budget mid-Phase-4. A hosted runner is
+# *more* disposable than a codespace, not less: the VM is destroyed when the job
+# ends, so there is no cleanup to forget and no machine to reuse by accident.
+# On a public repository these minutes are free.
+#
+# Nothing here asserts success in prose. The driver writes one JSON per phase and
+# the job uploads them; a red job means a phase reported a failure, not that a
+# machine was unavailable.
+
+on:
+  workflow_dispatch:
+    inputs:
+      phases:
+        description: "space-separated phases (gap1 c1 c2 c3 c4 c5 c6)"
+        required: false
+        default: "gap1 c1 c2 c3 c4 c5 c6"
+      tunnel_window:
+        description: "also run gap2, which enters WARP TUN mode (opt-in: it can kill the runner's own control path)"
+        type: boolean
+        required: false
+        default: false
+
+concurrency:
+  group: live-verify
+  cancel-in-progress: false
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      # The controller demotes verification to the owner of this home, so it must
+      # be the account opencode's state actually lives in on this machine.
+      OUC_TARGET_HOME: /home/runner
+      OUC_OC_BIN: /usr/local/bin/opencode
+      OUC_LIVE_REPO: ${{ github.workspace }}
+      OUC_LIVE_EV: ${{ github.workspace }}/lab3/evidence
+      OUC_WARP_MODE: proxy
+      OUC_IGNORE_TUN_CHECK: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          set -x
+          python3 --version
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq curl jq iproute2 procps iptables ip6tables conntrack
+          ls -l /dev/net/tun || true
+          id
+          echo "HOME=$HOME"
+
+      - name: Psiphon tunnel core
+        run: |
+          set -x
+          sudo curl -fsSL --max-time 240 -o /usr/local/bin/psiphon-tunnel-core \
+            https://github.com/Psiphon-Labs/psiphon-tunnel-core-binaries/raw/master/linux/psiphon-tunnel-core-x86_64
+          sudo chmod 755 /usr/local/bin/psiphon-tunnel-core
+          ls -l /usr/local/bin/psiphon-tunnel-core
+
+      - name: Cloudflare WARP (SOCKS5 mode)
+        run: |
+          set -x
+          sudo apt-get install -y -qq gpg
+          curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg \
+            | sudo gpg --yes --dearmor -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(. /etc/os-release; echo $VERSION_CODENAME) main" \
+            | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cloudflare-warp
+          sudo pkill -f '[w]arp-svc' || true
+          sudo nohup warp-svc >/tmp/warp-svc.log 2>&1 &
+          for i in $(seq 1 20); do
+            warp-cli --accept-tos --version >/dev/null 2>&1 && break
+            sleep 2
+          done
+          warp-cli --accept-tos registration new | tail -1
+          warp-cli --accept-tos mode proxy
+          warp-cli --accept-tos connect
+          sleep 10
+          warp-cli --accept-tos status | head -3
+          echo "--- egress through WARP SOCKS5:"
+          curl -s --max-time 20 --socks5-hostname 127.0.0.1:40000 https://api64.ipify.org; echo
+
+      - name: opencode
+        run: |
+          set -x
+          curl -fsSL https://opencode.ai/install | bash
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+          "$HOME/.opencode/bin/opencode" --version
+          sudo install -m755 "$HOME/.opencode/bin/opencode" /usr/local/bin/opencode
+          /usr/local/bin/opencode --version
+
+      - name: Install the controller
+        run: |
+          set -x
+          sudo bash install.sh --proxy --portable
+          sudo python3 ouc.py config | head -40 || true
+
+      - name: Baseline snapshot
+        run: |
+          mkdir -p lab3/evidence
+          python3 lab3/live_driver.py pre
+
+      - name: Live phases
+        run: |
+          set -x
+          rc=0
+          for phase in ${{ inputs.phases }}; do
+            echo "::group::phase $phase"
+            timeout 1500 python3 lab3/live_driver.py "$phase" || rc=1
+            echo "::endgroup::"
+          done
+          exit $rc
+
+      - name: Tunnel-mode window (gap2)
+        if: ${{ inputs.tunnel_window }}
+        run: |
+          set -x
+          # The driver arms lab3/warp_revert_guard.sh *before* asking warp-cli
+          # for a TUN device: if the interface takes the runner's control path
+          # down, the guard still reverts WARP to SOCKS5 and runs `ouc rescue`
+          # locally, with no network needed.
+          timeout 1500 python3 lab3/live_driver.py gap2 || true
+          warp-cli --accept-tos disconnect || true
+          warp-cli --accept-tos mode proxy || true
+          warp-cli --accept-tos connect || true
+          sleep 10
+          curl -s --max-time 20 https://api64.ipify.org; echo
+
+      - name: Teardown + post snapshot
+        if: always()
+        run: |
+          set -x
+          python3 lab3/live_driver.py t4 || true
+          sudo pkill -f '[p]siphon-tunnel-core' || true
+          sudo pkill -f '[o]uc.py' || true
+          ls -la lab3/evidence
+
+      - name: Summarise
+        if: always()
+        run: python3 lab3/summarise.py lab3/evidence >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-evidence-${{ github.run_id }}
+          path: lab3/evidence/
+          if-no-files-found: warn
