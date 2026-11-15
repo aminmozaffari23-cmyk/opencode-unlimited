@@ -232,6 +232,7 @@ binaries on a disposable Codespace.
 | — | Psiphon's first launch is still fetching its server list | one retry of the same region with a longer budget; regions are not burned | `t92` |
 | — | A killed tunnel leaves a stale pidfile | `ouc stop` still finds and reaps it | `t93` |
 | — | The daemon spawns its own continuation | it verifies with a real model instead of refusing for lack of one | `t94` |
+| — | Tunnel mode falls back to Psiphon | WARP's TUN is taken down via `mode proxy` (resolver kept), pin lifted before the probe, opencode handed the bridge, full tunnel guard re-armed on return; a failed fallback leaves WARP up | `t95` |
 
 The live half of this table is run by `.github/workflows/live-verify.yml` on a
 disposable root runner (real `iptables`, real `warp-cli`, real
@@ -380,7 +381,7 @@ absent file means "not run", not "passed".
 
 | Version | Headline |
 | --- | --- |
-| **2.6.5** | In tunnel mode the fallback now takes WARP's TUN down before activating Psiphon (with it up, every exit measured the host's own address) and brings it back on return; `OUC_KILLSWITCH=1` re-arms a guard that a proxy install disabled |
+| **2.6.5** | The tunnel-mode fallback actually moves: WARP's TUN comes down (`mode proxy`, resolver kept) before Psiphon is probed, the pin is lifted before the probe, opencode is handed the bridge while Psiphon carries traffic, and the full tunnel guard is re-armed on return. The exit probe now measures the bridge instead of the host, `OUC_KILLSWITCH=1` re-arms a guard a proxy install disabled, and the rotation budget scales with the region list |
 | **2.6.4** | `ouc stop` reaps orphaned tunnels even with a stale pidfile, ownership is the config path not the binary name, and a daemon-spawned continuation no longer refuses for lack of a model |
 | **2.6.3** | A cold Psiphon bootstrap is retried once with a longer budget instead of being reported as a provider failure |
 | **2.6.2** | A failed escalation hands the machine back honestly: the last walled tunnel is stopped instead of left running, and `active_backend` returns to what was actually carrying traffic |
