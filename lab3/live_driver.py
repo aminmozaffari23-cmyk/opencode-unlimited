@@ -197,6 +197,55 @@ def bridge_up():
     return "8080" in sh("ss -lnt")["out"]
 
 
+def sup_status():
+    """Supervisor liveness from the product's own report, not from pgrep.
+
+    `pgrep -f 'ouc.py supervise'` missed a supervisor that was demonstrably up
+    and logging: the daemon re-execs, and the argv it ends up with does not
+    match the pattern a human would type. The product already answers this
+    question — `status --json` -> supervisor.alive.
+    """
+    r = ouc(["status", "--json"], timeout=120)
+    return (r["json"] or {}).get("supervisor") or {}
+
+
+def count_procs(pattern):
+    """Count with a bracketed pattern and without matching our own shell.
+
+    `pgrep -cf 'ouc.py bridge'` run from inside `bash -c "pgrep -cf 'ouc.py
+    bridge'"` matches that bash. Every count in this file goes through here.
+    """
+    bracketed = pattern.replace("ouc.py", "[o]uc.py").replace(
+        "psiphon-tunnel-core", "[p]siphon-tunnel-core")
+    return sh(f"pgrep -cf '{bracketed}'")["out"].strip() or "0"
+
+
+def escalate_psiphon(tries=2, wait="120", extra=None):
+    """Escalate to Psiphon, retrying a cold bootstrap.
+
+    Measured on a fresh runner: the first attempt died with
+    "untunneled DSL fetch failed" after 45 s — the tunnel core was still
+    fetching its server list. That is a bootstrap budget, not a provider
+    verdict, and calling it one without a second, longer attempt would be
+    exactly the kind of premature conclusion this project keeps apologising
+    for. Each attempt is recorded.
+    """
+    attempts = []
+    base = dict(extra or {})
+    base.setdefault("OUC_PSIPHON_START_WAIT", wait)
+    for i in range(tries):
+        r = ouc(["hop", "--backend", "psiphon", "--wait", "300"], extra=base)
+        st = state()
+        attempts.append(dict(try_index=i + 1, rc=r["rc"],
+                             backend=st.get("active_backend"),
+                             region_index=st.get("psiphon_region_index"),
+                             tail=(r["out"] + r["err"])[-700:]))
+        if r["rc"] == 0 and st.get("active_backend") == "psiphon":
+            return True, attempts
+        time.sleep(10)
+    return False, attempts
+
+
 def ensure_bridge():
     if not bridge_up():
         sh(f"sudo nohup {PY} ouc.py bridge --listen 127.0.0.1:8080 --dynamic "
@@ -213,6 +262,52 @@ def main():
         return
 
     # =========================================== GAP 1
+    if "pdiag" in which:
+        log("PDIAG: can psiphon-tunnel-core form a tunnel on this network at all?")
+        # The first live run blamed nothing and proved nothing: the controller
+        # reported "no tunnel within 45s: untunneled DSL fetch failed", which is
+        # the tunnel core failing to fetch its server list. That is either a
+        # network the provider cannot serve or a controller that asks it wrong.
+        # This phase removes the controller: it writes the same config the
+        # controller writes and runs the binary by hand, for as long as it needs.
+        res = {"runs": []}
+        ouc(["stop"], timeout=120)
+        cfg_path = "/var/lib/opencode-unlimited/psiphon/psiphon.config"
+        for region in ("US", "DE"):
+            r = ouc(["hop", "--backend", "psiphon", "--wait", "30"],
+                    extra={"OUC_PSIPHON_REGIONS": region,
+                           "OUC_PSIPHON_START_WAIT": "20"})
+            res["runs"].append(dict(stage="controller-attempt", region=region,
+                                    rc=r["rc"], tail=(r["out"] + r["err"])[-500:]))
+            ouc(["stop"], timeout=60)
+            sh("sudo pkill -f '[p]siphon-tunnel-core' 2>/dev/null")
+            time.sleep(2)
+            logf = f"/tmp/pdiag-{region}.log"
+            sh(f"sudo rm -f {logf}")
+            # foreground, hand-written config, generous budget, verbose notices
+            cmd = (f"sudo timeout 150 /usr/local/bin/psiphon-tunnel-core "
+                   f"-config {cfg_path} -formatNotices")
+            run = sh(f"{cmd} > {logf} 2>&1", timeout=200)
+            log_text = sh(f"sudo cat {logf}")["out"]
+            tunnel_line = next((l for l in log_text.splitlines()
+                                if "Tunnels" in l and "count" in l), "")
+            res["runs"].append(dict(
+                stage="binary-direct", region=region, rc=run["rc"],
+                seconds=run["seconds"],
+                tunnel_notice=tunnel_line[:200],
+                errors=[l[:200] for l in log_text.splitlines()
+                        if "Error" in l or "error" in l][:6],
+                socks_opened_after=(("9060" in sh("ss -lnt")["out"])),
+                tail=log_text[-800:]))
+            log(f"  {region}: tunnel={bool(tunnel_line)} rc={run['rc']}")
+            sh("sudo pkill -f '[p]siphon-tunnel-core' 2>/dev/null")
+            time.sleep(3)
+        res["verdict"] = ("binary forms a tunnel" if any(
+            r.get("tunnel_notice") for r in res["runs"] if r["stage"] == "binary-direct")
+            else "binary never reported a tunnel either")
+        save("pdiag.json", res)
+        log(f"  verdict: {res['verdict']}")
+
     if "gap1" in which:
         log("GAP1: a wall arrives while Psiphon is carrying the traffic")
         res = {"steps": []}
@@ -240,9 +335,11 @@ def main():
         LIVE = {"OUC_PSIPHON_REGIONS": "US,DE,NL", "OUC_COOLDOWN_SECONDS": "0",
                 "OUC_AUTO_RESUME": "1", "OUC_RESUME_PROMPT": TOKEN_PROMPT,
                 "OUC_MIN_ROTATE_GAP": "0"}
-        r = ouc(["hop", "--backend", "psiphon", "--wait", "240"], extra=LIVE)
+        ok, tries = escalate_psiphon(tries=2, extra=LIVE)
+        r = {"rc": 0 if ok else 1, "out": tries[-1]["tail"] if tries else "",
+             "err": ""}
         st = state()
-        step("escalated", rc=r["rc"], backend=st.get("active_backend"),
+        step("escalated", rc=r["rc"], tries=tries, backend=st.get("active_backend"),
              region_index=st.get("psiphon_region_index"),
              region=(re.search(r"region (\w\w)", r["out"]).group(1)
                      if re.search(r"region (\w\w)", r["out"]) else ""),
@@ -263,12 +360,16 @@ def main():
         token = f"TOKEN-GAP1-{int(time.time()) % 100000}"
         seed = {}
         for attempt in range(6):
+            # A daemon that just detected a wall may be mid-rotation; the lease
+            # is shared, so wait for it instead of being refused (which is the
+            # v2.6.1 bug in its foreground clothes).
             seed = ouc(["run", "--", "--format", "json", "-m", MODEL,
                         "Remember this exact token and reply with only it: " + token],
-                       timeout=480, extra=LIVE)
+                       timeout=480, extra=dict(LIVE, OUC_WAIT_FOR_RECOVERY="300"))
             if seed["rc"] == 0:
                 break
-            time.sleep(20)
+            if "owns recovery" not in (seed["out"] + seed["err"]):
+                time.sleep(20)
         blob = seed["out"] + seed["err"]
         m = re.search(r"ses_[A-Za-z0-9]+", blob)
         session = m.group(0) if m else ""
@@ -506,22 +607,33 @@ def main():
         sh(f"sudo python3 -c \"import json,pathlib;p=pathlib.Path('{STATE}');"
            f"d=json.loads(p.read_text());d.update(active_backend='psiphon',"
            f"fallback_activated_at={int(time.time())});p.write_text(json.dumps(d,indent=2))\"")
-        ouc(["hop", "--backend", "psiphon", "--wait", "200"])
-        pids = sh("pgrep -af 'psiphon-tunnel-core' | grep -v pgrep")["out"]
-        bpids = sh("pgrep -af 'ouc.py bridge' | grep -v pgrep")["out"]
+        ok, tries = escalate_psiphon(tries=2, extra={"OUC_PSIPHON_REGIONS": "US,DE,NL"})
+        res["escalation"] = tries
+        pids = sh("pgrep -af '[p]siphon-tunnel-core'")["out"]
+        bpids = sh("pgrep -af '[o]uc.py bridge'")["out"]
         res["before"] = dict(psiphon=pids.strip(), bridge=bpids.strip(),
-                             egress=egress())
-        log(f"  before: psiphon={bool(pids.strip())} bridge={bool(bpids.strip())}")
-        sh("sudo pkill -9 -f 'psiphon-tunnel-core'; sudo pkill -9 -f 'ouc.py bridge'")
+                             egress=egress(), supervisor=sup_status())
+        log(f"  before: psiphon={bool(pids.strip())} bridge={bool(bpids.strip())} "
+            f"supervisor={res['before']['supervisor'].get('alive')}")
+        if not pids.strip():
+            # Do not stage a kill test against a process that does not exist:
+            # that is how a chaos test reports a pass it never earned.
+            res["skipped"] = ("no Psiphon tunnel to kill — escalation failed: "
+                              + (tries[-1]["tail"][-300:] if tries else "no attempt"))
+            save("chaos1.json", res)
+            log("  SKIPPED: no tunnel to kill")
+            ouc(["stop"], timeout=120)
+            return
+        sh("sudo pkill -9 -f '[p]siphon-tunnel-core'; sudo pkill -9 -f '[o]uc.py bridge'")
         time.sleep(2)
         res["after_kill"] = dict(
-            psiphon=sh("pgrep -cf 'psiphon-tunnel-core'")["out"].strip(),
+            psiphon=count_procs("psiphon-tunnel-core"),
             bridge="8080" in sh("ss -lnt")["out"])
         log(f"  killed: {res['after_kill']}")
         # no manual command from here on: the supervisor must do the work.
-        sup = sh("pgrep -af 'ouc.py supervise' | grep -v pgrep")["out"].strip()
-        res["supervisor_alive"] = bool(sup)
-        res["supervisor_cmd"] = sup[:200]
+        sup = sup_status()
+        res["supervisor_alive"] = bool(sup.get("alive"))
+        res["supervisor_pid"] = sup.get("pid")
         log(f"  supervisor alive={res['supervisor_alive']}")
         deadline = time.time() + 180
         recovered = False
@@ -532,9 +644,10 @@ def main():
                 break
         res["recovered"] = dict(
             both_ports=recovered,
-            psiphon_count=sh("pgrep -cf 'psiphon-tunnel-core'")["out"].strip(),
-            bridge_count=sh("pgrep -cf 'ouc.py bridge'")["out"].strip(),
-            egress=egress(), verify=(ouc(["verify", "-m", MODEL], timeout=420)["json"] or {}),
+            psiphon_count=count_procs("psiphon-tunnel-core"),
+            bridge_count=count_procs("ouc.py bridge"),
+            egress=egress(), supervisor=sup_status(),
+            verify=(ouc(["verify", "-m", MODEL], timeout=420)["json"] or {}),
             log=supervisor_log_tail(14))
         log(f"  recovered: {res['recovered']['both_ports']} egress={res['recovered']['egress']}")
         save("chaos1.json", res)
@@ -609,11 +722,16 @@ def main():
         res = {}
         ouc(["stop"], timeout=120)
         ensure_bridge()
+        # Root, because that is where the flock is: an unprivileged `hop` only
+        # writes a request file for the supervisor. The first version of this
+        # phase ran five unprivileged hops, all of which correctly answered
+        # "supervisor is not running" — proving nothing about serialisation.
         procs = []
+        hop_cmd = sudo_cmd(["hop", "--backend", "psiphon", "--wait", "200"],
+                           {"OUC_PSIPHON_REGIONS": "US,DE,NL"})
         for i in range(5):
             procs.append(subprocess.Popen(
-                [PY, "ouc.py", "hop", "--backend", "psiphon", "--wait", "200"],
-                cwd=str(REPO), env=ouc_env(), stdout=subprocess.PIPE,
+                hop_cmd, cwd=str(REPO), env=ouc_env(), stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT, text=True, start_new_session=True))
         outs = [p.communicate(timeout=600)[0] for p in procs]
         rcs = [p.returncode for p in procs]
@@ -623,8 +741,8 @@ def main():
         res["ran"] = sum(1 for r in res["results"] if r["ok"])
         res["refused"] = sum(1 for r in res["results"] if r["refused"])
         res["tracebacks"] = sum(1 for r in res["results"] if r["traceback"])
-        res["tunnels"] = sh("pgrep -cf 'psiphon-tunnel-core'")["out"].strip()
-        res["bridges"] = sh("pgrep -cf 'ouc.py bridge'")["out"].strip()
+        res["tunnels"] = count_procs("psiphon-tunnel-core")
+        res["bridges"] = count_procs("ouc.py bridge")
         try:
             json.loads(pathlib.Path(STATE).read_text())
             res["state_valid"] = True

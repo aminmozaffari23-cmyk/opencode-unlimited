@@ -10,3 +10,6 @@ supervisor.pid
 supervisor.lock
 *.tmp
 .ruff_cache/
+
+# live-run artifacts must never dirty the tree under test
+lab3/evidence/
