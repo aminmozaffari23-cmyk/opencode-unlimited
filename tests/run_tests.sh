@@ -2905,12 +2905,25 @@ d=json.load(open(p)); d['active_backend']='psiphon'; json.dump(d, open(p,'w'))
 import ouc
 print(ouc.opencode_env(ouc.Config()).get('HTTPS_PROXY',''))")" \
         "$OUC_HTTP_PROXY"
+  # During a handover the guard can already be dropping direct egress while
+  # state still says "warp". Keying the proxy on active_backend alone left a
+  # window where opencode could reach nothing at all — measured live as
+  # "Failed to fetch models.dev" from a resumed run.
+  check "the bridge is injected on guard dialect alone, mid-handover" \
+        "$(python3 -c "
+import json,sys
+sys.path.insert(0, '$ROOT')
+p='$OUC_STATE_DIR/state.json'
+d=json.load(open(p)); d['active_backend']='warp'; d['guard_mode']='proxy'; json.dump(d, open(p,'w'))
+import ouc
+print(ouc.opencode_env(ouc.Config()).get('HTTPS_PROXY',''))")" \
+        "$OUC_HTTP_PROXY"
   check "and does not when WARP is back in charge" \
         "$(python3 -c "
 import json,sys
 sys.path.insert(0, '$ROOT')
 p='$OUC_STATE_DIR/state.json'
-d=json.load(open(p)); d['active_backend']='warp'; json.dump(d, open(p,'w'))
+d=json.load(open(p)); d['active_backend']='warp'; d['guard_mode']='tunnel'; json.dump(d, open(p,'w'))
 import ouc
 print(ouc.opencode_env(ouc.Config()).get('HTTPS_PROXY',''))")" ""
 

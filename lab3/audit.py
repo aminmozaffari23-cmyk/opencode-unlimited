@@ -140,10 +140,19 @@ def main():
           f"{wr.get('block_before')} -> {wr.get('block_after')} by {wr.get('last_rotation')}, "
           f"region {wr.get('region_before')} -> {wr.get('region_after')}, "
           f"auto-resume pid {wr.get('auto_resume_pid')}")
+    recalled = bool(cont.get("recalled"))
+    # Print what actually happened. An earlier version of this line printed the
+    # recalled token even when `recalled` was False — a verdict that argues with
+    # its own FAIL is worse than no verdict.
+    detail16 = (f"session {cont.get('session')} recalled {cont.get('token')} after the wall"
+                if recalled else
+                f"session {cont.get('session')} did NOT recall {cont.get('token')} "
+                f"(resumes={cont.get('resumes')}, "
+                f"auto-resume log: {(cont.get('auto_resume_log') or '').strip()[:120] or 'n/a'})")
     check(16, "the same session survives the rotation and recalls its token",
-          bool(cont.get("recalled")) and cont.get("session") == seeded.get("session")
+          recalled and cont.get("session") == seeded.get("session")
           and cont.get("token") == seeded.get("token"),
-          f"session {cont.get('session')} recalled {cont.get('token')} after the wall")
+          detail16)
 
     # -- Gap #2: kill-switch + tunnel <-> Psiphon ------------------------
     no_dead = step(gap2, "no_deadlock")

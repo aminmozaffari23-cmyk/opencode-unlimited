@@ -5006,8 +5006,16 @@ def opencode_env(cfg: Config, cwd: "str | None" = None) -> dict:
     env["PWD"] = os.path.realpath(cwd or os.getcwd())
     via_bridge = cfg.proxy_mode
     if not via_bridge:
+        # Two independent reasons the bridge is the only way out, and both
+        # matter during a handover: Psiphon is carrying the traffic, *or* the
+        # guard is already in its owner-scoped dialect and is dropping direct
+        # egress. Keying only on active_backend left a window — measured live as
+        # `Failed to fetch models.dev` from a resumed run — where state still
+        # said "warp" while nothing but the bridge could reach the internet.
         try:
-            via_bridge = State(cfg).load().get("active_backend") == BACKEND_PSIPHON
+            st = State(cfg).load()
+            via_bridge = (st.get("active_backend") == BACKEND_PSIPHON
+                          or str(st.get("guard_mode") or "") == GUARD_PROXY)
         except Exception:
             via_bridge = False
     if via_bridge:

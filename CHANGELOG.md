@@ -91,6 +91,15 @@ found by the tunnel-mode window of the Phase-4 live matrix.
   attributed later — it is exactly the shape of an orphan. The CLI now refuses
   it with a message naming the setting; `Bridge.start()` refuses to spawn one.
 
+* **The bridge was injected on the wrong condition, leaving a dead window
+  mid-handover.** `opencode_env()` handed opencode the bridge only when
+  `active_backend` was already `psiphon`, but the guard switches to its
+  owner-scoped dialect *before* the backend field does — and in that window
+  direct egress is dropped while opencode is told to go direct. Measured live as
+  `Failed to fetch models.dev` from a run that was resuming across exactly such
+  a handover. The bridge is now injected when Psiphon is active **or** when the
+  guard is in proxy dialect, which is precisely when the bridge is the only way
+  out.
 * **`ouc stop` left foreground rotations running.** Stop stopped the
   supervisor, the bridge and the tunnel — and nothing else. A `hop` that
   outlived its caller (the ordinary result of a wrapper timing out and killing
@@ -103,7 +112,7 @@ found by the tunnel-mode window of the Phase-4 live matrix.
 
 ### Tests
 
-* **t95** (21 checks) — the guard arms over an install-time default and records
+* **t95** (22 checks) — the guard arms over an install-time default and records
   its dialect, a real rule reaches the firewall, escalation in tunnel mode takes
   WARP down, the state and the log record it, the return brings WARP back up and
   clears the flag, the guard is proxy-compatible while Psiphon carries traffic
