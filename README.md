@@ -9,7 +9,7 @@ session to Psiphon — automatically, verified, and without the conversation
 starting over.
 
 [![Version](https://img.shields.io/badge/version-2.6.1-1f6feb?style=flat-square)](CHANGELOG.md)
-[![Offline suite](https://img.shields.io/badge/offline%20suite-72%20passed%20%7C%200%20failed-2ea043?style=flat-square)](tests/run_tests.sh)
+[![Offline suite](https://img.shields.io/badge/offline%20suite-73%20passed%20%7C%200%20failed-2ea043?style=flat-square)](tests/run_tests.sh)
 [![pytest](https://img.shields.io/badge/pytest-104%20passed-2ea043?style=flat-square)](tests/test_runner_v2.py)
 [![Backends](https://img.shields.io/badge/backends-WARP%20%2B%20Psiphon%20fallback-8957e5?style=flat-square)](#how-the-dual-engine-works)
 [![Dependencies](https://img.shields.io/badge/dependencies-Python%203.8%2B%20stdlib%20only%20%C2%B7%20zero%20pip-0b7285?style=flat-square)](#requirements)
@@ -227,6 +227,7 @@ binaries on a disposable Codespace.
 | 5 | Two burned regions in a row | skip them by name, stay inside `OUC_ROTATION_TIMEOUT`, never spin | `t87` |
 | 6 | 40 random CLI calls during a rotation | no crash, no starvation, no torn writes | `t88` |
 | — | Tunnel mode ⇄ Psiphon guard handover | no deadlock, pin lifted, guard dialect recorded, `rescue` restores baseline | `t89` |
+| — | A rotation holds the lock while the daemon wants to resume | the daemon's child waits it out; a foreground command still answers instantly | `t90` |
 
 The live half of this table is run by `.github/workflows/live-verify.yml` on a
 disposable root runner (real `iptables`, real `warp-cli`, real

@@ -2461,6 +2461,111 @@ PY
   finish "84-chaos-assassination.log"
 }
 
+t90_auto_resume_waits_for_a_rotation(){
+  begin "the daemon's own auto-resume waits out the rotation it was spawned beside"
+  sb
+  # Found live, on a disposable Codespace, during Gap #1: the supervisor
+  # detected a wall, escalated through three Psiphon regions, fell back to
+  # WARP, rotated twice — and then the auto-resume child it spawned was
+  # refused by the rotation lock that the same tick still held:
+  #
+  #   resume.log: another managed run owns recovery; refusing a duplicate
+  #
+  # The wall had already been marked handled, so nothing ever retried, and the
+  # session the daemon rotated for was silently dropped. This test reproduces
+  # the shape of it hermetically: a foreign process holds rotation.lock, the
+  # daemon's trigger fires, and the continuation must still happen.
+  export OUC_VERIFY=1 OUC_OC_BIN="$HELPER/fake_opencode_verify.py"
+  export FAKE_OC_STATE="$T/oc.json"
+  printf '{"calls":0,"fail_first":0,"log":"%s"}\n' "$LOG" > "$FAKE_OC_STATE"
+  export OUC_AUTO_RESUME=1 OUC_WAIT_FOR_RECOVERY=25
+  export OUC_RESUME_MODEL=opencode/flint-40b-free OUC_RESUME_PROMPT=continue
+
+  # a genuinely fresh wall, the way the follower records one
+  python3 - "$OUC_STATE_DIR/state.json" <<'PY'
+import json, sys, time
+path = sys.argv[1]
+try:
+    d = json.load(open(path))
+except Exception:
+    d = {}
+d.update(last_wall=int(time.time()), pending_wall=True,
+         pending_since=int(time.time()), auto_resume_last=0)
+json.dump(d, open(path, "w"), indent=2)
+PY
+
+  # another process holds the rotation lock for 4 s, exactly as a real rotation does
+  python3 - "$OUC_STATE_DIR/rotation.lock" > "$T/holder.out" 2>&1 <<'PY' &
+import fcntl, sys, time
+fh = open(sys.argv[1], "a+")
+fcntl.flock(fh, fcntl.LOCK_EX)
+print("HELD", flush=True)
+time.sleep(4)
+PY
+  local holder=$!
+  sleep 1
+  check "a foreign process really holds the rotation lock" \
+        "$(head -1 "$T/holder.out")" "HELD"
+
+  # 1. the daemon's own trigger must not be the thing that gives up
+  python3 - > "$T/ar.out" 2>&1 <<'PY'
+import os, sys, time
+sys.path.insert(0, ".")
+import ouc
+cfg = ouc.Config(); log = ouc.Log(os.path.join(os.environ["OUC_STATE_DIR"], "t90.log"))
+spawned = ouc.supervisor_auto_resume(cfg, ouc.State(cfg), log)
+print("SPAWNED", spawned)
+PY
+  check "the daemon spawned the continuation despite the held lock" \
+        "$(sed -n 's/^SPAWNED //p' "$T/ar.out")" "True"
+
+  # 2. and the child got past the lease once the holder let go
+  local waited=0 calls=0 refused=1
+  while [ "$waited" -lt 60 ]; do
+    calls=$(jq_file "$FAKE_OC_STATE" "d.get('calls', 0)")
+    [ "${calls:-0}" -ge 1 ] && break
+    sleep 1; waited=$((waited+1))
+  done
+  local resume_log="$OUC_STATE_DIR/resume.log"
+  if [ -f "$resume_log" ] && grep -qF "owns recovery" "$resume_log"; then refused=1; else refused=0; fi
+  check "the child never printed the refusal that lost the session live" "$refused" "0"
+  check "the continuation actually reached opencode" \
+        "$([ "${calls:-0}" -ge 1 ] && echo yes || echo no)" "yes"
+  check "and the run was recorded as a resume" \
+        "$(state_of "int(d.get('resumes') or 0)")" "1"
+
+  # 3. the foreground path keeps its old, honest behaviour: fail fast.
+  # The waiting is opt-in through OUC_WAIT_FOR_RECOVERY, which only the
+  # daemon's own child gets — a user must never inherit it and hang.
+  unset OUC_WAIT_FOR_RECOVERY
+  wait "$holder" 2>/dev/null || true
+  python3 - "$OUC_STATE_DIR/rotation.lock" > "$T/holder2.out" 2>&1 <<'PY' &
+import fcntl, sys, time
+fh = open(sys.argv[1], "a+")
+fcntl.flock(fh, fcntl.LOCK_EX)
+print("HELD", flush=True)
+time.sleep(10)
+PY
+  local holder2=$!
+  sleep 1
+  local rc_fg t0 t1
+  t0=$(date +%s)
+  timeout 30 python3 "$ROOT/ouc.py" resume -s ses_zzz -m opencode/flint-40b-free \
+      > "$T/fg.out" 2>&1; rc_fg=$?
+  t1=$(date +%s)
+  check "a foreground resume is still refused rather than hanging" "$rc_fg" "1"
+  check "and it answers immediately, without waiting out the holder" \
+        "$([ $((t1 - t0)) -le 5 ] && echo fast || echo "slow:$((t1 - t0))s")" "fast"
+  check "and it says why" \
+        "$(grep -cF 'owns recovery' "$T/fg.out")" "1"
+  kill "$holder2" 2>/dev/null || true
+  wait "$holder2" 2>/dev/null || true
+  check "no unhandled traceback in any of it" \
+        "$(grep -l 'Traceback (most recent call last)' "$T"/*.out 2>/dev/null | wc -l)" "0"
+  sb_cleanup
+  finish "90-auto-resume-lock.log"
+}
+
 t85_chaos_port_squatting(){
   begin "chaos: a squatter on the SOCKS or bridge port is refused, never trusted"
   sb
@@ -2722,7 +2827,7 @@ t88_chaos_cli_monkey(){
   finish "88-chaos-monkey.log"
 }
 
-ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions t73_transport_resilience_regressions t74_orphaned_bridge_is_stopped t75_block_normalisation_and_ttl t76_escalation_after_five_warp_failures t77_psiphon_region_round_robin t78_bridge_follows_the_active_backend t79_hop_backend_override t80_tunnel_notice_dialects t81_a_daemons_writeonly_stdin_cannot_break_a_child t82_the_tunnel_outlives_the_command_that_started_it t89_tunnel_to_proxy_guard_transition t83_chaos_corrupt_state_and_stale_locks t84_chaos_process_assassination t85_chaos_port_squatting t86_chaos_concurrent_hop_stampede t87_chaos_blacklist_saturation t88_chaos_cli_monkey"
+ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions t73_transport_resilience_regressions t74_orphaned_bridge_is_stopped t75_block_normalisation_and_ttl t76_escalation_after_five_warp_failures t77_psiphon_region_round_robin t78_bridge_follows_the_active_backend t79_hop_backend_override t80_tunnel_notice_dialects t81_a_daemons_writeonly_stdin_cannot_break_a_child t82_the_tunnel_outlives_the_command_that_started_it t89_tunnel_to_proxy_guard_transition t83_chaos_corrupt_state_and_stale_locks t84_chaos_process_assassination t85_chaos_port_squatting t86_chaos_concurrent_hop_stampede t87_chaos_blacklist_saturation t88_chaos_cli_monkey t90_auto_resume_waits_for_a_rotation"
 REAL_TESTS="t30_real_install t31_real_auto_rotation t32_real_no_deadlock t33_real_hop t34_real_uninstall t45_real_proxy_rotation"
 TEST_TIMEOUT="${TEST_TIMEOUT:-240}"
 
