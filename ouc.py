@@ -2624,15 +2624,11 @@ def _restore_warp_tun(cfg: Config, state: "State", log: Log,
     if cfg.proxy_mode or not state.load().get("warp_tun_down_for_fallback"):
         return
     try:
-        if cfg.kill_switch:
-            fw = Firewall(cfg, log, state)
-            if fw.installed() and fw.mode() != GUARD_TUNNEL:
-                fw.install(GUARD_TUNNEL)
-                log("kill-switch re-armed in tunnel mode for the WARP backend")
-        if cfg.pin and state.load().get("pin_lifted_for_backend"):
-            if Pinner(cfg, log, state).install():
-                state.update(pin_lifted_for_backend="")
-                log("pin: re-installed the IPv6 pin for the WARP tunnel")
+        # Tunnel first, guard second. Arming a tunnel-dialect guard while the
+        # tunnel is still a proxy-mode daemon with no interface makes it
+        # (correctly) degrade itself to "off", and nothing re-armed it
+        # afterwards — a live return leg ended with the host unprotected and
+        # guard_mode=off despite the pin being back.
         W = warp or Warp(cfg, log)
         if state.load().get("warp_mode_saved_for_fallback"):
             W.mode_warp()          # back to TUN mode, this deployment's shape
@@ -2642,6 +2638,15 @@ def _restore_warp_tun(cfg: Config, state: "State", log: Log,
             if W.connected():
                 break
             time.sleep(2)
+        if cfg.kill_switch:
+            fw = Firewall(cfg, log, state)
+            if fw.mode() != GUARD_TUNNEL or not fw.installed():
+                if fw.install(GUARD_TUNNEL):
+                    log("kill-switch re-armed in tunnel mode for the WARP backend")
+        if cfg.pin and state.load().get("pin_lifted_for_backend"):
+            if Pinner(cfg, log, state).install():
+                state.update(pin_lifted_for_backend="")
+                log("pin: re-installed the IPv6 pin for the WARP tunnel")
         log(f"tunnel: WARP is back up — {why or 'the Psiphon episode is over'}")
     except Exception as exc:
         log(f"tunnel: could not bring WARP back up ({exc})", "WARN")

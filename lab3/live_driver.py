@@ -585,8 +585,11 @@ def main():
         sh("warp-cli --accept-tos mode warp", timeout=60)
         sh("warp-cli --accept-tos connect", timeout=60)
         time.sleep(10)
-        back = ouc(["hop", "--backend", "warp", "--wait", "240"],
-                   extra=TUN, timeout=400)
+        # The return leg has to reconnect the tunnel, re-arm the guard and find
+        # a fresh /64 with a real verification — 400s was not enough and the
+        # window recorded a timeout for a hop that then succeeded.
+        back = ouc(["hop", "--backend", "warp", "--wait", "300"],
+                   extra=TUN, timeout=900)
         st = state()
         rules_now = guard_rules()
         g2("returned", rc=back["rc"], backend=st.get("active_backend"),

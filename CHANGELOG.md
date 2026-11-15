@@ -52,6 +52,12 @@ found by the tunnel-mode window of the Phase-4 live matrix.
   that no longer existed, so the rotation's own verification failed ECONNREFUSED
   and the run reported a Psiphon failure that was ours. The pin is now lifted
   before the first probe and re-installed with the tunnel on the way back.
+* **The guard was re-armed before the tunnel it protects existed.** On the return
+  leg the tunnel-dialect rules were installed while WARP was still a
+  proxy-mode daemon with no interface, so `install()` correctly degraded itself
+  to `off` — and nothing re-armed it afterwards. A live return ended
+  unprotected (`guard_mode: off`) with the pin back in place. The return leg now
+  reconnects the tunnel first, then the guard, then the pin.
 * **Taking WARP down took the resolver with it.** `disconnect` removed the TUN
   device *and* the DNS service, so once the tunnel was out of the way every name
   lookup inside the fallback failed (`getaddrinfo EAI_AGAIN opencode.ai` on a
