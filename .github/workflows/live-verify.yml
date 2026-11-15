@@ -79,12 +79,29 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
           sudo apt-get update -qq
           sudo apt-get install -y -qq cloudflare-warp
-          sudo pkill -f '[w]arp-svc' || true
-          sudo nohup warp-svc >/tmp/warp-svc.log 2>&1 &
-          for i in $(seq 1 20); do
-            warp-cli --accept-tos --version >/dev/null 2>&1 && break
+          # The package installs warp-svc.service; use it, and fall back to a
+          # bare daemon only if systemd refuses. `warp-cli --version` answers
+          # without a daemon, so readiness must be judged by an actual call.
+          sudo systemctl enable warp-svc >/dev/null 2>&1 || true
+          sudo systemctl restart warp-svc >/dev/null 2>&1 || {
+            sudo pkill -f '[w]arp-svc' || true
+            sleep 1
+            sudo nohup warp-svc >/tmp/warp-svc.log 2>&1 &
+          }
+          ready=no
+          for i in $(seq 1 40); do
+            if ! warp-cli --accept-tos status 2>&1 | grep -qi "unable to connect"; then
+              ready=yes; break
+            fi
             sleep 2
           done
+          echo "daemon ready: $ready"
+          warp-cli --accept-tos status | head -2 || true
+          if [ "$ready" != yes ]; then
+            sudo tail -30 /tmp/warp-svc.log || true
+            sudo journalctl -u warp-svc --no-pager -n 40 || true
+            exit 1
+          fi
           warp-cli --accept-tos registration new | tail -1
           warp-cli --accept-tos mode proxy
           warp-cli --accept-tos connect
