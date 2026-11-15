@@ -79,27 +79,28 @@ jobs:
             | sudo tee /etc/apt/sources.list.d/cloudflare-client.list
           sudo apt-get update -qq
           sudo apt-get install -y -qq cloudflare-warp
-          # The package installs warp-svc.service; use it, and fall back to a
-          # bare daemon only if systemd refuses. `warp-cli --version` answers
-          # without a daemon, so readiness must be judged by an actual call.
-          sudo systemctl enable warp-svc >/dev/null 2>&1 || true
-          sudo systemctl restart warp-svc >/dev/null 2>&1 || {
-            sudo pkill -f '[w]arp-svc' || true
-            sleep 1
-            sudo nohup warp-svc >/tmp/warp-svc.log 2>&1 &
-          }
+          # Start the daemon the way a working host does (bare warp-svc) and
+          # judge readiness by the socket it must create. A client subcommand
+          # does not prove the daemon is behind it: --version answers without
+          # one, and `status` raced a socket that did not exist yet.
+          sudo systemctl stop warp-svc >/dev/null 2>&1 || true
+          sudo pkill -f '[w]arp-svc' || true
+          sleep 2
+          sudo nohup warp-svc >/tmp/warp-svc.log 2>&1 &
           ready=no
-          for i in $(seq 1 40); do
-            if ! warp-cli --accept-tos status 2>&1 | grep -qi "unable to connect"; then
-              ready=yes; break
+          for i in $(seq 1 45); do
+            if ls /run/cloudflare-warp/*.sock /var/run/cloudflare-warp/*.sock >/dev/null 2>&1; then
+              if ! warp-cli --accept-tos status 2>&1 | grep -qi "unable to connect"; then
+                ready=yes; break
+              fi
             fi
             sleep 2
           done
           echo "daemon ready: $ready"
-          warp-cli --accept-tos status | head -2 || true
+          ls -la /run/cloudflare-warp/ /var/run/cloudflare-warp/ 2>&1 | head -10
           if [ "$ready" != yes ]; then
-            sudo tail -30 /tmp/warp-svc.log || true
-            sudo journalctl -u warp-svc --no-pager -n 40 || true
+            echo "--- warp-svc.log"; sudo tail -40 /tmp/warp-svc.log || true
+            echo "--- journal"; sudo journalctl -u warp-svc --no-pager -n 40 || true
             exit 1
           fi
           warp-cli --accept-tos registration new | tail -1
