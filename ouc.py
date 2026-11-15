@@ -2754,13 +2754,24 @@ def _rotate_psiphon(cfg: Config, log: Log, state: State, why: str,
         index = int(st.get("psiphon_region_index") or 0)
         order = [region] if region else []
         order += [regions[(index + i) % len(regions)] for i in range(len(regions))]
+        seen_regions = list(dict.fromkeys(regions))
         seen: list = []
+        # The budget is per-attempt, not for the whole search. A default of 45s
+        # covered exactly one attempt — and one *walled* exit costs about 40s to
+        # prove honestly — so a rotation that met a single bad exit reported "no
+        # working Psiphon exit right now" having asked one of eleven regions.
+        # Scaling by the region list keeps §3.5's guarantee (no tight loop, a
+        # hard bound) while letting the ladder actually walk the ladder.
+        per_region = max(cfg.psiphon_start_wait * 2, cfg.rotation_timeout)
+        budget = per_region * max(1, len(seen_regions))
         for candidate_region in order:
             if candidate_region in seen:
                 continue
             seen.append(candidate_region)
-            if time.monotonic() - t0 > max(cfg.psiphon_start_wait * 2,
-                                           cfg.rotation_timeout):
+            if time.monotonic() - t0 > budget:
+                log(f"psiphon: rotation budget of {int(budget)}s exhausted after "
+                    f"{len(seen)} of {len(seen_regions)} regions — reporting what "
+                    f"we measured rather than what we hoped", "WARN")
                 break
             entry = {"how": f"psiphon@{candidate_region}", "block": "", "accepted": False}
             result["attempts"].append(entry)

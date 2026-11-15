@@ -349,7 +349,12 @@ def main():
                   psiphon_region_index=0, warp_fail_streak=0, pending_wall=False)
         pathlib.Path("/tmp/seed-state.json").write_text(json.dumps(st, indent=2))
         sh(f"sudo cp /tmp/seed-state.json {STATE}")
-        LIVE = {"OUC_PSIPHON_REGIONS": "US,DE,NL", "OUC_COOLDOWN_SECONDS": "0",
+        # Not a hand-picked three: the product's own list is what a real host
+        # uses, and with free-tier quota walls on individual exits a rotation
+        # that may only ask three of eleven regions fails for reasons that have
+        # nothing to do with the code under test.
+        LIVE = {"OUC_PSIPHON_REGIONS": "US,DE,NL,CA,GB,FR,JP,SG,CH,AT,SE",
+                "OUC_COOLDOWN_SECONDS": "0",
                 "OUC_AUTO_RESUME": "1", "OUC_RESUME_PROMPT": TOKEN_PROMPT,
                 "OUC_MIN_ROTATE_GAP": "0"}
         ok, tries = escalate_psiphon(tries=2, extra=LIVE)
@@ -376,13 +381,13 @@ def main():
         # 3. seed a real conversation through the fallback
         token = f"TOKEN-GAP1-{int(time.time()) % 100000}"
         seed = {}
-        for attempt in range(6):
+        for attempt in range(4):
             # A daemon that just detected a wall may be mid-rotation; the lease
             # is shared, so wait for it instead of being refused (which is the
             # v2.6.1 bug in its foreground clothes).
             seed = ouc(["run", "--", "--format", "json", "-m", MODEL,
                         "Remember this exact token and reply with only it: " + token],
-                       timeout=480, extra=dict(LIVE, OUC_WAIT_FOR_RECOVERY="300"))
+                       timeout=300, extra=dict(LIVE, OUC_WAIT_FOR_RECOVERY="240"))
             if seed["rc"] == 0:
                 break
             if "owns recovery" not in (seed["out"] + seed["err"]):
@@ -773,7 +778,7 @@ def main():
         # "supervisor is not running" — proving nothing about serialisation.
         procs = []
         hop_cmd = sudo_cmd(["hop", "--backend", "psiphon", "--wait", "200"],
-                           {"OUC_PSIPHON_REGIONS": "US,DE,NL"})
+                           {"OUC_PSIPHON_REGIONS": "US,DE,NL,CA,GB,FR,JP,SG,CH,AT,SE"})
         for i in range(5):
             procs.append(subprocess.Popen(
                 hop_cmd, cwd=str(REPO), env=ouc_env(), stdout=subprocess.PIPE,

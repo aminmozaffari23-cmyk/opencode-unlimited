@@ -79,6 +79,13 @@ found by the tunnel-mode window of the Phase-4 live matrix.
   `_record_mode()` no-opped: a live run showed 19 real rules in `iptables` while
   `status` claimed no guard at all. It now passes the state through.
 
+* **The rotation budget covered one attempt, not one rotation.** The default
+  45 s `OUC_ROTATION_TIMEOUT` was compared against the *whole* search, and a
+  single walled exit costs about 40 s to prove honestly — so a run that met one
+  bad exit reported "no working Psiphon exit right now" after asking one of the
+  eleven regions it knows. The budget now scales with the region list, keeps a
+  hard bound (no tight loop), and says out loud when it stops early.
+
 ### Tests
 
 * **t95** (21 checks) — the guard arms over an install-time default and records

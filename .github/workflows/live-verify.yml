@@ -139,7 +139,11 @@ jobs:
           rc=0
           for phase in ${{ inputs.phases }}; do
             echo "::group::phase $phase"
-            timeout 1500 python3 lab3/live_driver.py "$phase" || rc=1
+            # gap1 seeds a real conversation and may have to survive several
+            # rotations while free-tier quota walls are being walked off; the
+            # chaos phases are bounded by their own loops.
+            t=1500; [ "$phase" = "gap1" ] && t=2700
+            timeout "$t" python3 lab3/live_driver.py "$phase" || rc=1
             echo "::endgroup::"
           done
           exit $rc
