@@ -66,7 +66,7 @@ import time
 import urllib.request
 import uuid
 
-VERSION = "2.6.4"
+VERSION = "2.6.5"
 BRAND = "opencode-unlimited"
 DEFAULT_STATE_DIR = "/var/lib/opencode-unlimited"
 UNIT_NAME = "opencode-unlimited.service"
@@ -308,8 +308,16 @@ class Config:
 
         # kill-switch: OUC_DISABLE_KILL_SWITCH=1 always wins
         ks_default = bool(disk.get("kill_switch", True))
+        # proxy installs record kill_switch=false, because a TUN-shaped guard
+        # cannot arm without a TUN device. A host that later runs tunnel mode
+        # needs a way to say so without hand-editing config.json; the
+        # OUC_DISABLE_KILL_SWITCH=1 override keeps its absolute veto.
+        if env_bool("OUC_KILLSWITCH", False):
+            ks_default = True
         self.kill_switch = ks_default and not env_bool("OUC_DISABLE_KILL_SWITCH", False)
-        if env_bool("OUC_DISABLE_KILL_SWITCH", False):
+        if env_bool("OUC_KILLSWITCH", False) and not env_bool("OUC_DISABLE_KILL_SWITCH", False):
+            self.kill_switch_reason = "enabled by OUC_KILLSWITCH=1"
+        elif env_bool("OUC_DISABLE_KILL_SWITCH", False):
             self.kill_switch_reason = "disabled by OUC_DISABLE_KILL_SWITCH=1"
         elif not ks_default:
             self.kill_switch_reason = "disabled at install time"
@@ -2510,12 +2518,34 @@ def _bridge_socks_for(cfg: Config, backend: str) -> int:
 
 
 def _activate_backend(cfg: Config, state: "State", log: Log, backend: str,
-                      pinner: "Pinner | None" = None) -> None:
-    """Point the bridge and the pin at the backend that is now carrying traffic."""
+                      pinner: "Pinner | None" = None,
+                      warp: "Warp | None" = None) -> None:
+    """Point the bridge and the pin at the backend that is now carrying traffic.
+
+    In tunnel mode this also has to move WARP itself out of the way. Measured
+    on a real root runner: with WARP's TUN device up, every Psiphon region
+    reported the *same* egress as the host — because all traffic, including the
+    tunnel core's own dial-outs, still went through WARP's interface. The
+    controller correctly refused to call that a rotation ("egress equals the
+    host's own address") and the escalation could never succeed. A fallback
+    that only changes the port the bridge points at is not a fallback.
+    """
     port = _bridge_socks_for(cfg, backend)
     st = state.load()
     fields = {"active_backend": backend, "active_socks_port": port}
     if backend == BACKEND_PSIPHON:
+        if not cfg.proxy_mode:
+            try:
+                W = warp or Warp(cfg, log)
+                if W.connected():
+                    W.disconnect()
+                    fields["warp_tun_down_for_fallback"] = True
+                    log("tunnel: took WARP's TUN down so Psiphon can dial out "
+                        "directly — with it up, every exit measures the same "
+                        "address and no rotation would be real", "WARN")
+            except Exception as exc:
+                log(f"tunnel: could not take WARP down for the fallback ({exc})",
+                    "WARN")
         if not int(st.get("fallback_activated_at") or 0):
             fields["fallback_activated_at"] = now()
         # Psiphon exits are IPv4. An IPv6 /etc/hosts pin would send opencode
@@ -2531,7 +2561,19 @@ def _activate_backend(cfg: Config, state: "State", log: Log, backend: str,
             except Exception as exc:
                 log(f"pin: could not lift the pin for Psiphon ({exc})", "WARN")
     elif backend == BACKEND_WARP:
-        fields.update({"fallback_activated_at": 0, "warp_fail_streak": 0})
+        fields.update({"fallback_activated_at": 0, "warp_fail_streak": 0,
+                       "warp_tun_down_for_fallback": False})
+        if not cfg.proxy_mode and st.get("warp_tun_down_for_fallback"):
+            try:
+                W = warp or Warp(cfg, log)
+                W.connect()
+                for _ in range(max(4, int(cfg.connect_wait / 2))):
+                    if W.connected():
+                        break
+                    time.sleep(2)
+                log("tunnel: brought WARP back up for the WARP backend")
+            except Exception as exc:
+                log(f"tunnel: could not bring WARP back up ({exc})", "WARN")
         if cfg.pin and not cfg.proxy_mode and st.get("pin_lifted_for_backend"):
             try:
                 if pinner is not None:

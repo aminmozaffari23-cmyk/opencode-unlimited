@@ -519,7 +519,7 @@ def main():
         # default. Found live: both `pin on` and `killswitch on` returned 1 with
         # "no IPv6 address resolved, or pinning disabled", the guard never
         # armed, and the "no deadlock" step below proved nothing at all.
-        TUN = {"OUC_WARP_MODE": "warp", "OUC_PIN": "1"}
+        TUN = {"OUC_WARP_MODE": "warp", "OUC_PIN": "1", "OUC_KILLSWITCH": "1"}
         tun_up = {}
         sh("warp-cli --accept-tos disconnect", timeout=60)
         sh("warp-cli --accept-tos mode warp", timeout=60)

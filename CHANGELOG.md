@@ -1,5 +1,72 @@
 # CHANGELOG — opencode-unlimited
 
+## 2.6.5 — a fallback that actually moves, and a guard that actually arms
+
+Two defects that only a root machine with a real TUN device could show, both
+found by the tunnel-mode window of the Phase-4 live matrix.
+
+### Fixed
+
+* **In tunnel mode the fallback was cosmetic.** With WARP's TUN device up, the
+  Psiphon tunnel core's own dial-outs still went through WARP's interface, so
+  every region reported the *same* egress as the host — `2a09:bac5:9f22:1678`
+  for DE, NL and CA in one run. The controller correctly refused to call that a
+  rotation ("egress equals the host's own address"), so escalation could never
+  succeed while WARP held the default route, and the leak guard that exists to
+  protect the WARP tunnel stayed pointed at a path nothing was using.
+  `_activate_backend()` now takes WARP down when it activates Psiphon and brings
+  it back (waiting for `Connected`) when it returns to WARP, recording
+  `warp_tun_down_for_fallback` in `state.json` so `ouc status` and `rescue` can
+  see which shape the host was left in.
+* **A proxy install permanently disarmed the guard.** `install.sh --proxy`
+  records `kill_switch: false`, because a TUN-shaped guard cannot arm without a
+  TUN device — correct at install time, wrong forever after. On a host later run
+  in tunnel mode, `ouc killswitch on` returned 1 with "could not install (see
+  ouc doctor)" and `ouc doctor` said "off: disabled at install time", so the
+  whole Gap #2 window measured a guard that was never there. `OUC_KILLSWITCH=1`
+  now opts a host back in at runtime; `OUC_DISABLE_KILL_SWITCH=1` keeps its
+  absolute veto, and `doctor` names which of the two applied.
+
+### Tests
+
+* **t95** (10 checks) — the guard arms over an install-time default, a real rule
+  reaches the firewall, escalation in tunnel mode takes WARP down, the state and
+  the log record it, the return brings WARP back up and clears the flag, and
+  neither direction prints a traceback.
+
+## 2.6.4 — an orphan stops hiding behind a stale pidfile
+
+### Fixed
+
+* **`ouc stop` returned early when the pidfile named nothing alive** — which is
+  exactly the state a `SIGKILL` leaves behind, and exactly when an orphan is
+  waiting to be reaped. `stop()` now always sweeps, **waits** for the pids it
+  signalled (a sweep that fires `SIGTERM` and returns leaves a process still
+  exiting when the caller checks), and escalates to `SIGKILL`. Ownership is "our
+  config path appears in argv and `-config` is present", not the binary name.
+* **`ouc resume --reason auto` refused for lack of a model** when no CLI flags
+  were given: "cannot verify an unspecified interrupted model". The model now
+  falls back through `resume_model → agent_model → test_model`.
+
+### Tests
+
+* **t93** (4 checks) — a pidfile-less tunnel is still reaped, and gone when the
+  command returns. **t94** (3 checks) — `resume --reason auto` picks the
+  verified model.
+
+## 2.6.3 — a cold start is not a dead provider
+
+### Fixed
+
+* **A 45-second start budget read a cold Psiphon bootstrap as a dead provider.**
+  The first start on a fresh machine spends well over that fetching the server
+  list (>45 s on a real runner, then 8.1 s to a working tunnel). The start
+  budget now scales and retries rather than declaring the region burned.
+
+### Tests
+
+* **t92** — cold-start retry: the first slow bootstrap is retried, not blamed.
+
 ## 2.6.2 — a failed escalation owns up, and stops what it started
 
 ### Fixed

@@ -8,7 +8,7 @@ Rotate a Cloudflare WARP `/64`, and when that pool is exhausted, hand the same
 session to Psiphon — automatically, verified, and without the conversation
 starting over.
 
-[![Version](https://img.shields.io/badge/version-2.6.4-1f6feb?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.6.5-1f6feb?style=flat-square)](CHANGELOG.md)
 [![Offline suite](https://img.shields.io/badge/offline%20suite-77%20passed%20%7C%200%20failed-2ea043?style=flat-square)](tests/run_tests.sh)
 [![pytest](https://img.shields.io/badge/pytest-104%20passed-2ea043?style=flat-square)](tests/test_runner_v2.py)
 [![Backends](https://img.shields.io/badge/backends-WARP%20%2B%20Psiphon%20fallback-8957e5?style=flat-square)](#how-the-dual-engine-works)
@@ -380,6 +380,7 @@ absent file means "not run", not "passed".
 
 | Version | Headline |
 | --- | --- |
+| **2.6.5** | In tunnel mode the fallback now takes WARP's TUN down before activating Psiphon (with it up, every exit measured the host's own address) and brings it back on return; `OUC_KILLSWITCH=1` re-arms a guard that a proxy install disabled |
 | **2.6.4** | `ouc stop` reaps orphaned tunnels even with a stale pidfile, ownership is the config path not the binary name, and a daemon-spawned continuation no longer refuses for lack of a model |
 | **2.6.3** | A cold Psiphon bootstrap is retried once with a longer budget instead of being reported as a provider failure |
 | **2.6.2** | A failed escalation hands the machine back honestly: the last walled tunnel is stopped instead of left running, and `active_backend` returns to what was actually carrying traffic |
