@@ -318,6 +318,8 @@ def main():
         def screen(name):
             r = tmux("capture-pane", "-p", "-S", "-2000", "-t", "ouc-tui:0.0")
             text = r["out"]
+            if r["rc"] != 0:
+                (EV / "tui_tmux_errors.txt").write_text(str(r))
             (EV / ("tui_" + name + ".txt")).write_text(text)
             return text
         def alive(pid):
@@ -398,7 +400,7 @@ def main():
             start = sh(["tmux", "new-session", "-d", "-s", "ouc-tui", "-x", "120", "-y", "40", "-c", "/tmp/ouc-tui-home",
                         "env", "HTTPS_PROXY=" + env["HTTPS_PROXY"], "HTTP_PROXY=" + env["HTTP_PROXY"],
                         "ALL_PROXY=" + env["ALL_PROXY"], "NO_PROXY=" + env["NO_PROXY"],
-                        "TERM=xterm-256color", "sudo", "-u", "ouc-tui-test", "env", "HOME=/tmp/ouc-tui-home", "HTTPS_PROXY=" + env["HTTPS_PROXY"], "HTTP_PROXY=" + env["HTTP_PROXY"], "ALL_PROXY=" + env["ALL_PROXY"], "NO_PROXY=" + env["NO_PROXY"], OC, "-m", MODEL], env=env)
+                        "TERM=xterm-256color", "sudo", "-n", "-u", "ouc-tui-test", "env", "HOME=/tmp/ouc-tui-home", "HTTPS_PROXY=" + env["HTTPS_PROXY"], "HTTP_PROXY=" + env["HTTP_PROXY"], "ALL_PROXY=" + env["ALL_PROXY"], "NO_PROXY=" + env["NO_PROXY"], OC, "-m", MODEL], env=env)
             if start["rc"] != 0:
                 raise RuntimeError("tmux startup failed: " + start["err"])
             pid_result = tmux("display-message", "-p", "-t", "ouc-tui:0.0", "#{pane_pid}")
@@ -421,6 +423,8 @@ def main():
                    opencode_version=sh([OC, "--version"])["out"].strip())
             ready, text = wait_screen(lambda t: "Ask anything" in t and alive(pid), 90, "ready")
             if not ready:
+                record(process_diagnostics=sh(["ps", "-efww"])["out"][-20000:],
+                       tmux_diagnostics=tmux("list-panes", "-a", "-F", "#{session_name} #{pane_pid} #{pane_dead} #{pane_dead_status}"))
                 raise RuntimeError("TUI did not become ready")
             # Unique response marker appears in the prompt too; require a
             # second occurrence to avoid confusing echoed input with output.
