@@ -398,7 +398,7 @@ def main():
                        HTTP_PROXY="http://127.0.0.1:8080", ALL_PROXY="http://127.0.0.1:8080",
                        NO_PROXY="localhost,127.0.0.1,::1", TERM="xterm-256color")
             tmux("kill-session", "-t", "ouc-tui")
-            launch = ["sudo", "-n", "-u", "ouc-tui-test", "env", "HOME=/tmp/ouc-tui-home",
+            launch = ["sudo", "-n", "-u", "ouc-tui-test", "env", "HOME=/tmp/ouc-tui-home", "PWD=/tmp/ouc-tui-home",
                       "XDG_CONFIG_HOME=/tmp/ouc-tui-home/.config",
                       "XDG_DATA_HOME=/tmp/ouc-tui-home/.local/share",
                       "XDG_CACHE_HOME=/tmp/ouc-tui-home/.cache",
