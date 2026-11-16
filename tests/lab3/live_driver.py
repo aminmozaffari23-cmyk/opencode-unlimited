@@ -19,6 +19,7 @@ Phases (each selectable, each writes its own evidence file):
 Every number written here comes from a command that ran on the machine.
 """
 import json
+import secrets
 import os
 import re
 import pathlib
@@ -303,6 +304,119 @@ def main():
     if "pre" in which:
         save("state-pre.json", snapshot())
         log("pre-snapshot saved")
+        return
+
+    if "tui_live" in which:
+        log("TUI: real interactive OpenCode, same process across Psiphon hop")
+        res = {"phase": "tui_live", "passed": False}
+        def record(**fields):
+            res.update(fields)
+            save("tui_live.json", res)
+        def tmux(*args):
+            return sh(["tmux", *args], timeout=30)
+        def screen(name):
+            r = tmux("capture-pane", "-p", "-e", "-S", "-2000", "-t", "ouc-tui:0.0")
+            text = r["out"]
+            (EV / ("tui_" + name + ".txt")).write_text(text)
+            return text
+        def alive(pid):
+            try:
+                return bool(pid) and pathlib.Path("/proc", str(pid), "cmdline").read_bytes().find(b"opencode") >= 0
+            except OSError:
+                return False
+        def wait_screen(predicate, timeout, name):
+            deadline = time.monotonic() + timeout
+            text = ""
+            while time.monotonic() < deadline:
+                text = screen(name)
+                if predicate(text):
+                    return True, text
+                time.sleep(2)
+            return False, text
+        try:
+            ouc(["stop"], timeout=120)
+            # A fresh proxy-mode install starts on WARP. Publish the actual WARP
+            # endpoint before ensuring the dynamic bridge; do not fabricate an
+            # exit or change the product's backend implementation.
+            r = sh(["sudo", "env", "OUC_WARP_MODE=proxy", PY, "-c",
+                    "import ouc; c=ouc.Config(); ouc.State(c).update(active_backend='warp', active_socks_port=c.proxy_socks_port)"])
+            if r["rc"] != 0:
+                raise RuntimeError("could not set initial WARP bridge route: " + r["err"])
+            ensure_bridge()
+            before = egress()
+            before_state = state()
+            def epoch(st):
+                return [st.get("hops", 0), st.get("active_backend", "warp"),
+                        st.get("active_socks_port", 40000), st.get("current", "")]
+            record(egress_before=before, epoch_before=epoch(before_state), bridge_ready=bridge_up())
+            if not ident(before) or not bridge_up():
+                raise RuntimeError("WARP bridge or egress unavailable")
+            token = "TOKEN-TUI-" + secrets.token_hex(6).upper()
+            ack = "ACK-TUI-" + secrets.token_hex(4).upper()
+            env = dict(os.environ, HTTPS_PROXY="http://127.0.0.1:8080",
+                       HTTP_PROXY="http://127.0.0.1:8080", ALL_PROXY="http://127.0.0.1:8080",
+                       NO_PROXY="localhost,127.0.0.1,::1", TERM="xterm-256color")
+            tmux("kill-session", "-t", "ouc-tui")
+            start = sh(["tmux", "new-session", "-d", "-s", "ouc-tui", "-x", "120", "-y", "40",
+                        "env", "HTTPS_PROXY=" + env["HTTPS_PROXY"], "HTTP_PROXY=" + env["HTTP_PROXY"],
+                        "ALL_PROXY=" + env["ALL_PROXY"], "NO_PROXY=" + env["NO_PROXY"],
+                        "TERM=xterm-256color", OC, "-m", MODEL], env=env)
+            if start["rc"] != 0:
+                raise RuntimeError("tmux startup failed: " + start["err"])
+            pid_result = tmux("display-message", "-p", "-t", "ouc-tui:0.0", "#{pane_pid}")
+            pid = int(pid_result["out"].strip())
+            record(tui_pid_before=pid, token=token, ack=ack,
+                   opencode_version=sh([OC, "--version"])["out"].strip())
+            ready, text = wait_screen(lambda t: bool(t.strip()) and alive(pid), 90, "ready")
+            if not ready:
+                raise RuntimeError("TUI did not become ready")
+            # Unique response marker appears in the prompt too; require a
+            # second occurrence to avoid confusing echoed input with output.
+            prompt1 = f"Remember the exact secret token {token}. Reply with only {ack}."
+            tmux("send-keys", "-t", "ouc-tui:0.0", "-l", prompt1)
+            tmux("send-keys", "-t", "ouc-tui:0.0", "Enter")
+            turn1, text = wait_screen(lambda t: t.count(ack) >= 2, 240, "turn1")
+            record(turn1_response_visible=turn1, screen_turn1=text[-12000:])
+            if not turn1 or not alive(pid):
+                raise RuntimeError("Turn 1 response not proven or TUI exited")
+            ok, attempts = escalate_psiphon(tries=2)
+            after = egress()
+            after_state = state()
+            after_epoch = epoch(after_state)
+            record(hop_ok=ok, hop_attempts=attempts, egress_after=after,
+                   epoch_after=after_epoch, backend_after=after_state.get("active_backend"),
+                   epoch_advanced=after_epoch != epoch(before_state),
+                   tui_alive_after_rotation=alive(pid))
+            import ipaddress
+            try:
+                ipv4 = ipaddress.ip_address(after).version == 4
+            except ValueError:
+                ipv4 = False
+            record(psiphon_ipv4=ipv4, egress_changed=bool(before and after and before != after))
+            if not (ok and ipv4 and before != after and alive(pid) and after_epoch != epoch(before_state)):
+                raise RuntimeError("Psiphon rotation or same-process precondition not proven")
+            # The recall prompt does not contain the token. Require it to
+            # appear after the recall prompt in captured scrollback.
+            marker = "Recall the secret token from the previous turn"
+            prompt2 = marker + ". Reply with only the exact token."
+            tmux("send-keys", "-t", "ouc-tui:0.0", "-l", prompt2)
+            tmux("send-keys", "-t", "ouc-tui:0.0", "Enter")
+            recalled, text = wait_screen(lambda t: marker in t and token in t.split(marker, 1)[1], 240, "turn2")
+            pid2 = int(tmux("display-message", "-p", "-t", "ouc-tui:0.0", "#{pane_pid}")["out"].strip())
+            same = pid == pid2 and alive(pid)
+            record(tui_pid_after=pid2, same_pid_alive=same,
+                   token_recalled_on_screen=recalled, screen_snippet=text[-12000:],
+                   passed=bool(recalled and same),
+                   routing_note="Egress verified through bridge; per-request CONNECT attribution not independently instrumented")
+            if not (recalled and same):
+                raise RuntimeError("token recall or persistent TUI PID not proven")
+        except Exception as exc:
+            record(error=str(exc), screen_snippet=screen("failure")[-12000:])
+            log("TUI phase failed:", exc)
+        finally:
+            tmux("kill-session", "-t", "ouc-tui")
+        if not res.get("passed"):
+            raise SystemExit(1)
         return
 
     # =========================================== GAP 1

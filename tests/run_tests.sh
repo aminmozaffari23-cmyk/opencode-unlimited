@@ -2529,18 +2529,28 @@ d.update(last_wall=int(time.time()), pending_wall=True,
 json.dump(d, open(path, "w"), indent=2)
 PY
 
-  # another process holds the rotation lock for 4 s, exactly as a real rotation does
-  python3 - "$OUC_STATE_DIR/rotation.lock" > "$T/holder.out" 2>&1 <<'PY' &
-import fcntl, sys, time
+  # Hold the lock until explicitly released; the waiter must be spawned while
+  # the lock is held even on an overloaded host.
+  python3 - "$OUC_STATE_DIR/rotation.lock" "$T/release-holder" > "$T/holder.out" 2>&1 <<'PY' &
+import fcntl, os, sys, time
 fh = open(sys.argv[1], "a+")
 fcntl.flock(fh, fcntl.LOCK_EX)
 print("HELD", flush=True)
-time.sleep(4)
+deadline = time.monotonic() + 90
+while not os.path.exists(sys.argv[2]) and time.monotonic() < deadline:
+    time.sleep(0.05)
 PY
   local holder=$!
-  sleep 1
+  # Deterministic sync: poll for the readiness marker instead of a fixed sleep,
+  # which races under full-suite CPU load (the holder may not have acquired
+  # the lock yet when the waiter is spawned).
+  local _w=0
+  while [ "$_w" -lt 100 ]; do
+    [ "$(head -1 "$T/holder.out" 2>/dev/null)" = "HELD" ] && break
+    sleep 0.1; _w=$((_w+1))
+  done
   check "a foreign process really holds the rotation lock" \
-        "$(head -1 "$T/holder.out")" "HELD"
+        "$(head -1 "$T/holder.out" 2>/dev/null)" "HELD"
 
   # 1. the daemon's own trigger must not be the thing that gives up
   python3 - > "$T/ar.out" 2>&1 <<'PY'
@@ -2553,13 +2563,41 @@ print("SPAWNED", spawned)
 PY
   check "the daemon spawned the continuation despite the held lock" \
         "$(sed -n 's/^SPAWNED //p' "$T/ar.out")" "True"
+  # The child takes managed.lock before trying rotation.lock. Observe that
+  # lease while the holder is still active, rather than merely assuming the
+  # child has been scheduled after Popen returns.
+  local contending=0
+  for _w in $(seq 1 300); do
+    if python3 - "$OUC_STATE_DIR/managed-run.lock" <<'PY'
+import fcntl, os, sys
+try:
+    with open(sys.argv[1], 'r') as fh:
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            sys.exit(0)
+except OSError:
+    pass
+sys.exit(1)
+PY
+    then contending=1; break; fi
+    sleep 0.1
+  done
+  check "the auto-resume child acquired the managed lease while rotation was held" "$contending" "1"
+  touch "$T/release-holder"
+  wait "$holder" 2>/dev/null || true
 
   # 2. and the child got past the lease once the holder let go
-  local waited=0 calls=0 refused=1
-  while [ "$waited" -lt 60 ]; do
+  # Deterministic sync: poll until BOTH the opencode call happened AND the
+  # resume was recorded. Checking `resumes` the instant `calls` hits 1 races
+  # the child's own bookkeeping (it records the resume after the call), which
+  # is what made this flaky under load.
+  local waited=0 calls=0 resumes=0 refused=1
+  while [ "$waited" -lt 120 ]; do
     calls=$(jq_file "$FAKE_OC_STATE" "d.get('calls', 0)")
-    [ "${calls:-0}" -ge 1 ] && break
-    sleep 1; waited=$((waited+1))
+    resumes=$(state_of "int(d.get('resumes') or 0)")
+    [ "${calls:-0}" -ge 1 ] && [ "${resumes:-0}" -ge 1 ] && break
+    sleep 0.5; waited=$((waited+1))
   done
   local resume_log="$OUC_STATE_DIR/resume.log"
   if [ -f "$resume_log" ] && grep -qF "owns recovery" "$resume_log"; then refused=1; else refused=0; fi
@@ -2567,22 +2605,30 @@ PY
   check "the continuation actually reached opencode" \
         "$([ "${calls:-0}" -ge 1 ] && echo yes || echo no)" "yes"
   check "and the run was recorded as a resume" \
-        "$(state_of "int(d.get('resumes') or 0)")" "1"
+        "$([ "${resumes:-0}" -ge 1 ] && echo 1 || echo "${resumes:-0}")" "1"
 
   # 3. the foreground path keeps its old, honest behaviour: fail fast.
   # The waiting is opt-in through OUC_WAIT_FOR_RECOVERY, which only the
   # daemon's own child gets — a user must never inherit it and hang.
   unset OUC_WAIT_FOR_RECOVERY
   wait "$holder" 2>/dev/null || true
-  python3 - "$OUC_STATE_DIR/rotation.lock" > "$T/holder2.out" 2>&1 <<'PY' &
-import fcntl, sys, time
+  python3 - "$OUC_STATE_DIR/rotation.lock" "$T/release-holder2" > "$T/holder2.out" 2>&1 <<'PY' &
+import fcntl, os, sys, time
 fh = open(sys.argv[1], "a+")
 fcntl.flock(fh, fcntl.LOCK_EX)
 print("HELD", flush=True)
-time.sleep(10)
+deadline = time.monotonic() + 90
+while not os.path.exists(sys.argv[2]) and time.monotonic() < deadline:
+    time.sleep(0.05)
 PY
   local holder2=$!
-  sleep 1
+  _w=0
+  while [ "$_w" -lt 100 ]; do
+    [ "$(head -1 "$T/holder2.out" 2>/dev/null)" = "HELD" ] && break
+    sleep 0.1; _w=$((_w+1))
+  done
+  check "foreground test holder acquired the rotation lock" \
+        "$(head -1 "$T/holder2.out" 2>/dev/null)" "HELD"
   local rc_fg t0 t1
   t0=$(date +%s)
   timeout 30 python3 "$ROOT/ouc.py" resume -s ses_zzz -m opencode/flint-40b-free \
@@ -3287,7 +3333,193 @@ t99_markdown_link_integrity(){
   finish "99-link-integrity.log"
 }
 
-ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions t73_transport_resilience_regressions t74_orphaned_bridge_is_stopped t75_block_normalisation_and_ttl t76_escalation_after_five_warp_failures t77_psiphon_region_round_robin t78_bridge_follows_the_active_backend t79_hop_backend_override t80_tunnel_notice_dialects t81_a_daemons_writeonly_stdin_cannot_break_a_child t82_the_tunnel_outlives_the_command_that_started_it t89_tunnel_to_proxy_guard_transition t83_chaos_corrupt_state_and_stale_locks t84_chaos_process_assassination t85_chaos_port_squatting t86_chaos_concurrent_hop_stampede t87_chaos_blacklist_saturation t88_chaos_cli_monkey t90_auto_resume_waits_for_a_rotation t91_chaos_every_region_walled t92_cold_bootstrap_is_retried_once t93_stop_reaps_an_orphan_tunnel_with_no_pidfile t94_auto_resume_defaults_to_the_verified_model t95_fallback_takes_the_tunnel_down t96_bridge_refuses_a_port_nobody_can_find t97_stop_reaps_an_inflight_rotation t98_installer_psiphon_lifecycle t99_markdown_link_integrity"
+t100_interactive_tui_survives_rotation(){
+  begin "an interactive TUI stays open (same PID) across a WARP->Psiphon rotation"
+  sb
+  # Every other end-to-end test spawns a fresh process per turn. Daily use is
+  # one long-lived TUI process, open across many prompts, pooling connections
+  # to the bridge. This drives a real PTY: a persistent stand-in reads
+  # keystrokes, sends each turn through the bridge over a POOLED tunnel, and
+  # must keep working after the backend rotates underneath it.
+  local pa=14021 pb=14022 lport=18099 target=15199
+  FAKE_SOCKS_LOG="$T/socksA.log" python3 "$HELPER/fake_socks5.py" --port $pa \
+    > "$T/socksA.out" 2>&1 &
+  local pida=$!
+  FAKE_SOCKS_LOG="$T/socksB.log" python3 "$HELPER/fake_socks5.py" --port $pb \
+    > "$T/socksB.out" 2>&1 &
+  local pidb=$!
+  # a tiny echo target: the far end of the CONNECT tunnel
+  python3 - "$target" > "$T/echo.out" 2>&1 <<'PY' &
+import socket, sys, threading
+srv = socket.socket(); srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+srv.bind(("127.0.0.1", int(sys.argv[1]))); srv.listen(5)
+def handle(c):
+    try:
+        while True:
+            d = c.recv(4096)
+            if not d: break
+            c.sendall(d)
+    except OSError: pass
+    finally: c.close()
+while True:
+    c, _ = srv.accept()
+    threading.Thread(target=handle, args=(c,), daemon=True).start()
+PY
+  local pidecho=$!
+  sleep 1.2
+
+  python3 -c "
+import json, sys
+json.dump({'active_backend': 'warp', 'active_socks_port': $pa},
+          open(sys.argv[1], 'w'))" "$OUC_STATE_DIR/state.json"
+  python3 "$ROOT/ouc.py" bridge --listen "127.0.0.1:$lport" --dynamic \
+    > "$T/bridge.out" 2>&1 &
+  local pidbr=$!
+  local i
+  for i in $(seq 1 40); do
+    python3 -c 'import socket,sys
+s=socket.socket(); s.settimeout(0.3)
+try: s.connect(("127.0.0.1", int(sys.argv[1])))
+except OSError: sys.exit(1)' "$lport" && break
+    sleep 0.25
+  done
+
+  # The TUI stand-in: one pooled CONNECT tunnel, reused across turns. On a
+  # drained socket it reconnects (exactly what a real HTTP client does).
+  cat > "$T/tui_standin.py" <<'PY'
+import socket, sys
+BRIDGE = ("127.0.0.1", int(sys.argv[1]))
+TARGET = ("127.0.0.1", int(sys.argv[2]))
+def connect():
+    s = socket.create_connection(BRIDGE, timeout=8)
+    s.sendall(f"CONNECT {TARGET[0]}:{TARGET[1]} HTTP/1.1\r\nHost: {TARGET[0]}:{TARGET[1]}\r\n\r\n".encode())
+    resp = s.recv(200)
+    if b"200" not in resp:
+        raise OSError("CONNECT failed: %r" % resp)
+    return s
+def turn(sock, label):
+    sock.sendall((label + "\n").encode())
+    sock.settimeout(4)
+    data = b""
+    while label.encode() not in data:
+        chunk = sock.recv(4096)
+        if not chunk:
+            break
+        data += chunk
+    return data
+sock = connect()
+print("READY", flush=True)
+for line in sys.stdin:
+    label = line.strip()
+    if not label:
+        continue
+    try:
+        data = turn(sock, label)
+        if label.encode() not in data:
+            raise OSError("empty/stale response")
+    except (OSError, socket.timeout):
+        try: sock.close()
+        except OSError: pass
+        sock = connect()
+        data = turn(sock, label)
+    print(f"RENDERED:{label}", flush=True)
+PY
+
+  # Drive it through a real PTY so it sees a TTY (isatty) like the real TUI.
+  python3 - "$T" "$lport" "$target" > "$T/pty.out" 2>&1 <<'PY' &
+import os, pty, select, socket, subprocess, sys, time
+T, lport, target = sys.argv[1], sys.argv[2], sys.argv[3]
+master, slave = pty.openpty()
+proc = subprocess.Popen(
+    [sys.executable, os.path.join(T, "tui_standin.py"), lport, target],
+    stdin=slave, stdout=slave, stderr=slave, close_fds=True)
+os.close(slave)
+print(f"TUI_PID {proc.pid}", flush=True)
+buf = b""
+def read_until(needle, timeout=20):
+    global buf
+    end = time.time() + timeout
+    while needle.encode() not in buf and time.time() < end:
+        r, _, _ = select.select([master], [], [], 0.5)
+        if r:
+            try:
+                chunk = os.read(master, 4096)
+            except OSError:
+                break
+            if not chunk:
+                break
+            buf += chunk
+    return needle.encode() in buf
+read_until("READY")
+os.write(master, b"turn1\n")
+ok1 = read_until("RENDERED:turn1")
+print(f"TURN1 {'ok' if ok1 else 'FAIL'}", flush=True)
+# background rotation: flip the active backend to Psiphon, TUI stays open
+import json
+with open(os.path.join(os.environ["OUC_STATE_DIR"], "state.json"), "w") as fh:
+    json.dump({"active_backend": "psiphon", "active_socks_port": 14022}, fh)
+time.sleep(2)  # let the bridge watcher drain the pooled WARP tunnel
+print(f"TUI_ALIVE {proc.poll() is None}", flush=True)
+os.write(master, b"turn2\n")
+ok2 = read_until("RENDERED:turn2")
+print(f"TURN2 {'ok' if ok2 else 'FAIL'}", flush=True)
+# Keep a second epoch-2 tunnel open while the watcher repeatedly observes the
+# same route: it must not be mistaken for a stale epoch-1 tunnel.
+peer = socket.create_connection(("127.0.0.1", int(lport)), timeout=5)
+peer.sendall(f"CONNECT 127.0.0.1:{target} HTTP/1.1\r\nHost: 127.0.0.1:{target}\r\n\r\n".encode())
+assert b"200" in peer.recv(200)
+time.sleep(1)
+peer.sendall(b"epoch2-stays\n")
+print("EPOCH2_INTACT", peer.recv(128) == b"epoch2-stays\n", flush=True)
+peer.close()
+# Same port, different verified exit and hop count: the old pooled tunnel
+# must be closed even though active_socks_port did not change.
+with open(os.path.join(os.environ["OUC_STATE_DIR"], "state.json"), "w") as fh:
+    json.dump({"active_backend": "psiphon", "active_socks_port": 14022,
+               "hops": 1, "current": "192.0.2.42"}, fh)
+time.sleep(1)
+os.write(master, b"turn3\n")
+ok3 = read_until("RENDERED:turn3")
+print(f"TURN3 {'ok' if ok3 else 'FAIL'}", flush=True)
+print(f"TUI_PID_AFTER {proc.pid} alive={proc.poll() is None}", flush=True)
+try:
+    proc.terminate()
+except Exception:
+    pass
+PY
+  local pidpty=$!
+  wait "$pidpty" 2>/dev/null || true
+  sleep 0.5
+
+  check "turn 1 rendered through the open TUI" \
+        "$(grep -c 'TURN1 ok' "$T/pty.out")" "1"
+  check "turn 1 went through the WARP upstream" \
+        "$([ -s "$T/socksA.log" ] && echo yes || echo no)" "yes"
+  check "turn 2 rendered through the SAME open TUI" \
+        "$(grep -c 'TURN2 ok' "$T/pty.out")" "1"
+  check "turn 2 went through the Psiphon upstream" \
+        "$([ -s "$T/socksB.log" ] && echo yes || echo no)" "yes"
+  # the pooled WARP tunnel was drained on the backend change, forcing cutover
+  check "the bridge drained the stale pooled connection on cutover" \
+        "$([ "$(grep -c 'drained .* stale route connection' "$OUC_STATE_DIR/ouc.log" 2>/dev/null)" -ge 1 ] && echo yes || echo no)" "yes"
+  check "new epoch connection remains open" \
+        "$(grep -c 'EPOCH2_INTACT True' "$T/pty.out")" "1"
+  check "same-port rotation reconnects the same TUI" \
+        "$(grep -c 'TURN3 ok' "$T/pty.out")" "1"
+  check "both cross-port and same-port changes drained old tunnels" \
+        "$(grep -c 'drained .* stale route connection' "$OUC_STATE_DIR/ouc.log")" "2"
+  check "the TUI process never exited (same PID, still alive)" \
+        "$(grep -c 'TUI_ALIVE True' "$T/pty.out")" "1"
+  check "no traceback from the TUI harness" \
+        "$(grep -c 'Traceback (most recent call last)' "$T/pty.out")" "0"
+  a_note "bridge ouc.log:"; sed 's/^/    /' "$OUC_STATE_DIR/ouc.log" 2>/dev/null
+  a_note "pty.out:"; sed 's/^/    /' "$T/pty.out" 2>/dev/null
+  kill "$pida" "$pidb" "$pidecho" "$pidbr" 2>/dev/null || true
+  sb_cleanup
+  finish "100-interactive-tui.log"
+}
+
+ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions t73_transport_resilience_regressions t74_orphaned_bridge_is_stopped t75_block_normalisation_and_ttl t76_escalation_after_five_warp_failures t77_psiphon_region_round_robin t78_bridge_follows_the_active_backend t79_hop_backend_override t80_tunnel_notice_dialects t81_a_daemons_writeonly_stdin_cannot_break_a_child t82_the_tunnel_outlives_the_command_that_started_it t89_tunnel_to_proxy_guard_transition t83_chaos_corrupt_state_and_stale_locks t84_chaos_process_assassination t85_chaos_port_squatting t86_chaos_concurrent_hop_stampede t87_chaos_blacklist_saturation t88_chaos_cli_monkey t90_auto_resume_waits_for_a_rotation t91_chaos_every_region_walled t92_cold_bootstrap_is_retried_once t93_stop_reaps_an_orphan_tunnel_with_no_pidfile t94_auto_resume_defaults_to_the_verified_model t95_fallback_takes_the_tunnel_down t96_bridge_refuses_a_port_nobody_can_find t97_stop_reaps_an_inflight_rotation t98_installer_psiphon_lifecycle t99_markdown_link_integrity t100_interactive_tui_survives_rotation"
 REAL_TESTS="t30_real_install t31_real_auto_rotation t32_real_no_deadlock t33_real_hop t34_real_uninstall t45_real_proxy_rotation"
 TEST_TIMEOUT="${TEST_TIMEOUT:-240}"
 

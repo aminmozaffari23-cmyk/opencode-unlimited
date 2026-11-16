@@ -1528,19 +1528,75 @@ def run_bridge(listen: str, socks: str, log: "Log | None" = None,
     ("UnsupportedProxyProtocol"), so this is the adapter that makes proxy mode
     usable by opencode. No dependencies, no root, binds to loopback only.
 
-    With `dynamic` (or no static `socks`), the upstream is re-read from
-    state.json per connection: a mid-task fallback from WARP (40000) to Psiphon
-    (9060) costs the caller nothing.
+    Dynamic CONNECT tunnels are tagged with the route observed at dial time.
+    A watcher shuts down tunnels with an obsolete tag when state changes;
+    clients must reconnect, and an in-flight request can be interrupted.
+    Backend and port can change before a candidate has been verified, while
+    hops and current are updated on a successful rotation. Static tunnels are
+    not monitored. This mechanism cannot guarantee that an HTTP client retries.
     """
     lh, lp = listen.rsplit(":", 1)
     dynamic = dynamic or not (socks or "").strip()
     sh = sp = ""
     if not dynamic:
         sh, sp = socks.rsplit(":", 1)
-    cache: dict = {}
-    last = {"upstream": ""}
+    # Keep route observations and tunnel registration serialized.  A changed
+    # inode matters too: State writes by atomic rename, and mtimes alone can
+    # collide on filesystems with coarse timestamp resolution.
+    route_lock = threading.RLock()
+    observed = {"signature": None, "epoch": None}
+    clients = {}  # client socket -> (upstream socket, route epoch)
+    state_path = os.path.join(_state_dir_default(), "state.json")
+    default_port = int(os.environ.get("OUC_PROXY_SOCKS_PORT") or 40000)
+
+    def route():
+        """Read on change; retain last known route on a transient read error.
+
+        Caller holds route_lock.  The inode/size/mtime signature avoids a
+        periodic JSON parse while detecting the atomic renames used by State.
+        """
+        try:
+            stat = os.stat(state_path)
+            signature = (stat.st_dev, stat.st_ino, stat.st_mtime_ns, stat.st_size)
+            if signature != observed["signature"]:
+                with open(state_path) as fh:
+                    st = json.load(fh)
+                port = int(st.get("active_socks_port") or default_port)
+                epoch = (int(st.get("hops") or 0),
+                         st.get("active_backend") or "warp", port,
+                         st.get("current") or st.get("block") or "")
+                if log and (observed["epoch"] is None or observed["epoch"][2] != port):
+                    log(f"bridge: upstream now socks5://127.0.0.1:{port}")
+                observed.update(signature=signature, epoch=epoch)
+        except (OSError, ValueError, TypeError, AttributeError):
+            pass
+        return observed["epoch"] or (0, "warp", default_port, "")
+
+    def reconcile():
+        """Shut down only tunnels tagged with an obsolete route."""
+        with route_lock:
+            epoch = route()
+            stale = [(client, upstream) for client, (upstream, tag)
+                     in clients.items() if tag != epoch]
+            for client, upstream in stale:
+                for sock in (client, upstream):
+                    try:
+                        sock.shutdown(socket.SHUT_RDWR)
+                    except OSError:
+                        pass
+                clients.pop(client, None)
+            if stale and log:
+                log(f"bridge: drained {len(stale)} stale route connection(s)")
+            return epoch
+
+    def watcher():
+        while True:
+            time.sleep(0.2)
+            reconcile()
 
     def handle(conn):
+        upstream = None
+        registered = False
         try:
             head = b""
             while b"\r\n\r\n" not in head:
@@ -1556,19 +1612,24 @@ def run_bridge(listen: str, socks: str, log: "Log | None" = None,
                 conn.sendall(b"HTTP/1.1 405 Method Not Allowed\r\n\r\n")
                 return
             host, _, port = parts[1].rpartition(":")
-            up_h, up_p = sh, sp
             if dynamic:
-                candidate = bridge_upstream("", cache)
-                up_h, up_p = candidate.rsplit(":", 1)
-                if last["upstream"] != candidate:
-                    last["upstream"] = candidate
-                    if log:
-                        log(f"bridge: upstream now socks5://{candidate}")
-            upstream = _socks5_connect(up_h, int(up_p), host.strip("[]"), int(port))
+                # Dial without holding the registry lock (a SOCKS handshake can
+                # take seconds). Recheck before registration so a route change
+                # during the handshake never admits an old-route connection.
+                epoch = reconcile()
+                upstream = _socks5_connect("127.0.0.1", epoch[2],
+                                           host.strip("[]"), int(port))
+                with route_lock:
+                    if route() != epoch:
+                        raise OSError("route changed during SOCKS handshake")
+                    clients[conn] = (upstream, epoch)
+                    registered = True
+            else:
+                upstream = _socks5_connect(sh, int(sp), host.strip("[]"), int(port))
             conn.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")
             threading.Thread(target=_pump, args=(upstream, conn), daemon=True).start()
             _pump(conn, upstream)
-        except Exception as exc:  # a proxy must never die on one bad client
+        except Exception as exc:
             try:
                 conn.sendall(b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
             except OSError:
@@ -1576,10 +1637,15 @@ def run_bridge(listen: str, socks: str, log: "Log | None" = None,
             if log:
                 log(f"bridge: {exc}", "WARN")
         finally:
-            try:
-                conn.close()
-            except OSError:
-                pass
+            if registered:
+                with route_lock:
+                    clients.pop(conn, None)
+            for sock in (conn, upstream):
+                if sock is not None:
+                    try:
+                        sock.close()
+                    except OSError:
+                        pass
 
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -1594,6 +1660,8 @@ def run_bridge(listen: str, socks: str, log: "Log | None" = None,
         log(f"bridge listening on http://{listen} -> "
             + (f"socks5://{socks}" if not dynamic
                else "socks5://<state.json active_socks_port>"))
+    if dynamic:
+        threading.Thread(target=watcher, daemon=True).start()
     while True:
         try:
             conn, _ = srv.accept()
