@@ -1,0 +1,40 @@
+
+  ┃
+  ┃  Remember the exact secret token TOKEN-TUI-F08FFF573D27. Reply with only ACK-TUI-42C2C240.
+  ┃
+
+     + Thought: 1.0s
+
+     ACK-TUI-42C2C240
+
+     ▣  Build · DeepSeek V4.1 Flash Free · 3.5s
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ┃
+  ┃
+  ┃
+  ┃  Build · DeepSeek V4.1 Flash Free OpenCode
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+   /tmp/ouc-tui-home                                                                        8.4K (4%)  ctrl+p commands
+

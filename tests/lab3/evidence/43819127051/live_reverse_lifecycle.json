@@ -1,0 +1,972 @@
+{
+  "phase": "live_reverse_lifecycle",
+  "passed": true,
+  "steps": [
+    {
+      "step": "initial_psiphon",
+      "ok": true,
+      "attempts": [
+        {
+          "try_index": 1,
+          "rc": 0,
+          "backend": "psiphon",
+          "region_index": 1,
+          "tail": "  old block: ?\n  new block: 167.99.108.171/32\n  backend: psiphon, region US\n  \u2713 rotated in 37.73s \u2014 resend your message\n"
+        }
+      ],
+      "state": {
+        "active_backend": "psiphon",
+        "active_socks_port": 9060,
+        "blacklist": [],
+        "blacklist_ts": {},
+        "current": "167.99.108.171",
+        "current_source": "periodic check",
+        "current_ts": 1794811679,
+        "degraded": false,
+        "fallback_activated_at": 1794811725,
+        "hops": 1,
+        "last_error": "",
+        "last_hop": 1794811725,
+        "last_hop_request": "",
+        "last_rotation": {
+          "attempts": [
+            {
+              "accepted": true,
+              "block": "167.99.108.171/32",
+              "how": "psiphon@US",
+              "verify": {
+                "detail": "opencode answered on the current block",
+                "failure_class": "",
+                "model": "opencode/deepseek-v4.1-flash-free",
+                "ok": true,
+                "ran": true,
+                "rc": 0,
+                "walled": false
+              }
+            }
+          ],
+          "backend": "psiphon",
+          "degraded": false,
+          "duration": 37.73,
+          "error": "",
+          "how": "psiphon@US",
+          "new": "167.99.108.171",
+          "ok": true,
+          "old": "",
+          "region": "US",
+          "verified": true,
+          "why": "manual-hop"
+        },
+        "last_wall": 0,
+        "log_id": "",
+        "offset": 0,
+        "pending_since": 0,
+        "pending_wall": false,
+        "pin_lifted_for_backend": "",
+        "psiphon_cycle_count": 0,
+        "psiphon_cycle_visited": [
+          "US"
+        ],
+        "psiphon_region_index": 1,
+        "psiphon_rotations": 1,
+        "schema": 2,
+        "tail_sig": "",
+        "updated": 1794811725,
+        "verify_log_id": "2049:7779892",
+        "verify_offset": 4463,
+        "warp_fail_streak": 0
+      },
+      "egress": "167.99.108.171"
+    },
+    {
+      "step": "automatic_ttl_return",
+      "hop": {
+        "cmd": "hop --wait 300",
+        "rc": 0,
+        "seconds": 9.295,
+        "json": null,
+        "out": "  old block: 2a09:bac5:d2a2:1c64\n  new block: 2a09:bac1:76a0:8628\n  \u2713 rotated in 8.93s \u2014 resend your message\n",
+        "err": ""
+      },
+      "state": {
+        "active_backend": "warp",
+        "active_socks_port": 40000,
+        "blacklist": [
+          "2a09:bac5:d2a2:1c64"
+        ],
+        "blacklist_ts": {
+          "2a09:bac5:d2a2:1c64": 1794811736
+        },
+        "current": "2a09:bac1:76a0:8628::281:a",
+        "current_source": "periodic check",
+        "current_ts": 1794811679,
+        "degraded": false,
+        "fallback_activated_at": 0,
+        "hops": 2,
+        "last_block_reused": false,
+        "last_error": "",
+        "last_hop": 1794811736,
+        "last_hop_request": "",
+        "last_rotate_ts": 1794811727,
+        "last_rotation": {
+          "attempts": [
+            {
+              "accepted": true,
+              "block": "2a09:bac1:76a0:8628",
+              "how": "rotate-keys#1",
+              "verify": {
+                "detail": "opencode answered on the current block",
+                "failure_class": "",
+                "model": "opencode/deepseek-v4.1-flash-free",
+                "ok": true,
+                "ran": true,
+                "rc": 0,
+                "walled": false
+              }
+            }
+          ],
+          "degraded": false,
+          "duration": 8.93,
+          "error": "",
+          "how": "rotate-keys#1",
+          "new": "2a09:bac1:76a0:8628::281:a",
+          "ok": true,
+          "old": "2a09:bac5:d2a2:1c64::2d4:e7",
+          "quota_evidence": true,
+          "verified": true,
+          "why": "manual-hop"
+        },
+        "last_wall": 0,
+        "log_id": "",
+        "offset": 0,
+        "pending_since": 0,
+        "pending_wall": false,
+        "pin_lifted_for_backend": "",
+        "psiphon_cycle_count": 0,
+        "psiphon_cycle_visited": [],
+        "psiphon_region_index": 1,
+        "psiphon_rotations": 1,
+        "rotate_stamps": [
+          1794811727
+        ],
+        "schema": 2,
+        "tail_sig": "",
+        "updated": 1794811736,
+        "verify_log_id": "2049:7779892",
+        "verify_offset": 8844,
+        "warp_fail_streak": 0,
+        "warp_tun_down_for_fallback": false
+      },
+      "egress": "2a09:bac1:76a0:8628::281:a",
+      "psiphon_listener_stopped": true
+    },
+    {
+      "step": "failed_warp_bounce",
+      "warp_stop": {
+        "rc": 0,
+        "out": "",
+        "err": "",
+        "seconds": 0.034
+      },
+      "before": {
+        "active_backend": "psiphon",
+        "active_socks_port": 9060,
+        "blacklist": [
+          "2a09:bac5:d2a2:1c64",
+          "2a09:bac1:76a0:8628"
+        ],
+        "blacklist_ts": {
+          "2a09:bac1:76a0:8628": 1794811749,
+          "2a09:bac5:d2a2:1c64": 1794811736
+        },
+        "current": "172.238.108.167",
+        "current_source": "periodic check",
+        "current_ts": 1794811679,
+        "degraded": false,
+        "fallback_activated_at": 1794811749,
+        "hops": 3,
+        "last_block_reused": false,
+        "last_error": "",
+        "last_hop": 1794811749,
+        "last_hop_request": "",
+        "last_rotate_ts": 1794811727,
+        "last_rotation": {
+          "attempts": [
+            {
+              "accepted": true,
+              "block": "172.238.108.167/32",
+              "how": "psiphon@DE",
+              "verify": {
+                "detail": "opencode answered on the current block",
+                "failure_class": "",
+                "model": "opencode/deepseek-v4.1-flash-free",
+                "ok": true,
+                "ran": true,
+                "rc": 0,
+                "walled": false
+              }
+            }
+          ],
+          "backend": "psiphon",
+          "degraded": false,
+          "duration": 12.5,
+          "error": "",
+          "how": "psiphon@DE",
+          "new": "172.238.108.167",
+          "ok": true,
+          "old": "2a09:bac1:76a0:8628::281:a",
+          "region": "DE",
+          "verified": true,
+          "why": "manual-hop"
+        },
+        "last_wall": 0,
+        "log_id": "",
+        "offset": 0,
+        "pending_since": 0,
+        "pending_wall": false,
+        "pin_lifted_for_backend": "",
+        "psiphon_cycle_count": 0,
+        "psiphon_cycle_visited": [
+          "DE"
+        ],
+        "psiphon_region_index": 2,
+        "psiphon_rotations": 2,
+        "rotate_stamps": [
+          1794811727
+        ],
+        "schema": 2,
+        "tail_sig": "",
+        "updated": 1794811749,
+        "verify_log_id": "2049:7779892",
+        "verify_offset": 13228,
+        "warp_fail_streak": 0,
+        "warp_tun_down_for_fallback": false
+      },
+      "hop": {
+        "cmd": "hop --wait 300",
+        "rc": 0,
+        "seconds": 65.902,
+        "json": null,
+        "out": "  old block: ?\n  new block: 172.235.168.66/32\n  backend: psiphon, region NL\n  \u2713 rotated in 11.64s \u2014 resend your message\n",
+        "err": ""
+      },
+      "state": {
+        "active_backend": "psiphon",
+        "active_socks_port": 9060,
+        "blacklist": [
+          "2a09:bac5:d2a2:1c64",
+          "2a09:bac1:76a0:8628"
+        ],
+        "blacklist_ts": {
+          "2a09:bac1:76a0:8628": 1794811749,
+          "2a09:bac5:d2a2:1c64": 1794811736
+        },
+        "current": "172.235.168.66",
+        "current_source": "periodic check",
+        "current_ts": 1794811679,
+        "degraded": false,
+        "fallback_activated_at": 1794811818,
+        "hops": 4,
+        "last_block_reused": false,
+        "last_error": "",
+        "last_hop": 1794811818,
+        "last_hop_request": "",
+        "last_rotate_ts": 1794811752,
+        "last_rotation": {
+          "attempts": [
+            {
+              "accepted": true,
+              "block": "172.235.168.66/32",
+              "how": "psiphon@NL",
+              "verify": {
+                "detail": "opencode answered on the current block",
+                "failure_class": "",
+                "model": "opencode/deepseek-v4.1-flash-free",
+                "ok": true,
+                "ran": true,
+                "rc": 0,
+                "walled": false
+              }
+            }
+          ],
+          "backend": "psiphon",
+          "degraded": false,
+          "duration": 11.64,
+          "error": "",
+          "how": "psiphon@NL",
+          "new": "172.235.168.66",
+          "ok": true,
+          "old": "",
+          "region": "NL",
+          "verified": true,
+          "why": "manual-hop"
+        },
+        "last_wall": 0,
+        "log_id": "2049:7779892",
+        "offset": 13228,
+        "pending_since": 0,
+        "pending_wall": false,
+        "pin_lifted_for_backend": "",
+        "psiphon_cycle_count": 0,
+        "psiphon_cycle_visited": [
+          "DE",
+          "NL"
+        ],
+        "psiphon_region_index": 3,
+        "psiphon_rotations": 3,
+        "rotate_stamps": [
+          1794811727,
+          1794811752
+        ],
+        "schema": 2,
+        "tail_sig": "258b5a012584669dd5c109fa9c3240e9abdede54e84e250310bd152921360870",
+        "updated": 1794811818,
+        "verify_log_id": "2049:7779892",
+        "verify_offset": 17609,
+        "wall_partial": "",
+        "warp_fail_streak": 0,
+        "warp_tun_down_for_fallback": false
+      },
+      "egress": "172.235.168.66",
+      "controller_log": {
+        "rc": 0,
+        "out": "2026-11-16T06:47:59 INFO  bridge listening on http://127.0.0.1:8080 -> socks5://<state.json active_socks_port>\n2026-11-16T06:47:59 INFO  bridge: upstream now socks5://127.0.0.1:40000\n2026-11-16T06:48:07 INFO  psiphon: started pid 4750 region=US (DisableReplay=true, socks 9060)\n2026-11-16T06:48:40 INFO  bridge listening on http://127.0.0.1:8080 -> socks5://<state.json active_socks_port>\n2026-11-16T06:48:40 INFO  bridge up on http://127.0.0.1:8080 -> socks5://127.0.0.1:40000\n2026-11-16T06:48:40 INFO  bridge: upstream now socks5://127.0.0.1:9060\n2026-11-16T06:48:45 INFO  rotation done in 37.73s via psiphon@US (fallback backend): ? -> 167.99.108.171/32 (verified with a real request)\n2026-11-16T06:48:47 INFO  backend: the WARP blacklist window has elapsed \u2014 probing WARP again before using Psiphon\n2026-11-16T06:48:47 INFO  bridge: upstream now socks5://127.0.0.1:40000\n2026-11-16T06:48:47 INFO  rotation start (manual-hop); egress=2a09:bac5:d2a2:1c64::2d4:e7\n2026-11-16T06:48:56 INFO  rotation done in 8.93s via rotate-keys#1: 2a09:bac5:d2a2:1c64 -> 2a09:bac1:76a0:8628 (verified with a real request)\n2026-11-16T06:48:56 INFO  psiphon: stopped pid 4750\n2026-11-16T06:48:57 INFO  psiphon: started pid 5143 region=DE (DisableReplay=true, socks 9060)\n2026-11-16T06:49:00 INFO  bridge: upstream now socks5://127.0.0.1:9060\n2026-11-16T06:49:09 INFO  rotation done in 12.5s via psiphon@DE (fallback backend): 2a09:bac1:76a0:8628 -> 172.238.108.167/32 (verified with a real request)\n2026-11-16T06:49:12 INFO  backend: the WARP blacklist window has elapsed \u2014 probing WARP again before using Psiphon\n2026-11-16T06:49:12 INFO  bridge: upstream now socks5://127.0.0.1:40000\n2026-11-16T06:49:12 WARN  bridge: [Errno 111] Connection refused\n2026-11-16T06:49:12 WARN  bridge: [Errno 111] Connection refused\n2026-11-16T06:49:12 INFO  rotation start (manual-hop); egress=unreachable\n2026-11-16T06:49:12 WARN  rotate-keys failed: 'Unable to connect to the CloudflareWARP daemon: No such file or directory (os error 2)\\n\\nMaybe the daemon is not running?' \u2014 falling back\n2026-11-16T06:49:12 INFO  waiting 9s for the old registration to clear\n2026-11-16T06:49:21 WARN  registration new failed: 'Unable to connect to the CloudflareWARP daemon: No such file or directory (os error 2)\\n\\nMaybe the daemon is not running?' \u2014 retry in 3s\n2026-11-16T06:49:24 WARN  registration new failed: 'Unable to connect to the CloudflareWARP daemon: No such file or directory (os error 2)\\n\\nMaybe the daemon is not running?' \u2014 retry in 6s\n2026-11-16T06:49:30 ERROR could not register a new device\n2026-11-16T06:49:30 INFO  waiting 9s for the old registration to clear\n2026-11-16T06:49:39 WARN  registration new failed: 'Unable to connect to the CloudflareWARP daemon: No such file or directory (os error 2)\\n\\nMaybe the daemon is not running?' \u2014 retry in 3s\n2026-11-16T06:49:42 WARN  registration new failed: 'Unable to connect to the CloudflareWARP daemon: No such file or directory (os error 2)\\n\\nMaybe the daemon is not running?' \u2014 retry in 6s\n2026-11-16T06:49:48 ERROR could not register a new device\n2026-11-16T06:49:48 INFO  waiting 9s for the old registration to clear\n2026-11-16T06:49:57 WARN  registration new failed: 'Unable to connect to the CloudflareWARP daemon: No such file or directory (os error 2)\\n\\nMaybe the daemon is not running?' \u2014 retry in 3s\n2026-11-16T06:50:00 WARN  registration new failed: 'Unable to connect to the CloudflareWARP daemon: No such file or directory (os error 2)\\n\\nMaybe the daemon is not running?' \u2014 retry in 6s\n2026-11-16T06:50:06 ERROR could not register a new device\n2026-11-16T06:50:06 ERROR rotation FAILED after 54.1s: no fresh /64 available right now; every candidate was spent or unverifiable [nothing]\n2026-11-16T06:50:06 WARN  backend: WARP return failed; attempting Psiphon recovery\n2026-11-16T06:50:06 WARN  bridge: [Errno 111] Connection refused\n2026-11-16T06:50:06 WARN  bridge: [Errno 111] Connection refused\n2026-11-16T06:50:07 INFO  psiphon: stopped pid 5143\n2026-11-16T06:50:07 INFO  psiphon: started pid 5439 region=NL (DisableReplay=true, socks 9060)\n2026-11-16T06:50:10 INFO  bridge: upstream now socks5://127.0.0.1:9060\n2026-11-16T06:50:18 INFO  rotation done in 11.64s via psiphon@NL (fallback backend): ? -> 172.235.168.66/32 (verified with a real request)\n",
+        "err": "",
+        "seconds": 0.01
+      }
+    },
+    {
+      "step": "cache_bust_trial",
+      "attempt": 1,
+      "measured_blacklist": [
+        "167.99.108.171/32",
+        "172.235.168.66/32"
+      ],
+      "setup": {
+        "rc": 0,
+        "out": "",
+        "err": "",
+        "seconds": 0.15
+      },
+      "hop": {
+        "cmd": "hop --backend psiphon --wait 300",
+        "rc": 0,
+        "seconds": 9.475,
+        "json": null,
+        "out": "  old block: 172.235.168.66/32\n  new block: 146.185.143.64/32\n  backend: psiphon, region NL\n  \u2713 rotated in 9.32s \u2014 resend your message\n",
+        "err": ""
+      },
+      "state": {
+        "active_backend": "psiphon",
+        "active_socks_port": 9060,
+        "blacklist": [
+          "2a09:bac5:d2a2:1c64",
+          "2a09:bac1:76a0:8628",
+          "167.99.108.171/32",
+          "172.235.168.66/32"
+        ],
+        "blacklist_ts": {
+          "167.99.108.171/32": 1794811819,
+          "172.235.168.66/32": 1794811829,
+          "2a09:bac1:76a0:8628": 1794811749,
+          "2a09:bac5:d2a2:1c64": 1794811736
+        },
+        "current": "146.185.143.64",
+        "current_source": "periodic check",
+        "current_ts": 1794811679,
+        "degraded": false,
+        "fallback_activated_at": 1794811818,
+        "hops": 5,
+        "last_block_reused": false,
+        "last_error": "",
+        "last_hop": 1794811829,
+        "last_hop_request": "",
+        "last_rotate_ts": 1794811752,
+        "last_rotation": {
+          "attempts": [
+            {
+              "accepted": true,
+              "block": "146.185.143.64/32",
+              "how": "psiphon@NL",
+              "verify": {
+                "detail": "opencode answered on the current block",
+                "failure_class": "",
+                "model": "opencode/deepseek-v4.1-flash-free",
+                "ok": true,
+                "ran": true,
+                "rc": 0,
+                "walled": false
+              }
+            }
+          ],
+          "backend": "psiphon",
+          "degraded": false,
+          "duration": 9.32,
+          "error": "",
+          "how": "psiphon@NL",
+          "new": "146.185.143.64",
+          "ok": true,
+          "old": "172.235.168.66",
+          "region": "NL",
+          "verified": true,
+          "why": "manual-hop"
+        },
+        "last_wall": 0,
+        "log_id": "2049:7779892",
+        "offset": 13228,
+        "pending_since": 0,
+        "pending_wall": false,
+        "pin_lifted_for_backend": "",
+        "psiphon_cycle_count": 1,
+        "psiphon_cycle_visited": [
+          "NL"
+        ],
+        "psiphon_region_index": 0,
+        "psiphon_rotations": 4,
+        "rotate_stamps": [
+          1794811727,
+          1794811752
+        ],
+        "schema": 2,
+        "tail_sig": "258b5a012584669dd5c109fa9c3240e9abdede54e84e250310bd152921360870",
+        "updated": 1794811829,
+        "verify_log_id": "2049:7779892",
+        "verify_offset": 21991,
+        "wall_partial": "",
+        "warp_fail_streak": 0,
+        "warp_tun_down_for_fallback": false
+      },
+      "egress": "146.185.143.64",
+      "pid_before": {
+        "rc": 0,
+        "out": "5439",
+        "err": "",
+        "seconds": 0.009
+      },
+      "pid_after": {
+        "rc": 0,
+        "out": "5582",
+        "err": "",
+        "seconds": 0.01
+      },
+      "backup_listing": {
+        "rc": 0,
+        "out": "total 152\ndrwxrwxr-x 3 runner runner   4096 Nov 16 06:50 .\ndrwxr-xr-x 3 runner runner   4096 Nov 16 06:50 ..\ndrwxrwxr-x 3 runner runner   4096 Nov 16 06:48 data\n-rw-r--r-- 1 root   root     3026 Nov 16 06:50 psiphon.config\n-rw-r--r-- 1 root   root   133293 Nov 16 06:50 psiphon.log\n-rw-r--r-- 1 root   root        4 Nov 16 06:50 psiphon.pid\n",
+        "err": "",
+        "seconds": 0.01
+      }
+    },
+    {
+      "step": "cache_bust_trial",
+      "attempt": 2,
+      "measured_blacklist": [
+        "167.99.108.171/32",
+        "172.235.168.66/32",
+        "146.185.143.64/32"
+      ],
+      "setup": {
+        "rc": 0,
+        "out": "",
+        "err": "",
+        "seconds": 0.08
+      },
+      "hop": {
+        "cmd": "hop --backend psiphon --wait 300",
+        "rc": 1,
+        "seconds": 158.247,
+        "json": null,
+        "out": "  old block: 146.185.143.64/32\n  new block: ?\n  backend: psiphon, region NL\n  \u2717 rotation failed: no working Psiphon exit right now [psiphon@NL=142.93.224.179/32 (verification hit the quota wall)]\n    the machine keeps its internet; try again, or run: ouc repair\n",
+        "err": ""
+      },
+      "state": {
+        "active_backend": "warp",
+        "active_socks_port": 40000,
+        "backend_after_failed_fallback": "warp",
+        "blacklist": [
+          "2a09:bac5:d2a2:1c64",
+          "2a09:bac1:76a0:8628",
+          "167.99.108.171/32",
+          "172.235.168.66/32",
+          "146.185.143.64/32"
+        ],
+        "blacklist_ts": {
+          "146.185.143.64/32": 1794811829,
+          "167.99.108.171/32": 1794811829,
+          "172.235.168.66/32": 1794811829,
+          "2a09:bac1:76a0:8628": 1794811749,
+          "2a09:bac5:d2a2:1c64": 1794811736
+        },
+        "current": "146.185.143.64",
+        "current_source": "periodic check",
+        "current_ts": 1794811679,
+        "degraded": false,
+        "fallback_activated_at": 1794811818,
+        "hops": 5,
+        "last_block_reused": false,
+        "last_error": "no working Psiphon exit right now [psiphon@NL=142.93.224.179/32 (verification hit the quota wall)]",
+        "last_hop": 1794811829,
+        "last_hop_request": "",
+        "last_rotate_ts": 1794811752,
+        "last_rotation": {
+          "attempts": [
+            {
+              "accepted": false,
+              "block": "142.93.224.179/32",
+              "how": "psiphon@NL",
+              "reason": "verification hit the quota wall",
+              "verify": {
+                "detail": "native quota error: AI_RetryError: Failed after 3 attempts. Last error: Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going: https://opencode.ai/go",
+                "failure_class": "quota",
+                "model": "opencode/deepseek-v4.1-flash-free",
+                "ok": false,
+                "ran": true,
+                "rc": -15,
+                "walled": true
+              }
+            }
+          ],
+          "backend": "psiphon",
+          "degraded": false,
+          "duration": 157.89,
+          "error": "no working Psiphon exit right now [psiphon@NL=142.93.224.179/32 (verification hit the quota wall)]",
+          "how": "",
+          "new": "",
+          "ok": false,
+          "old": "146.185.143.64",
+          "region": "NL",
+          "verified": false,
+          "why": "manual-hop"
+        },
+        "last_wall": 1794811848,
+        "log_id": "2049:7779892",
+        "offset": 27270,
+        "pending_since": 1794811848,
+        "pending_wall": true,
+        "pin_lifted_for_backend": "",
+        "psiphon_cycle_count": 1,
+        "psiphon_cycle_visited": [
+          "NL"
+        ],
+        "psiphon_region_index": 0,
+        "psiphon_rotations": 4,
+        "rotate_stamps": [
+          1794811727,
+          1794811752
+        ],
+        "schema": 2,
+        "tail_sig": "56d894cabc823d0938723f0d66dd6dd95ac183564578984099a4316edd106186",
+        "updated": 1794811988,
+        "verify_log_id": "2049:7779892",
+        "verify_offset": 27270,
+        "wall_partial": "",
+        "warp_fail_streak": 0,
+        "warp_tun_down_for_fallback": false
+      },
+      "egress": "",
+      "pid_before": {
+        "rc": 0,
+        "out": "5582",
+        "err": "",
+        "seconds": 0.009
+      },
+      "pid_after": {
+        "rc": 1,
+        "out": "",
+        "err": "cat: /var/lib/opencode-unlimited/psiphon/psiphon.pid: No such file or directory\n",
+        "seconds": 0.009
+      },
+      "backup_listing": {
+        "rc": 0,
+        "out": "total 188\ndrwxrwxr-x 3 runner runner   4096 Nov 16 06:53 .\ndrwxr-xr-x 3 runner runner   4096 Nov 16 06:53 ..\ndrwxrwxr-x 3 runner runner   4096 Nov 16 06:48 data\n-rw-r--r-- 1 root   root     3026 Nov 16 06:50 psiphon.config\n-rw-r--r-- 1 root   root   173948 Nov 16 06:53 psiphon.log\n",
+        "err": "",
+        "seconds": 0.01
+      }
+    },
+    {
+      "step": "cache_bust_trial",
+      "attempt": 3,
+      "measured_blacklist": [
+        "167.99.108.171/32",
+        "172.235.168.66/32",
+        "146.185.143.64/32"
+      ],
+      "setup": {
+        "rc": 0,
+        "out": "",
+        "err": "",
+        "seconds": 0.081
+      },
+      "hop": {
+        "cmd": "hop --backend psiphon --wait 300",
+        "rc": 0,
+        "seconds": 9.888,
+        "json": null,
+        "out": "  old block: ?\n  new block: 172.235.167.128/32\n  backend: psiphon, region NL\n  \u2713 rotated in 9.73s \u2014 resend your message\n",
+        "err": ""
+      },
+      "state": {
+        "active_backend": "psiphon",
+        "active_socks_port": 9060,
+        "backend_after_failed_fallback": "warp",
+        "blacklist": [
+          "2a09:bac5:d2a2:1c64",
+          "2a09:bac1:76a0:8628",
+          "167.99.108.171/32",
+          "172.235.168.66/32",
+          "146.185.143.64/32"
+        ],
+        "blacklist_ts": {
+          "146.185.143.64/32": 1794811988,
+          "167.99.108.171/32": 1794811988,
+          "172.235.168.66/32": 1794811988,
+          "2a09:bac1:76a0:8628": 1794811749,
+          "2a09:bac5:d2a2:1c64": 1794811736
+        },
+        "current": "172.235.167.128",
+        "current_source": "periodic check",
+        "current_ts": 1794811679,
+        "degraded": false,
+        "fallback_activated_at": 1794811818,
+        "hops": 6,
+        "last_block_reused": false,
+        "last_error": "",
+        "last_hop": 1794811998,
+        "last_hop_request": "",
+        "last_rotate_ts": 1794811752,
+        "last_rotation": {
+          "attempts": [
+            {
+              "accepted": true,
+              "block": "172.235.167.128/32",
+              "how": "psiphon@NL",
+              "verify": {
+                "detail": "opencode answered on the current block",
+                "failure_class": "",
+                "model": "opencode/deepseek-v4.1-flash-free",
+                "ok": true,
+                "ran": true,
+                "rc": 0,
+                "walled": false
+              }
+            }
+          ],
+          "backend": "psiphon",
+          "degraded": false,
+          "duration": 9.73,
+          "error": "",
+          "how": "psiphon@NL",
+          "new": "172.235.167.128",
+          "ok": true,
+          "old": "",
+          "region": "NL",
+          "verified": true,
+          "why": "manual-hop"
+        },
+        "last_wall": 1794811848,
+        "log_id": "2049:7779892",
+        "offset": 27270,
+        "pending_since": 0,
+        "pending_wall": false,
+        "pin_lifted_for_backend": "",
+        "psiphon_cycle_count": 1,
+        "psiphon_cycle_visited": [
+          "NL"
+        ],
+        "psiphon_region_index": 0,
+        "psiphon_rotations": 5,
+        "rotate_stamps": [
+          1794811727,
+          1794811752
+        ],
+        "schema": 2,
+        "tail_sig": "56d894cabc823d0938723f0d66dd6dd95ac183564578984099a4316edd106186",
+        "updated": 1794811998,
+        "verify_log_id": "2049:7779892",
+        "verify_offset": 31653,
+        "wall_partial": "",
+        "warp_fail_streak": 0,
+        "warp_tun_down_for_fallback": false
+      },
+      "egress": "172.235.167.128",
+      "pid_before": {
+        "rc": 1,
+        "out": "",
+        "err": "cat: /var/lib/opencode-unlimited/psiphon/psiphon.pid: No such file or directory\n",
+        "seconds": 0.009
+      },
+      "pid_after": {
+        "rc": 0,
+        "out": "6217",
+        "err": "",
+        "seconds": 0.01
+      },
+      "backup_listing": {
+        "rc": 0,
+        "out": "total 224\ndrwxrwxr-x 3 runner runner   4096 Nov 16 06:53 .\ndrwxr-xr-x 3 runner runner   4096 Nov 16 06:53 ..\ndrwxrwxr-x 3 runner runner   4096 Nov 16 06:48 data\n-rw-r--r-- 1 root   root     3026 Nov 16 06:53 psiphon.config\n-rw-r--r-- 1 root   root   205353 Nov 16 06:53 psiphon.log\n-rw-r--r-- 1 root   root        4 Nov 16 06:53 psiphon.pid\n",
+        "err": "",
+        "seconds": 0.012
+      }
+    },
+    {
+      "step": "cache_bust_trial",
+      "attempt": 4,
+      "measured_blacklist": [
+        "167.99.108.171/32",
+        "172.235.168.66/32",
+        "146.185.143.64/32",
+        "172.235.167.128/32"
+      ],
+      "setup": {
+        "rc": 0,
+        "out": "",
+        "err": "",
+        "seconds": 0.098
+      },
+      "hop": {
+        "cmd": "hop --backend psiphon --wait 300",
+        "rc": 1,
+        "seconds": 157.245,
+        "json": null,
+        "out": "  old block: 172.235.167.128/32\n  new block: ?\n  backend: psiphon, region NL\n  \u2717 rotation failed: no working Psiphon exit right now [psiphon@NL=142.93.224.179/32 (verification hit the quota wall)]\n    the machine keeps its internet; try again, or run: ouc repair\n",
+        "err": ""
+      },
+      "state": {
+        "active_backend": "warp",
+        "active_socks_port": 40000,
+        "backend_after_failed_fallback": "warp",
+        "blacklist": [
+          "2a09:bac5:d2a2:1c64",
+          "2a09:bac1:76a0:8628",
+          "167.99.108.171/32",
+          "172.235.168.66/32",
+          "146.185.143.64/32",
+          "172.235.167.128/32"
+        ],
+        "blacklist_ts": {
+          "146.185.143.64/32": 1794811999,
+          "167.99.108.171/32": 1794811999,
+          "172.235.167.128/32": 1794811999,
+          "172.235.168.66/32": 1794811999,
+          "2a09:bac1:76a0:8628": 1794811749,
+          "2a09:bac5:d2a2:1c64": 1794811736
+        },
+        "current": "172.235.167.128",
+        "current_source": "periodic check",
+        "current_ts": 1794811679,
+        "degraded": false,
+        "fallback_activated_at": 1794811818,
+        "hops": 6,
+        "last_block_reused": false,
+        "last_error": "no working Psiphon exit right now [psiphon@NL=142.93.224.179/32 (verification hit the quota wall)]",
+        "last_hop": 1794811998,
+        "last_hop_request": "",
+        "last_rotate_ts": 1794811752,
+        "last_rotation": {
+          "attempts": [
+            {
+              "accepted": false,
+              "block": "142.93.224.179/32",
+              "how": "psiphon@NL",
+              "reason": "verification hit the quota wall",
+              "verify": {
+                "detail": "native quota error: AI_RetryError: Failed after 3 attempts. Last error: Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going: https://opencode.ai/go",
+                "failure_class": "quota",
+                "model": "opencode/deepseek-v4.1-flash-free",
+                "ok": false,
+                "ran": true,
+                "rc": -15,
+                "walled": true
+              }
+            }
+          ],
+          "backend": "psiphon",
+          "degraded": false,
+          "duration": 156.68,
+          "error": "no working Psiphon exit right now [psiphon@NL=142.93.224.179/32 (verification hit the quota wall)]",
+          "how": "",
+          "new": "",
+          "ok": false,
+          "old": "172.235.167.128",
+          "region": "NL",
+          "verified": false,
+          "why": "manual-hop"
+        },
+        "last_wall": 1794812030,
+        "log_id": "2049:7779892",
+        "offset": 36931,
+        "pending_since": 1794812030,
+        "pending_wall": true,
+        "pin_lifted_for_backend": "",
+        "psiphon_cycle_count": 1,
+        "psiphon_cycle_visited": [
+          "NL"
+        ],
+        "psiphon_region_index": 0,
+        "psiphon_rotations": 5,
+        "rotate_stamps": [
+          1794811727,
+          1794811752
+        ],
+        "schema": 2,
+        "tail_sig": "92f2a7655167e359a2a9f6ae0717b2308a364203d2c7324afea06a064fad01db",
+        "updated": 1794812156,
+        "verify_log_id": "2049:7779892",
+        "verify_offset": 36931,
+        "wall_partial": "",
+        "warp_fail_streak": 0,
+        "warp_tun_down_for_fallback": false
+      },
+      "egress": "",
+      "pid_before": {
+        "rc": 0,
+        "out": "6217",
+        "err": "",
+        "seconds": 0.009
+      },
+      "pid_after": {
+        "rc": 1,
+        "out": "",
+        "err": "cat: /var/lib/opencode-unlimited/psiphon/psiphon.pid: No such file or directory\n",
+        "seconds": 0.009
+      },
+      "backup_listing": {
+        "rc": 0,
+        "out": "total 260\ndrwxrwxr-x 3 runner runner   4096 Nov 16 06:55 .\ndrwxr-xr-x 3 runner runner   4096 Nov 16 06:55 ..\ndrwxrwxr-x 3 runner runner   4096 Nov 16 06:48 data\n-rw-r--r-- 1 root   root     3026 Nov 16 06:53 psiphon.config\n-rw-r--r-- 1 root   root   246582 Nov 16 06:55 psiphon.log\n",
+        "err": "",
+        "seconds": 0.01
+      }
+    },
+    {
+      "step": "cache_bust_trial",
+      "attempt": 5,
+      "measured_blacklist": [
+        "167.99.108.171/32",
+        "172.235.168.66/32",
+        "146.185.143.64/32",
+        "172.235.167.128/32"
+      ],
+      "setup": {
+        "rc": 0,
+        "out": "",
+        "err": "",
+        "seconds": 0.08
+      },
+      "hop": {
+        "cmd": "hop --backend psiphon --wait 300",
+        "rc": 0,
+        "seconds": 14.478,
+        "json": null,
+        "out": "  old block: ?\n  new block: 92.5.236.193/32\n  backend: psiphon, region NL\n  \u2713 rotated in 14.32s \u2014 resend your message\n",
+        "err": ""
+      },
+      "state": {
+        "active_backend": "psiphon",
+        "active_socks_port": 9060,
+        "backend_after_failed_fallback": "warp",
+        "blacklist": [
+          "2a09:bac5:d2a2:1c64",
+          "2a09:bac1:76a0:8628",
+          "167.99.108.171/32",
+          "172.235.168.66/32",
+          "146.185.143.64/32",
+          "172.235.167.128/32"
+        ],
+        "blacklist_ts": {
+          "146.185.143.64/32": 1794812156,
+          "167.99.108.171/32": 1794812156,
+          "172.235.167.128/32": 1794812156,
+          "172.235.168.66/32": 1794812156,
+          "2a09:bac1:76a0:8628": 1794811749,
+          "2a09:bac5:d2a2:1c64": 1794811736
+        },
+        "current": "92.5.236.193",
+        "current_source": "periodic check",
+        "current_ts": 1794811679,
+        "degraded": false,
+        "fallback_activated_at": 1794811818,
+        "hops": 7,
+        "last_block_reused": false,
+        "last_error": "",
+        "last_hop": 1794812171,
+        "last_hop_request": "",
+        "last_rotate_ts": 1794811752,
+        "last_rotation": {
+          "attempts": [
+            {
+              "accepted": true,
+              "block": "92.5.236.193/32",
+              "cache_bust": true,
+              "cache_bust_connected": true,
+              "cache_bust_detail": "tunnel up",
+              "duplicate_block": "172.235.168.66/32",
+              "how": "psiphon@NL",
+              "verify": {
+                "detail": "opencode answered on the current block",
+                "failure_class": "",
+                "model": "opencode/deepseek-v4.1-flash-free",
+                "ok": true,
+                "ran": true,
+                "rc": 0,
+                "walled": false
+              }
+            }
+          ],
+          "backend": "psiphon",
+          "degraded": false,
+          "duration": 14.32,
+          "error": "",
+          "how": "psiphon@NL",
+          "new": "92.5.236.193",
+          "ok": true,
+          "old": "",
+          "region": "NL",
+          "verified": true,
+          "why": "manual-hop"
+        },
+        "last_wall": 1794812030,
+        "log_id": "2049:7779892",
+        "offset": 36931,
+        "pending_since": 0,
+        "pending_wall": false,
+        "pin_lifted_for_backend": "",
+        "psiphon_cycle_count": 1,
+        "psiphon_cycle_visited": [
+          "NL"
+        ],
+        "psiphon_region_index": 0,
+        "psiphon_rotations": 6,
+        "rotate_stamps": [
+          1794811727,
+          1794811752
+        ],
+        "schema": 2,
+        "tail_sig": "92f2a7655167e359a2a9f6ae0717b2308a364203d2c7324afea06a064fad01db",
+        "updated": 1794812171,
+        "verify_log_id": "2049:7779892",
+        "verify_offset": 41315,
+        "wall_partial": "",
+        "warp_fail_streak": 0,
+        "warp_tun_down_for_fallback": false
+      },
+      "egress": "92.5.236.193",
+      "pid_before": {
+        "rc": 1,
+        "out": "",
+        "err": "cat: /var/lib/opencode-unlimited/psiphon/psiphon.pid: No such file or directory\n",
+        "seconds": 0.009
+      },
+      "pid_after": {
+        "rc": 0,
+        "out": "6828",
+        "err": "",
+        "seconds": 0.009
+      },
+      "backup_listing": {
+        "rc": 0,
+        "out": "total 340\ndrwxrwxr-x 3 runner runner   4096 Nov 16 06:56 .\ndrwxr-xr-x 3 runner runner   4096 Nov 16 06:56 ..\ndrwxrwxr-x 3 runner runner   4096 Nov 16 06:56 data\n-rw-r--r-- 1 root   root     3026 Nov 16 06:56 psiphon.config\n-rw-r--r-- 1 root   root   326002 Nov 16 06:56 psiphon.log\n-rw-r--r-- 1 root   root        4 Nov 16 06:56 psiphon.pid\n",
+        "err": "",
+        "seconds": 0.01
+      }
+    }
+  ]
+}

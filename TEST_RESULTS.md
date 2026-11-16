@@ -26,6 +26,56 @@ python3 -m pytest tests -q
 → 129 passed, 16 subtests passed
 ```
 
+### Live reverse lifecycle and four-turn TUI: disposable Actions run 43819127051
+
+[Run 43819127051](https://github.com/aminmozaffari23-cmyk/opencode-unlimited/actions/runs/43819127051)
+completed successfully against the committed controller `f86b68a` on a fresh
+hosted runner. Its [audit](tests/lab3/evidence/43819127051/audit.txt) reports
+**18/18 core checks and 6/6 chaos checks**. The 18 include baseline/code
+identity checks and Gap #1/#2 functional checks; they are not 18 independent
+host-preservation checks. Teardown recorded no Psiphon, bridge or controller
+processes/listeners and no guard rules.
+
+The [reverse lifecycle](tests/lab3/evidence/43819127051/live_reverse_lifecycle.json)
+recorded an **unforced** short-TTL return from Psiphon to verified WARP egress
+`2a09:bac1:76a0:8628::281:a`, with the Psiphon listener stopped. In the next
+case the runner deliberately stopped `warp-svc` to make the automatic WARP
+attempt fail; the controller recovered through verified Psiphon
+`172.235.168.66/32` and refreshed `fallback_activated_at` from `1794811749`
+to `1794811818`. This proves the measured service-unavailable bounce; it does
+not separately prove every possible WARP quota-exhaustion failure mode.
+
+For the cache test, the harness **explicitly marked previously measured real
+provider /32s as spent** and set later-pass progress; it did not inject fake
+provider addresses. Two intermediate attempts hit free-usage limits. On trial
+5 the controller recorded duplicate `172.235.168.66/32`, a successful clean
+bootstrap and a verified fresh `92.5.236.193/32`; the post-trial listing had no
+backup directory. The trial captured the post-hop tunnel PID `6828` but the
+pre-hop pidfile was absent after the preceding failure. It does not provide a
+complete before/after PID chain or a snapshot of the backup while it existed.
+
+The [four-turn interactive run](tests/lab3/evidence/43819127051/pingpong_4turn_live.json)
+used real OpenCode PID **7320** throughout WARP → Psiphon → WARP → Psiphon,
+and recalled the seeded token on turns 2–4. Measured egress addresses were
+`2a09:bac5:d2a1:2e28::499:6b`, `45.79.208.50/32`,
+`2a09:bac5:d2a4:15e1::22e:45`, and `164.92.191.85/32`. `ss` process-tree
+samples and bridge JSONL correlate the observed turn sockets; the Psiphon
+turn-2 close carried 37,272 bytes up / 15,860 down, the returning WARP close
+38,041 / 5,937, and turn-4 Psiphon close 38,217 / 6,157. The first three
+route transitions produced correlated drains; the UID-scoped direct curl
+negative control failed as expected.
+
+**State/epoch qualification:** the four-turn harness initially repointed the
+bridge to WARP after the prior Psiphon phase, but did not clear or refresh the
+saved `current` field. Consequently its first WARP epoch retained the previous
+Psiphon IPv4 `92.5.236.193`, even though the separately measured WARP egress
+was IPv6. The epoch backend, port and hop counter advanced on transitions, but
+this run does **not** prove that the initial WARP epoch's address field was
+correct. Also, the historical chaos audit's bridge count was reported as `2`
+while its listener criterion passed; it is not an independent proof that at
+all instants only one bridge process existed. Counters are encrypted bytes, not
+TLS plaintext, and changes can interrupt in-flight requests.
+
 ### Interactive reverse ping-pong: disposable Actions run 43814088627
 
 [Run 43814088627](https://github.com/aminmozaffari23-cmyk/opencode-unlimited/actions/runs/43814088627)

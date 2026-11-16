@@ -1,0 +1,76 @@
+{
+  "steps": [
+    {
+      "step": "escalated",
+      "rc": 0,
+      "tries": [
+        {
+          "try_index": 1,
+          "rc": 0,
+          "backend": "psiphon",
+          "region_index": 1,
+          "tail": "  old block: ?\n  new block: 162.216.16.177/32\n  backend: psiphon, region US\n  \u2713 rotated in 7.87s \u2014 resend your message\n"
+        }
+      ],
+      "backend": "psiphon",
+      "region_index": 1,
+      "region": "US",
+      "egress": "162.216.16.177",
+      "tail": "  old block: ?\n  new block: 162.216.16.177/32\n  backend: psiphon, region US\n  \u2713 rotated in 7.87s \u2014 resend your message\n"
+    },
+    {
+      "step": "supervisor",
+      "backend": "psiphon",
+      "guard_mode": "off",
+      "bridge": true,
+      "auto_resume": null,
+      "cmd": "",
+      "log": "2026-11-16T06:56:12 INFO  tunnel repaired (proxy mode)\n2026-11-16T06:56:13 INFO  supervisor stopping \u2014 removing kill-switch so nothing is stranded\n2026-11-16T06:58:01 INFO  supervisor up (pid 8946, mode portable, warp proxy, kill-switch disabled at install time)\n2026-11-16T06:58:01 INFO  proxy mode: opencode must use HTTP_PROXY=http://127.0.0.1:8080\n2026-11-16T06:58:07 INFO  supervisor stopping \u2014 removing kill-switch so nothing is stranded\n2026-11-16T06:58:07 INFO  supervisor up (pid 9061, mode portable, warp proxy, kill-switch disabled at install time)\n2026-11-16T06:58:07 INFO  bridge up on http://127.0.0.1:8080 -> socks5://127.0.0.1:40000\n2026-11-16T06:58:07 INFO  proxy mode: opencode must use HTTP_PROXY=http://127.0.0.1:8080\n2026-11-16T06:58:07 WARN  fallback: the Psiphon tunnel is gone \u2014 restarting it\n2026-11-16T06:58:07 INFO  psiphon: started pid 9071 region=DE (DisableReplay=true, socks 9060)\n2026-11-16T06:58:11 INFO  fallback: tunnel restored on DE\n2026-11-16T06:58:11 INFO  auto-resume: continuing the last session (pid 9095)\n"
+    },
+    {
+      "step": "seeded",
+      "token": "TOKEN-GAP1-12299",
+      "session": "ses_e1cd9b06dffeiUZDXok0qKWui1",
+      "rc": 0,
+      "seeded": true,
+      "backend": "psiphon",
+      "egress": "165.22.87.252",
+      "tail": "geID\":\"msg_1e32652a0001OKEOV1DBCevZkB\",\"sessionID\":\"ses_e1cd9b06dffeiUZDXok0qKWui1\",\"type\":\"text\",\"text\":\"TOKEN-GAP1-12299\",\"time\":{\"start\":1794812304387,\"end\":1794812304390}}}\n{\"type\":\"step_finish\",\"timestamp\":1794812304409,\"sessionID\":\"ses_e1cd9b06dffeiUZDXok0qKWui1\",\"part\":{\"id\":\"prt_1e3265c15001PVFZGTgyDjIhJw\",\"reason\":\"stop\",\"snapshot\":\"19c0497099baca3c790f968f6ca279df8bb7af7e\",\"messageID\":\"msg_1e32652a0001OKEOV1DBCevZkB\",\"sessionID\":\"ses_e1cd9b06dffeiUZDXok0qKWui1\",\"type\":\"step-finish\",\"tokens\":{\"total\":7845,\"input\":28,\"output\":9,\"reasoning\":0,\"cache\":{\"write\":0,\"read\":7808}},\"cost\":0}}\n"
+    },
+    {
+      "step": "wall_rotated",
+      "rotated_unattended": true,
+      "region_before": 1,
+      "region_after": 2,
+      "block_before": "165.22.87.252/32",
+      "block_after": "139.177.179.250/32",
+      "backend": "psiphon",
+      "last_rotation": "psiphon@DE",
+      "resumes": null,
+      "auto_resume_pid": 9346,
+      "supervisor_log": "2026-11-16T06:54:24 INFO  wall pending, waiting out cooldown (66s < 90s)\n2026-11-16T06:54:26 INFO  wall pending, waiting out cooldown (68s < 90s)\n2026-11-16T06:54:28 INFO  wall pending, waiting out cooldown (70s < 90s)\n2026-11-16T06:54:30 INFO  wall pending, waiting out cooldown (72s < 90s)\n2026-11-16T06:54:32 INFO  wall pending, waiting out cooldown (74s < 90s)\n2026-11-16T06:54:34 INFO  wall pending, waiting out cooldown (76s < 90s)\n2026-11-16T06:54:36 INFO  wall pending, waiting out cooldown (78s < 90s)\n2026-11-16T06:54:38 INFO  wall pending, waiting out cooldown (80s < 90s)\n2026-11-16T06:54:40 INFO  wall pending, waiting out cooldown (82s < 90s)\n2026-11-16T06:54:42 INFO  wall pending, waiting out cooldown (84s < 90s)\n2026-11-16T06:54:44 INFO  wall pending, waiting out cooldown (86s < 90s)\n2026-11-16T06:54:46 INFO  wall pending, waiting out cooldown (88s < 90s)\n2026-11-16T06:55:56 WARN  tunnel is down \u2014 repairing (kill-switch opens during repair)\n2026-11-16T06:56:12 INFO  tunnel repaired (proxy mode)\n2026-11-16T06:56:13 INFO  supervisor stopping \u2014 removing kill-switch so nothing is stranded\n2026-11-16T06:58:01 INFO  supervisor up (pid 8946, mode portable, warp proxy, kill-switch disabled at install time)\n2026-11-16T06:58:01 INFO  proxy mode: opencode must use HTTP_PROXY=http://127.0.0.1:8080\n2026-11-16T06:58:07 INFO  supervisor stopping \u2014 removing kill-switch so nothing is stranded\n2026-11-16T06:58:07 INFO  supervisor up (pid 9061, mode portable, warp proxy, kill-switch disabled at install time)\n2026-11-16T06:58:07 INFO  bridge up on http://127.0.0.1:8080 -> socks5://127.0.0.1:40000\n2026-11-16T06:58:07 INFO  proxy mode: opencode must use HTTP_PROXY=http://127.0.0.1:8080\n2026-11-16T06:58:07 WARN  fallback: the Psiphon tunnel is gone \u2014 restarting it\n2026-11-16T06:58:07 INFO  psiphon: started pid 9071 region=DE (DisableReplay=true, socks 9060)\n2026-11-16T06:58:11 INFO  fallback: tunnel restored on DE\n2026-11-16T06:58:11 INFO  auto-resume: continuing the last session (pid 9095)\n2026-11-16T06:58:27 WARN  quota wall detected (AI_APICallError: Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going: https://opencode.ai/go)\n2026-11-16T06:58:28 INFO  psiphon: stopped pid 9071\n2026-11-16T06:58:28 INFO  psiphon: started pid 9268 region=DE (DisableReplay=true, socks 9060)\n2026-11-16T06:58:37 INFO  rotation done in 9.87s via psiphon@DE (fallback backend): 165.22.87.252/32 -> 139.177.179.250/32 (verified with a real request)\n2026-11-16T06:58:37 INFO  auto-resume: continuing the last session (pid 9346)\n"
+    },
+    {
+      "step": "continuity_manual",
+      "rc": 0,
+      "recalled": true,
+      "session": "ses_e1cd9b06dffeiUZDXok0qKWui1",
+      "waited_for_idle": 0.0,
+      "backend": "psiphon",
+      "block": "139.177.179.250/32",
+      "seconds": 8.884,
+      "tail": "TOKEN-GAP1-12299\n\u001b[0m\n> build \u00b7 deepseek-v4.1-flash-free\n\u001b[0m\n"
+    },
+    {
+      "step": "continuity",
+      "recalled": true,
+      "session": "ses_e1cd9b06dffeiUZDXok0qKWui1",
+      "token": "TOKEN-GAP1-12299",
+      "backend": "psiphon",
+      "block": "139.177.179.250/32",
+      "resumes": 1,
+      "auto_resume_log": "another managed run owns recovery; refusing a duplicate\nanother managed run owns recovery; refusing a duplicate\n",
+      "auto_resume_pid": 9346
+    }
+  ]
+}

@@ -1,0 +1,145 @@
+{
+  "steps": [
+    {
+      "step": "baseline",
+      "hosts_sha": "c6afed8b0328b0714c42e406f6908aeffe525d674d4734e54cf317a89020177a",
+      "guard_rule_count": 0,
+      "direct_ip": "52.161.14.86",
+      "iptables_lines": 44,
+      "warp": "Merged configuration:\n(not set)\tCompliance Environment: Normal\n(derived)\tAlways On: true\n",
+      "tun_devices": "0"
+    },
+    {
+      "step": "revert_guard_armed",
+      "log": "",
+      "guard_procs": "2"
+    },
+    {
+      "step": "tun_window",
+      "up": true,
+      "links": [
+        "CloudflareWARP"
+      ],
+      "status": "Status update: Connected\nNetwork: healthy\n",
+      "v6": "5: CloudflareWARP: <POINTOPOINT,MULTICAST,NOARP,UP,LOWER_UP> mtu 1300 state UNKNOWN qlen 500\n    inet6 2606:4700:110:8368:8090:fb6e:45a7:8f63/128 scope global \n       valid_lft forever preferred_lft forever\n",
+      "egress": "",
+      "seconds": 5
+    },
+    {
+      "step": "armed",
+      "pin_rc": 0,
+      "pin_out": "pinned opencode.ai, api.opencode.ai to IPv6 in /etc/hosts\n",
+      "ks_rc": 0,
+      "ks_out": "installed\n",
+      "doctor": "\n  opencode-unlimited doctor \u2014 v2.6.5\n\n  \u2713 warp tunnel\n  \u2717 supervisor (portable)\n  \u2713 IPv6 egress: 2a09:bac5:d2a6:15e1::22e:45\n  \u2713 kill-switch\n  \u2713 leak posture: tunnel-only\n  \u2713 opencode log readable: /home/runner/.local/share/opencode/log/opencode.log\n  \u2713 opencode binary: /usr/local/bin/opencode\n  \u2713 rotations: 6  blocks blacklisted: 0\n  \u2713 auto-resume: off (ouc run always resumes)   max 0 attempt(s), budget 900s\n  \u2717 blacklist hygiene (no empty/invalid blocks)\n  \u2713 psiphon fallback: ready (/usr/local/bin/psiphon-tunnel-core)\n  \u2713 no agent-rule/credits file planted by this tool\n\n  ! supervisor not running: 'sudo ouc start'\n",
+      "guard_mode": "tunnel",
+      "guard_rules": [
+        ":OUC_LEAKGUARD - [0:0]",
+        "-A OUTPUT -j OUC_LEAKGUARD",
+        "-A OUC_LEAKGUARD -o lo -j ACCEPT",
+        "-A OUC_LEAKGUARD -m state --state RELATED,ESTABLISHED -j ACCEPT",
+        "-A OUC_LEAKGUARD -d 10.0.0.0/8 -j ACCEPT",
+        "-A OUC_LEAKGUARD -d 172.16.0.0/12 -j ACCEPT",
+        "-A OUC_LEAKGUARD -d 192.168.0.0/16 -j ACCEPT",
+        "-A OUC_LEAKGUARD -d 162.159.0.0/16 -j ACCEPT",
+        "-A OUC_LEAKGUARD -d 188.114.0.0/16 -j ACCEPT",
+        "-A OUC_LEAKGUARD -o CloudflareWARP -j ACCEPT",
+        "-A OUC_LEAKGUARD -j DROP",
+        ":OUC_LEAKGUARD - [0:0]",
+        "-A OUTPUT -j OUC_LEAKGUARD",
+        "-A OUC_LEAKGUARD -o lo -j ACCEPT",
+        "-A OUC_LEAKGUARD -m state --state RELATED,ESTABLISHED -j ACCEPT",
+        "-A OUC_LEAKGUARD -d fe80::/10 -j ACCEPT",
+        "-A OUC_LEAKGUARD -d 2606:4700::/32 -j ACCEPT",
+        "-A OUC_LEAKGUARD -o CloudflareWARP -j ACCEPT",
+        "-A OUC_LEAKGUARD -j DROP"
+      ],
+      "hosts_pinned": true,
+      "dialect_tunnel": true
+    },
+    {
+      "step": "escalated",
+      "rc": 0,
+      "backend": "psiphon",
+      "guard_mode": "proxy",
+      "guard_rules": [
+        ":OUC_LEAKGUARD - [0:0]",
+        "-A OUTPUT -j OUC_LEAKGUARD",
+        "-A OUC_LEAKGUARD -o lo -j ACCEPT",
+        "-A OUC_LEAKGUARD -m state --state RELATED,ESTABLISHED -j ACCEPT",
+        "-A OUC_LEAKGUARD -d 10.0.0.0/8 -j ACCEPT",
+        "-A OUC_LEAKGUARD -d 172.16.0.0/12 -j ACCEPT",
+        "-A OUC_LEAKGUARD -d 192.168.0.0/16 -j ACCEPT",
+        "-A OUC_LEAKGUARD -d 162.159.0.0/16 -j ACCEPT",
+        "-A OUC_LEAKGUARD -d 188.114.0.0/16 -j ACCEPT",
+        "-A OUC_LEAKGUARD -p udp -m owner --uid-owner 1001 -m udp --dport 53 -j ACCEPT",
+        "-A OUC_LEAKGUARD -p tcp -m owner --uid-owner 1001 -m tcp --dport 53 -j ACCEPT",
+        "-A OUC_LEAKGUARD -m owner --uid-owner 1001 -j DROP",
+        ":OUC_LEAKGUARD - [0:0]",
+        "-A OUTPUT -j OUC_LEAKGUARD",
+        "-A OUC_LEAKGUARD -o lo -j ACCEPT",
+        "-A OUC_LEAKGUARD -m state --state RELATED,ESTABLISHED -j ACCEPT",
+        "-A OUC_LEAKGUARD -d fe80::/10 -j ACCEPT",
+        "-A OUC_LEAKGUARD -d 2606:4700::/32 -j ACCEPT",
+        "-A OUC_LEAKGUARD -m owner --uid-owner 1001 -j DROP"
+      ],
+      "dialect_proxy": true,
+      "dialect_tunnel": false,
+      "pin_lifted": true,
+      "egress": "172.105.246.126",
+      "region": 2,
+      "tail": "  old block: 52.161.14.86/32\n  new block: 172.105.246.126/32\n  backend: psiphon, region DE\n  \u2713 rotated in 10.33s \u2014 resend your message\n"
+    },
+    {
+      "step": "no_deadlock",
+      "verify": {
+        "ran": true,
+        "ok": true,
+        "walled": false,
+        "detail": "opencode answered on the current block",
+        "failure_class": "",
+        "rc": 0,
+        "model": "opencode/deepseek-v4.1-flash-free",
+        "ipv6_egress": ""
+      },
+      "rc": 0,
+      "seconds": 4.489,
+      "ssh_alive": true
+    },
+    {
+      "step": "returned",
+      "rc": 0,
+      "backend": "warp",
+      "guard_mode": "tunnel",
+      "pinned": true,
+      "dialect_tunnel": true,
+      "egress": "",
+      "tail": "  old block: ?\n  new block: 2a09:bac1:76c0:8628\n  \u2713 rotated in 252.68s \u2014 resend your message\n"
+    },
+    {
+      "step": "rescued",
+      "rc": 0,
+      "guard_rules": [],
+      "guard_mode": "off",
+      "hosts_matches_baseline": true,
+      "backend": "warp",
+      "rules_clean": true,
+      "iptables_matches": true,
+      "ip6tables_matches": true,
+      "out": "removing the leak guard...\nipv6 pin removed from /etc/hosts\nstopped the HTTP bridge\n  tunnel: Status update: Connected\n  egress: 2a09:bac1:76c0:8628::3ce:47\ndone. If the egress is empty, the tunnel is still down but the firewall is gone, so normal internet works.\n"
+    },
+    {
+      "step": "left_window",
+      "warp_mode": "Merged configuration:\n(not set)\tCompliance Environment: Normal\n(derived)\tAlways On: true\n",
+      "egress": "2a09:bac5:d2a2:2632::3ce:47",
+      "tun_devices": "0",
+      "hosts_matches_baseline": true,
+      "iptables_matches": true,
+      "ip6tables_matches": true,
+      "routes4_matches": true,
+      "guard_rules": [],
+      "egress_ok": true,
+      "egress_direct": "52.161.14.86"
+    }
+  ]
+}

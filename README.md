@@ -17,11 +17,12 @@ starting over.
 
 </div>
 
-**Interactive TUI:** a disposable [ping-pong run](tests/lab3/evidence/43814088627/pingpong_live.json)
-observed one OpenCode process recall a token across WARP→Psiphon→WARP,
+**Interactive TUI:** a disposable [four-turn live run](tests/lab3/evidence/43819127051/pingpong_4turn_live.json)
+observed one real OpenCode process recall a token across WARP→Psiphon→WARP→Psiphon,
 with kernel socket correlation, bridge byte counters and epoch drains. The
-four-turn PTY test uses an offline stand-in, not real OpenCode. See
-[test results](TEST_RESULTS.md) for the evidence and limits.
+[reverse-lifecycle evidence](tests/lab3/evidence/43819127051/live_reverse_lifecycle.json)
+also records TTL return, failed-WARP bounce and a duplicate-exit cache bust.
+See [test results](TEST_RESULTS.md) for the setup and important limits.
 Bridge telemetry is size-rotated and private by default; optional hostname
 hashing and retention settings are described in the privacy note there.
 

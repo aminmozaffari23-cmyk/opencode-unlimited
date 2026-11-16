@@ -372,20 +372,48 @@ def main():
                                       "psiphon_cycle_count":1, "psiphon_cycle_visited":[region],
                                       "psiphon_region_index":0})
                 pid_before = sh(["sudo", "cat", "/var/lib/opencode-unlimited/psiphon/psiphon.pid"])
-                hop = ouc(["hop", "--backend", "psiphon", "--wait", "300"], timeout=400,
-                          extra={"OUC_PSIPHON_REGIONS":region, "OUC_PSIPHON_START_WAIT":"120",
-                                 "OUC_BLACKLIST_TTL":"14400", "OUC_COOLDOWN_SECONDS":"0"})
+                cache_samples = []
+                monitor_stop = threading.Event()
+                def cache_monitor():
+                    while not monitor_stop.wait(0.2):
+                        snap = sh(["sudo", "bash", "-c",
+                            "ps -eo pid=,args= | grep '[p]siphon-tunnel-core'; "
+                            "if [ -d /var/lib/opencode-unlimited/psiphon/data.ouc-cache-backup ]; "
+                            "then echo BACKUP_PRESENT; else echo BACKUP_ABSENT; fi"], timeout=10)
+                        cache_samples.append({"timestamp":time.time(), "rc":snap["rc"], "out":snap["out"]})
+                watcher = threading.Thread(target=cache_monitor, daemon=True)
+                watcher.start()
+                try:
+                    hop = ouc(["hop", "--backend", "psiphon", "--wait", "300"], timeout=400,
+                              extra={"OUC_PSIPHON_REGIONS":region, "OUC_PSIPHON_START_WAIT":"120",
+                                     "OUC_BLACKLIST_TTL":"14400", "OUC_COOLDOWN_SECONDS":"0"})
+                finally:
+                    monitor_stop.set()
+                    watcher.join(15)
                 after_state = state()
                 ip = egress()
                 pid_after = sh(["sudo", "cat", "/var/lib/opencode-unlimited/psiphon/psiphon.pid"])
                 details = (after_state.get("last_rotation") or {}).get("attempts") or []
                 trials.append(dict(attempt=attempt, measured_blacklist=list(measured), setup=setup, hop=hop,
                                    state=after_state, egress=ip, pid_before=pid_before, pid_after=pid_after,
+                                   cache_process_samples=cache_samples,
                                    backup_listing=sh(["sudo", "ls", "-la", "/var/lib/opencode-unlimited/psiphon"])))
                 step("cache_bust_trial", **trials[-1])
                 tested = [a for a in details if a.get("cache_bust") and a.get("cache_bust_connected") and a.get("accepted")]
+                sampled_pids = set()
+                for sample in cache_samples:
+                    for line in sample.get("out", "").splitlines():
+                        fields = line.strip().split(None, 1)
+                        if (len(fields) == 2 and fields[0].isdigit() and
+                                "psiphon-tunnel-core" in fields[1] and
+                                "-config" in fields[1] and "/psiphon/psiphon.config" in fields[1]):
+                            sampled_pids.add(int(fields[0]))
+                backup_seen = any("BACKUP_PRESENT" in sample.get("out", "") for sample in cache_samples)
+                step("cache_bust_observation", attempt=attempt, sampled_pids=sorted(sampled_pids),
+                     backup_seen=backup_seen)
                 if (hop["rc"] == 0 and tested and ident(ip) and ident(ip) not in measured
-                    and all(a.get("duplicate_block") in measured for a in tested)):
+                    and all(a.get("duplicate_block") in measured for a in tested)
+                    and backup_seen and len(sampled_pids) >= 2):
                     res["passed"] = True
                     save("live_reverse_lifecycle.json", res)
                     break
@@ -513,8 +541,16 @@ def main():
             record(warp_preflight=preflight)
             if not (preflight[-1]["verify"].get("json") or {}).get("ok"):
                 raise RuntimeError("could not verify an unwalled WARP exit before the TUI seed")
+            # The preceding phase may have left a Psiphon address in `current`
+            # even after the harness selected WARP. Ask the product's guarded
+            # status refresh to reconcile the verified live route before the
+            # first epoch is used as evidence.
+            status_refresh = ouc(["status", "--json"], timeout=120)
             before = egress()
             before_state = state()
+            record(initial_status_refresh=status_refresh)
+            if not before or before_state.get("current") != before:
+                raise RuntimeError("initial WARP current address did not match measured egress")
             def epoch(st):
                 return [st.get("hops", 0), st.get("active_backend", "warp"),
                         st.get("active_socks_port", 40000), st.get("current", "")]

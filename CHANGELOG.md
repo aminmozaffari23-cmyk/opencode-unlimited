@@ -7,8 +7,10 @@
   errors are best-effort and do not terminate a bridge connection.
 * Scope offline test cleanup to a unique run identifier and sandbox, replacing
   broad process-name kills. Add offline bridge-log and datastore-fault tests.
-* Add live four-turn and reverse-lifecycle verification phases. These phases
-  must be run on a disposable runner; their existence is not evidence of a pass.
+* Live disposable run `43819127051` exercised TTL return, a deliberately
+  stopped-WARP bounce, a controlled measured-address duplicate cache bust, and
+  four interactive TUI turns. Its artifacts and qualifications, including a
+  stale first-epoch address field, are documented in `TEST_RESULTS.md`.
 
 ## 2.6.5 — a fallback that actually moves, and a guard that actually arms
 
