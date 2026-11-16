@@ -1,0 +1,83 @@
+{
+  "steps": [
+    {
+      "step": "escalated",
+      "rc": 0,
+      "tries": [
+        {
+          "try_index": 1,
+          "rc": 1,
+          "backend": "warp",
+          "region_index": 0,
+          "tail": "  old block: ?\n  new block: ?\n  backend: psiphon, region US\n  \u2717 rotation failed: could not be confirmed: native network error: AI_APICallError: Cannot connect to API: ECONNRESET: The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch() (cause: TypeError: ECONNRESET: The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch())\n    the machine keeps its internet; try again, or run: ouc repair\n"
+        },
+        {
+          "try_index": 2,
+          "rc": 0,
+          "backend": "psiphon",
+          "region_index": 1,
+          "tail": "  old block: 2a09:bac5:c82c:32aa\n  new block: 162.243.139.135/32\n  backend: psiphon, region US\n  \u2713 rotated in 11.4s \u2014 resend your message\n"
+        }
+      ],
+      "backend": "psiphon",
+      "region_index": 1,
+      "region": "US",
+      "egress": "162.243.139.135",
+      "tail": "  old block: 2a09:bac5:c82c:32aa\n  new block: 162.243.139.135/32\n  backend: psiphon, region US\n  \u2713 rotated in 11.4s \u2014 resend your message\n"
+    },
+    {
+      "step": "supervisor",
+      "backend": "psiphon",
+      "guard_mode": "off",
+      "bridge": true,
+      "auto_resume": null,
+      "cmd": "",
+      "log": "2026-11-16T07:43:02 INFO  supervisor stopping \u2014 removing kill-switch so nothing is stranded\n2026-11-16T07:44:01 INFO  supervisor up (pid 14001, mode portable, warp proxy, kill-switch disabled at install time)\n2026-11-16T07:44:01 INFO  proxy mode: opencode must use HTTP_PROXY=http://127.0.0.1:8080\n2026-11-16T07:44:10 INFO  state: current address refreshed 164.90.218.10 -> 2a09:bac5:c82c:32aa::50c:57 (periodic check) -- WARP moved without a rotation\n2026-11-16T07:44:32 INFO  supervisor stopping \u2014 removing kill-switch so nothing is stranded\n2026-11-16T07:44:33 INFO  supervisor up (pid 14268, mode portable, warp proxy, kill-switch disabled at install time)\n2026-11-16T07:44:33 INFO  bridge up on http://127.0.0.1:8080 -> socks5://127.0.0.1:40000\n2026-11-16T07:44:33 INFO  proxy mode: opencode must use HTTP_PROXY=http://127.0.0.1:8080\n2026-11-16T07:44:33 WARN  fallback: the Psiphon tunnel is gone \u2014 restarting it\n2026-11-16T07:44:33 INFO  psiphon: started pid 14278 region=DE (DisableReplay=true, socks 9060)\n2026-11-16T07:44:37 INFO  fallback: tunnel restored on DE\n2026-11-16T07:44:37 INFO  auto-resume: continuing the last session (pid 14295)\n"
+    },
+    {
+      "step": "seeded",
+      "token": "TOKEN-GAP1-15085",
+      "session": "ses_e1caf2e68ffeiqks9nD66tXCqX",
+      "rc": 0,
+      "seeded": true,
+      "backend": "psiphon",
+      "egress": "217.160.153.135",
+      "tail": "ID\":\"msg_1e350d491001JkmlfP6wgKMl14\",\"sessionID\":\"ses_e1caf2e68ffeiqks9nD66tXCqX\",\"type\":\"text\",\"text\":\"TOKEN-GAP1-15085\",\"time\":{\"start\":1794815090196,\"end\":1794815090288}}}\n{\"type\":\"step_finish\",\"timestamp\":1794815090308,\"sessionID\":\"ses_e1caf2e68ffeiqks9nD66tXCqX\",\"part\":{\"id\":\"prt_1e350de800019A8ripJ3uFcKrn\",\"reason\":\"stop\",\"snapshot\":\"362276c5af8822323f22bcaa8a6a014f61ae6372\",\"messageID\":\"msg_1e350d491001JkmlfP6wgKMl14\",\"sessionID\":\"ses_e1caf2e68ffeiqks9nD66tXCqX\",\"type\":\"step-finish\",\"tokens\":{\"total\":7885,\"input\":34,\"output\":10,\"reasoning\":33,\"cache\":{\"write\":0,\"read\":7808}},\"cost\":0}}\n"
+    },
+    {
+      "step": "wall_rotated",
+      "rotated_unattended": true,
+      "region_before": 1,
+      "region_after": 2,
+      "block_before": "217.160.153.135/32",
+      "block_after": "172.236.206.28/32",
+      "backend": "psiphon",
+      "last_rotation": "psiphon@DE",
+      "resumes": null,
+      "auto_resume_pid": 14562,
+      "supervisor_log": "2026-11-16T07:36:11 SECURITY tunnel repair failed \u2014 staying open (real IP visible) and retrying next tick\n2026-11-16T07:37:45 WARN  tunnel is down \u2014 repairing (kill-switch opens during repair)\n2026-11-16T07:38:05 WARN  reconnect attempt 1 failed\n2026-11-16T07:38:15 INFO  tunnel repaired (proxy mode)\n2026-11-16T07:38:16 INFO  supervisor stopping \u2014 removing kill-switch so nothing is stranded\n2026-11-16T07:40:01 INFO  supervisor up (pid 10945, mode portable, warp proxy, kill-switch disabled at install time)\n2026-11-16T07:40:01 INFO  proxy mode: opencode must use HTTP_PROXY=http://127.0.0.1:8080\n2026-11-16T07:40:01 WARN  quota wall detected (AI_APICallError: Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going: https://opencode.ai/go)\n2026-11-16T07:40:01 INFO  state: current address refreshed 172.233.51.123 -> 2a09:bac1:7681:62b0::50d:bd (periodic check) -- WARP moved without a rotation\n2026-11-16T07:40:02 INFO  rotation start (quota-wall); egress=2a09:bac1:7681:62b0::50d:bd\n2026-11-16T07:40:08 INFO  rotation done in 6.78s via rotate-keys#1: 2a09:bac1:7681:62b0 -> 2a09:bac5:c82c:2832 (verified with a real request)\n2026-11-16T07:42:26 WARN  tunnel is down \u2014 repairing (kill-switch opens during repair)\n2026-11-16T07:42:28 INFO  tunnel repaired (proxy mode)\n2026-11-16T07:43:02 INFO  supervisor stopping \u2014 removing kill-switch so nothing is stranded\n2026-11-16T07:44:01 INFO  supervisor up (pid 14001, mode portable, warp proxy, kill-switch disabled at install time)\n2026-11-16T07:44:01 INFO  proxy mode: opencode must use HTTP_PROXY=http://127.0.0.1:8080\n2026-11-16T07:44:10 INFO  state: current address refreshed 164.90.218.10 -> 2a09:bac5:c82c:32aa::50c:57 (periodic check) -- WARP moved without a rotation\n2026-11-16T07:44:32 INFO  supervisor stopping \u2014 removing kill-switch so nothing is stranded\n2026-11-16T07:44:33 INFO  supervisor up (pid 14268, mode portable, warp proxy, kill-switch disabled at install time)\n2026-11-16T07:44:33 INFO  bridge up on http://127.0.0.1:8080 -> socks5://127.0.0.1:40000\n2026-11-16T07:44:33 INFO  proxy mode: opencode must use HTTP_PROXY=http://127.0.0.1:8080\n2026-11-16T07:44:33 WARN  fallback: the Psiphon tunnel is gone \u2014 restarting it\n2026-11-16T07:44:33 INFO  psiphon: started pid 14278 region=DE (DisableReplay=true, socks 9060)\n2026-11-16T07:44:37 INFO  fallback: tunnel restored on DE\n2026-11-16T07:44:37 INFO  auto-resume: continuing the last session (pid 14295)\n2026-11-16T07:44:53 WARN  quota wall detected (AI_APICallError: Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going: https://opencode.ai/go)\n2026-11-16T07:44:54 INFO  psiphon: stopped pid 14278\n2026-11-16T07:44:54 INFO  psiphon: started pid 14479 region=DE (DisableReplay=true, socks 9060)\n2026-11-16T07:45:06 INFO  rotation done in 13.18s via psiphon@DE (fallback backend): 217.160.153.135/32 -> 172.236.206.28/32 (verified with a real request)\n2026-11-16T07:45:06 INFO  auto-resume: continuing the last session (pid 14562)\n"
+    },
+    {
+      "step": "continuity_manual",
+      "rc": 0,
+      "recalled": true,
+      "session": "ses_e1caf2e68ffeiqks9nD66tXCqX",
+      "waited_for_idle": 0.0,
+      "backend": "psiphon",
+      "block": "172.236.206.28/32",
+      "seconds": 21.228,
+      "tail": "TOKEN-GAP1-15085\n\u001b[0m\n> build \u00b7 deepseek-v4.1-flash-free\n\u001b[0m\n"
+    },
+    {
+      "step": "continuity",
+      "recalled": true,
+      "session": "ses_e1caf2e68ffeiqks9nD66tXCqX",
+      "token": "TOKEN-GAP1-15085",
+      "backend": "psiphon",
+      "block": "172.236.206.28/32",
+      "resumes": 1,
+      "auto_resume_log": "another managed run owns recovery; refusing a duplicate\nanother managed run owns recovery; refusing a duplicate\n",
+      "auto_resume_pid": 14562
+    }
+  ]
+}

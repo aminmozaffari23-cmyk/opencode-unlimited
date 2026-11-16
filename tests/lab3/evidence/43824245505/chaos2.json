@@ -1,0 +1,22 @@
+{
+  "squatter": {
+    "listening": true,
+    "owner": "LISTEN 0      4          127.0.0.1:8080       0.0.0.0:*"
+  },
+  "refusal": {
+    "start_rc": 0,
+    "said_security": true,
+    "named_owner": true,
+    "log": "2026-11-16T08:00:24 WARN  fallback: the Psiphon tunnel is gone \u2014 restarting it\n2026-11-16T08:00:24 INFO  psiphon: started pid 18494 region=NL (DisableReplay=true, socks 9060)\n2026-11-16T08:00:27 INFO  fallback: tunnel restored on NL\n2026-11-16T08:00:37 WARN  fallback: the Psiphon tunnel is gone \u2014 restarting it\n2026-11-16T08:00:37 INFO  psiphon: started pid 18563 region=NL (DisableReplay=true, socks 9060)\n2026-11-16T08:00:38 WARN  psiphon: launch did not produce a tunnel \u2014 pid 18563 stopped (psiphon exited rc=0 2026-11-16T08:00:37.939Z Exiting {} | 2026-11-16T08:00:37.939Z Info {\"message\":\"HTTP proxy stopped\"})\n2026-11-16T08:00:38 ERROR fallback: could not restore the tunnel (psiphon exited rc=0 2026-11-16T08:00:37.939Z Exiting {} | 2026-11-16T08:00:37.939Z Info {\"message\":\"HTTP proxy stopped\"} | 2026-11-16T08:00:37.939Z Info {\"message\":\"SOCKS proxy stopped\"})\n2026-11-16T08:00:54 INFO  bridge up on http://127.0.0.1:8080 -> socks5://127.0.0.1:40000\n2026-11-16T08:00:54 WARN  fallback: the Psiphon tunnel is gone \u2014 restarting it\n2026-11-16T08:00:54 INFO  psiphon: started pid 18756 region=US (DisableReplay=true, socks 9060)\n2026-11-16T08:00:57 INFO  fallback: tunnel restored on US\n2026-11-16T08:01:09 INFO  supervisor stopping \u2014 removing kill-switch so nothing is stranded\n2026-11-16T08:01:39 INFO  supervisor up (pid 19081, mode portable, warp proxy, kill-switch disabled at install time)\n2026-11-16T08:01:39 SECURITY bridge: port 8080 is held by pid 18998 ('python3 -c import socket,time;s=socket.socket();s.setsockopt(socket.SOL_SOCKET,s') \u2014 refusing to route through an unowned listener\n2026-11-16T08:01:39 INFO  proxy mode: opencode must use HTTP_PROXY=http://127.0.0.1:8080\n2026-11-16T08:01:39 SECURITY bridge: port 8080 is held by pid 18998 ('python3 -c import socket,time;s=socket.socket();s.setsockopt(socket.SOL_SOCKET,s') \u2014 refusing to route through an unowned listener\n2026-11-16T08:01:39 WARN  fallback: the Psiphon tunnel is gone \u2014 restarting it\n2026-11-16T08:01:39 INFO  psiphon: started pid 19085 region=US (DisableReplay=true, socks 9060)\n2026-11-16T08:01:43 INFO  fallback: tunnel restored on US\n2026-11-16T08:01:45 SECURITY bridge: port 8080 is held by pid 18998 ('python3 -c import socket,time;s=socket.socket();s.setsockopt(socket.SOL_SOCKET,s') \u2014 refusing to route through an unowned listener\n",
+    "verify": {
+      "ran": true,
+      "ok": false,
+      "walled": false,
+      "detail": "native network error: AI_APICallError: Cannot connect to API: ETIMEDOUT: Unable to connect. Is the computer able to access the url? (cause: TypeError: ETIMEDOUT: Unable to connect. Is the computer able to access the url?)",
+      "failure_class": "network",
+      "rc": -15,
+      "model": "opencode/deepseek-v4.1-flash-free",
+      "ipv6_egress": "172.235.145.43"
+    }
+  }
+}

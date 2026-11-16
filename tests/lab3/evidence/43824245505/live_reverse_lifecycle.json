@@ -1,0 +1,3992 @@
+{
+  "phase": "live_reverse_lifecycle",
+  "passed": true,
+  "steps": [
+    {
+      "step": "initial_psiphon",
+      "ok": true,
+      "attempts": [
+        {
+          "try_index": 1,
+          "rc": 0,
+          "backend": "psiphon",
+          "region_index": 1,
+          "tail": "  old block: ?\n  new block: 192.241.163.32/32\n  backend: psiphon, region US\n  \u2713 rotated in 218.72s \u2014 resend your message\n"
+        }
+      ],
+      "state": {
+        "active_backend": "psiphon",
+        "active_socks_port": 9060,
+        "blacklist": [],
+        "blacklist_ts": {},
+        "current": "192.241.163.32",
+        "current_source": "periodic check",
+        "current_ts": 1794814236,
+        "degraded": false,
+        "fallback_activated_at": 1794814463,
+        "hops": 1,
+        "last_error": "",
+        "last_hop": 1794814463,
+        "last_hop_request": "",
+        "last_rotation": {
+          "attempts": [
+            {
+              "accepted": true,
+              "block": "192.241.163.32/32",
+              "how": "psiphon@US",
+              "retried": true,
+              "verify": {
+                "detail": "opencode answered on the current block",
+                "failure_class": "",
+                "model": "opencode/deepseek-v4.1-flash-free",
+                "ok": true,
+                "ran": true,
+                "rc": 0,
+                "walled": false
+              }
+            }
+          ],
+          "backend": "psiphon",
+          "degraded": false,
+          "duration": 218.71,
+          "error": "",
+          "how": "psiphon@US",
+          "new": "192.241.163.32",
+          "ok": true,
+          "old": "",
+          "region": "US",
+          "verified": true,
+          "why": "manual-hop"
+        },
+        "last_wall": 0,
+        "log_id": "2049:7778655",
+        "offset": 4460,
+        "pending_since": 0,
+        "pending_wall": false,
+        "pin_lifted_for_backend": "",
+        "psiphon_cycle_count": 0,
+        "psiphon_cycle_visited": [
+          "US"
+        ],
+        "psiphon_region_index": 1,
+        "psiphon_rotations": 1,
+        "schema": 2,
+        "tail_sig": "258b5a012584669dd5c109fa9c3240e9abdede54e84e250310bd152921360870",
+        "updated": 1794814463,
+        "verify_log_id": "2049:7778655",
+        "verify_offset": 4460,
+        "wall_partial": "",
+        "warp_fail_streak": 0
+      },
+      "egress": "192.241.163.32"
+    },
+    {
+      "step": "automatic_ttl_return",
+      "hop": {
+        "cmd": "hop --wait 300",
+        "rc": 0,
+        "seconds": 7.996,
+        "json": null,
+        "out": "  old block: 2a09:bac1:76a1:62b0\n  new block: 2a09:bac5:c82d:2832\n  \u2713 rotated in 7.63s \u2014 resend your message\n",
+        "err": ""
+      },
+      "state": {
+        "active_backend": "warp",
+        "active_socks_port": 40000,
+        "blacklist": [
+          "2a09:bac1:76a1:62b0"
+        ],
+        "blacklist_ts": {
+          "2a09:bac1:76a1:62b0": 1794814473
+        },
+        "current": "2a09:bac5:c82d:2832::401:8",
+        "current_source": "periodic check",
+        "current_ts": 1794814236,
+        "degraded": false,
+        "fallback_activated_at": 0,
+        "hops": 2,
+        "last_block_reused": false,
+        "last_error": "",
+        "last_hop": 1794814473,
+        "last_hop_request": "",
+        "last_rotate_ts": 1794814465,
+        "last_rotation": {
+          "attempts": [
+            {
+              "accepted": true,
+              "block": "2a09:bac5:c82d:2832",
+              "how": "rotate-keys#1",
+              "verify": {
+                "detail": "opencode answered on the current block",
+                "failure_class": "",
+                "model": "opencode/deepseek-v4.1-flash-free",
+                "ok": true,
+                "ran": true,
+                "rc": 0,
+                "walled": false
+              }
+            }
+          ],
+          "degraded": false,
+          "duration": 7.63,
+          "error": "",
+          "how": "rotate-keys#1",
+          "new": "2a09:bac5:c82d:2832::401:8",
+          "ok": true,
+          "old": "2a09:bac1:76a1:62b0::401:17",
+          "quota_evidence": true,
+          "verified": true,
+          "why": "manual-hop"
+        },
+        "last_wall": 0,
+        "log_id": "2049:7778655",
+        "offset": 8843,
+        "pending_since": 0,
+        "pending_wall": false,
+        "pin_lifted_for_backend": "",
+        "psiphon_cycle_count": 0,
+        "psiphon_cycle_visited": [],
+        "psiphon_region_index": 1,
+        "psiphon_rotations": 1,
+        "rotate_stamps": [
+          1794814465
+        ],
+        "schema": 2,
+        "tail_sig": "258b5a012584669dd5c109fa9c3240e9abdede54e84e250310bd152921360870",
+        "updated": 1794814473,
+        "verify_log_id": "2049:7778655",
+        "verify_offset": 8843,
+        "wall_partial": "",
+        "warp_fail_streak": 0,
+        "warp_tun_down_for_fallback": false
+      },
+      "egress": "2a09:bac5:c82d:2832::401:8",
+      "psiphon_listener_stopped": true
+    },
+    {
+      "step": "failed_warp_bounce",
+      "warp_stop": {
+        "rc": 0,
+        "out": "",
+        "err": "",
+        "seconds": 0.027
+      },
+      "before": {
+        "active_backend": "psiphon",
+        "active_socks_port": 9060,
+        "blacklist": [
+          "2a09:bac1:76a1:62b0",
+          "2a09:bac5:c82d:2832"
+        ],
+        "blacklist_ts": {
+          "2a09:bac1:76a1:62b0": 1794814473,
+          "2a09:bac5:c82d:2832": 1794814483
+        },
+        "current": "57.129.1.179",
+        "current_source": "periodic check",
+        "current_ts": 1794814236,
+        "degraded": false,
+        "fallback_activated_at": 1794814483,
+        "hops": 3,
+        "last_block_reused": false,
+        "last_error": "",
+        "last_hop": 1794814483,
+        "last_hop_request": "",
+        "last_rotate_ts": 1794814465,
+        "last_rotation": {
+          "attempts": [
+            {
+              "accepted": true,
+              "block": "57.129.1.179/32",
+              "how": "psiphon@DE",
+              "verify": {
+                "detail": "opencode answered on the current block",
+                "failure_class": "",
+                "model": "opencode/deepseek-v4.1-flash-free",
+                "ok": true,
+                "ran": true,
+                "rc": 0,
+                "walled": false
+              }
+            }
+          ],
+          "backend": "psiphon",
+          "degraded": false,
+          "duration": 9.43,
+          "error": "",
+          "how": "psiphon@DE",
+          "new": "57.129.1.179",
+          "ok": true,
+          "old": "2a09:bac5:c82d:2832::401:8",
+          "region": "DE",
+          "verified": true,
+          "why": "manual-hop"
+        },
+        "last_wall": 0,
+        "log_id": "2049:7778655",
+        "offset": 13225,
+        "pending_since": 0,
+        "pending_wall": false,
+        "pin_lifted_for_backend": "",
+        "psiphon_cycle_count": 0,
+        "psiphon_cycle_visited": [
+          "DE"
+        ],
+        "psiphon_region_index": 2,
+        "psiphon_rotations": 2,
+        "rotate_stamps": [
+          1794814465
+        ],
+        "schema": 2,
+        "tail_sig": "258b5a012584669dd5c109fa9c3240e9abdede54e84e250310bd152921360870",
+        "updated": 1794814483,
+        "verify_log_id": "2049:7778655",
+        "verify_offset": 13225,
+        "wall_partial": "",
+        "warp_fail_streak": 0,
+        "warp_tun_down_for_fallback": false
+      },
+      "hop": {
+        "cmd": "hop --wait 300",
+        "rc": 0,
+        "seconds": 66.188,
+        "json": null,
+        "out": "  old block: ?\n  new block: 146.185.143.64/32\n  backend: psiphon, region NL\n  \u2713 rotated in 11.92s \u2014 resend your message\n",
+        "err": ""
+      },
+      "state": {
+        "active_backend": "psiphon",
+        "active_socks_port": 9060,
+        "blacklist": [
+          "2a09:bac1:76a1:62b0",
+          "2a09:bac5:c82d:2832"
+        ],
+        "blacklist_ts": {
+          "2a09:bac1:76a1:62b0": 1794814473,
+          "2a09:bac5:c82d:2832": 1794814483
+        },
+        "current": "146.185.143.64",
+        "current_source": "periodic check",
+        "current_ts": 1794814236,
+        "degraded": false,
+        "fallback_activated_at": 1794814552,
+        "hops": 4,
+        "last_block_reused": false,
+        "last_error": "",
+        "last_hop": 1794814552,
+        "last_hop_request": "",
+        "last_rotate_ts": 1794814486,
+        "last_rotation": {
+          "attempts": [
+            {
+              "accepted": true,
+              "block": "146.185.143.64/32",
+              "how": "psiphon@NL",
+              "verify": {
+                "detail": "opencode answered on the current block",
+                "failure_class": "",
+                "model": "opencode/deepseek-v4.1-flash-free",
+                "ok": true,
+                "ran": true,
+                "rc": 0,
+                "walled": false
+              }
+            }
+          ],
+          "backend": "psiphon",
+          "degraded": false,
+          "duration": 11.91,
+          "error": "",
+          "how": "psiphon@NL",
+          "new": "146.185.143.64",
+          "ok": true,
+          "old": "",
+          "region": "NL",
+          "verified": true,
+          "why": "manual-hop"
+        },
+        "last_wall": 0,
+        "log_id": "2049:7778655",
+        "offset": 13225,
+        "pending_since": 0,
+        "pending_wall": false,
+        "pin_lifted_for_backend": "",
+        "psiphon_cycle_count": 0,
+        "psiphon_cycle_visited": [
+          "DE",
+          "NL"
+        ],
+        "psiphon_region_index": 3,
+        "psiphon_rotations": 3,
+        "rotate_stamps": [
+          1794814465,
+          1794814486
+        ],
+        "schema": 2,
+        "tail_sig": "258b5a012584669dd5c109fa9c3240e9abdede54e84e250310bd152921360870",
+        "updated": 1794814552,
+        "verify_log_id": "2049:7778655",
+        "verify_offset": 17605,
+        "wall_partial": "",
+        "warp_fail_streak": 0,
+        "warp_tun_down_for_fallback": false
+      },
+      "egress": "146.185.143.64",
+      "controller_log": {
+        "rc": 0,
+        "out": "2026-11-16T07:30:36 INFO  bridge listening on http://127.0.0.1:8080 -> socks5://<state.json active_socks_port>\n2026-11-16T07:30:36 INFO  bridge: upstream now socks5://127.0.0.1:40000\n2026-11-16T07:30:44 INFO  psiphon: started pid 4677 region=US (DisableReplay=true, socks 9060)\n2026-11-16T07:32:01 INFO  bridge listening on http://127.0.0.1:8080 -> socks5://<state.json active_socks_port>\n2026-11-16T07:32:01 INFO  bridge: upstream now socks5://127.0.0.1:40000\n2026-11-16T07:32:45 WARN  psiphon: launch did not produce a tunnel \u2014 pid 4677 stopped (no tunnel within 120s: 2026-11-16T07:30:45.041Z Error {\"message\":\"untunneled DSL fetch failed: psiphon.runUntunneledDSLF)\n2026-11-16T07:32:45 WARN  psiphon US: no tunnel within 120s: 2026-11-16T07:30:45.041Z Error {\"message\":\"untunneled DSL fetch failed: psiphon.runUntunneledDSLFetcher#98: psiphon.runUntunneledDSLFetcher.func1#62: psiphon.(*InproxyBrokerClientManager).GetBrokerCli \u2014 cold bootstrap, retrying the same region with a 180s budget\n2026-11-16T07:32:45 INFO  psiphon: started pid 5196 region=US (DisableReplay=true, socks 9060)\n2026-11-16T07:34:17 INFO  bridge: upstream now socks5://127.0.0.1:9060\n2026-11-16T07:34:23 INFO  rotation done in 218.71s via psiphon@US (fallback backend): ? -> 192.241.163.32/32 (verified with a real request)\n2026-11-16T07:34:25 INFO  backend: the WARP blacklist window has elapsed \u2014 probing WARP again before using Psiphon\n2026-11-16T07:34:25 INFO  bridge: upstream now socks5://127.0.0.1:40000\n2026-11-16T07:34:26 INFO  rotation start (manual-hop); egress=2a09:bac1:76a1:62b0::401:17\n2026-11-16T07:34:33 INFO  rotation done in 7.63s via rotate-keys#1: 2a09:bac1:76a1:62b0 -> 2a09:bac5:c82d:2832 (verified with a real request)\n2026-11-16T07:34:33 INFO  psiphon: stopped pid 5196\n2026-11-16T07:34:34 INFO  psiphon: started pid 6034 region=DE (DisableReplay=true, socks 9060)\n2026-11-16T07:34:38 INFO  bridge: upstream now socks5://127.0.0.1:9060\n2026-11-16T07:34:43 INFO  rotation done in 9.43s via psiphon@DE (fallback backend): 2a09:bac5:c82d:2832 -> 57.129.1.179/32 (verified with a real request)\n2026-11-16T07:34:46 INFO  backend: the WARP blacklist window has elapsed \u2014 probing WARP again before using Psiphon\n2026-11-16T07:34:46 INFO  bridge: upstream now socks5://127.0.0.1:40000\n2026-11-16T07:34:46 WARN  bridge: [Errno 111] Connection refused\n2026-11-16T07:34:46 WARN  bridge: [Errno 111] Connection refused\n2026-11-16T07:34:46 INFO  rotation start (manual-hop); egress=unreachable\n2026-11-16T07:34:46 WARN  rotate-keys failed: 'Unable to connect to the CloudflareWARP daemon: No such file or directory (os error 2)\\n\\nMaybe the daemon is not running?' \u2014 falling back\n2026-11-16T07:34:46 INFO  waiting 9s for the old registration to clear\n2026-11-16T07:34:55 WARN  registration new failed: 'Unable to connect to the CloudflareWARP daemon: No such file or directory (os error 2)\\n\\nMaybe the daemon is not running?' \u2014 retry in 3s\n2026-11-16T07:34:58 WARN  registration new failed: 'Unable to connect to the CloudflareWARP daemon: No such file or directory (os error 2)\\n\\nMaybe the daemon is not running?' \u2014 retry in 6s\n2026-11-16T07:35:04 ERROR could not register a new device\n2026-11-16T07:35:04 INFO  waiting 9s for the old registration to clear\n2026-11-16T07:35:13 WARN  registration new failed: 'Unable to connect to the CloudflareWARP daemon: No such file or directory (os error 2)\\n\\nMaybe the daemon is not running?' \u2014 retry in 3s\n2026-11-16T07:35:16 WARN  registration new failed: 'Unable to connect to the CloudflareWARP daemon: No such file or directory (os error 2)\\n\\nMaybe the daemon is not running?' \u2014 retry in 6s\n2026-11-16T07:35:22 ERROR could not register a new device\n2026-11-16T07:35:22 INFO  waiting 9s for the old registration to clear\n2026-11-16T07:35:31 WARN  registration new failed: 'Unable to connect to the CloudflareWARP daemon: No such file or directory (os error 2)\\n\\nMaybe the daemon is not running?' \u2014 retry in 3s\n2026-11-16T07:35:34 WARN  registration new failed: 'Unable to connect to the CloudflareWARP daemon: No such file or directory (os error 2)\\n\\nMaybe the daemon is not running?' \u2014 retry in 6s\n2026-11-16T07:35:40 ERROR could not register a new device\n2026-11-16T07:35:40 ERROR rotation FAILED after 54.1s: no fresh /64 available right now; every candidate was spent or unverifiable [nothing]\n2026-11-16T07:35:40 WARN  backend: WARP return failed; attempting Psiphon recovery\n2026-11-16T07:35:40 WARN  bridge: [Errno 111] Connection refused\n2026-11-16T07:35:40 WARN  bridge: [Errno 111] Connection refused\n2026-11-16T07:35:41 INFO  psiphon: stopped pid 6034\n2026-11-16T07:35:41 INFO  psiphon: started pid 6370 region=NL (DisableReplay=true, socks 9060)\n2026-11-16T07:35:44 INFO  bridge: upstream now socks5://127.0.0.1:9060\n2026-11-16T07:35:52 INFO  rotation done in 11.91s via psiphon@NL (fallback backend): ? -> 146.185.143.64/32 (verified with a real request)\n",
+        "err": "",
+        "seconds": 0.01
+      }
+    },
+    {
+      "step": "cache_bust_trial",
+      "attempt": 1,
+      "measured_blacklist": [
+        "192.241.163.32/32",
+        "146.185.143.64/32"
+      ],
+      "setup": {
+        "rc": 0,
+        "out": "",
+        "err": "",
+        "seconds": 0.153
+      },
+      "hop": {
+        "cmd": "hop --backend psiphon --wait 300",
+        "rc": 0,
+        "seconds": 10.338,
+        "json": null,
+        "out": "  old block: 146.185.143.64/32\n  new block: 172.235.191.183/32\n  backend: psiphon, region NL\n  \u2713 rotated in 10.18s \u2014 resend your message\n",
+        "err": ""
+      },
+      "state": {
+        "active_backend": "psiphon",
+        "active_socks_port": 9060,
+        "blacklist": [
+          "2a09:bac1:76a1:62b0",
+          "2a09:bac5:c82d:2832",
+          "192.241.163.32/32",
+          "146.185.143.64/32"
+        ],
+        "blacklist_ts": {
+          "146.185.143.64/32": 1794814564,
+          "192.241.163.32/32": 1794814553,
+          "2a09:bac1:76a1:62b0": 1794814473,
+          "2a09:bac5:c82d:2832": 1794814483
+        },
+        "current": "172.235.191.183",
+        "current_source": "periodic check",
+        "current_ts": 1794814236,
+        "degraded": false,
+        "fallback_activated_at": 1794814552,
+        "hops": 5,
+        "last_block_reused": false,
+        "last_error": "",
+        "last_hop": 1794814564,
+        "last_hop_request": "",
+        "last_rotate_ts": 1794814486,
+        "last_rotation": {
+          "attempts": [
+            {
+              "accepted": true,
+              "block": "172.235.191.183/32",
+              "how": "psiphon@NL",
+              "verify": {
+                "detail": "opencode answered on the current block",
+                "failure_class": "",
+                "model": "opencode/deepseek-v4.1-flash-free",
+                "ok": true,
+                "ran": true,
+                "rc": 0,
+                "walled": false
+              }
+            }
+          ],
+          "backend": "psiphon",
+          "degraded": false,
+          "duration": 10.18,
+          "error": "",
+          "how": "psiphon@NL",
+          "new": "172.235.191.183",
+          "ok": true,
+          "old": "146.185.143.64",
+          "region": "NL",
+          "verified": true,
+          "why": "manual-hop"
+        },
+        "last_wall": 0,
+        "log_id": "2049:7778655",
+        "offset": 13225,
+        "pending_since": 0,
+        "pending_wall": false,
+        "pin_lifted_for_backend": "",
+        "psiphon_cycle_count": 1,
+        "psiphon_cycle_visited": [
+          "NL"
+        ],
+        "psiphon_region_index": 0,
+        "psiphon_rotations": 4,
+        "rotate_stamps": [
+          1794814465,
+          1794814486
+        ],
+        "schema": 2,
+        "tail_sig": "258b5a012584669dd5c109fa9c3240e9abdede54e84e250310bd152921360870",
+        "updated": 1794814564,
+        "verify_log_id": "2049:7778655",
+        "verify_offset": 21985,
+        "wall_partial": "",
+        "warp_fail_streak": 0,
+        "warp_tun_down_for_fallback": false
+      },
+      "egress": "172.235.191.183",
+      "pid_before": {
+        "rc": 0,
+        "out": "6370",
+        "err": "",
+        "seconds": 0.01
+      },
+      "pid_after": {
+        "rc": 0,
+        "out": "6556",
+        "err": "",
+        "seconds": 0.01
+      },
+      "cache_process_samples": [
+        {
+          "timestamp": 1794814554.0937107,
+          "rc": 0,
+          "out": "   6370 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814554.311999,
+          "rc": 0,
+          "out": "   6370 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814554.530551,
+          "rc": 0,
+          "out": "   6370 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814554.7494066,
+          "rc": 0,
+          "out": "   6370 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814554.9681542,
+          "rc": 0,
+          "out": "   6370 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814555.1872609,
+          "rc": 0,
+          "out": "BACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814555.4062676,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814555.6255744,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814555.845125,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814556.0655105,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814556.285195,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814556.506419,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814556.72515,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814556.9445922,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814557.163808,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814557.3825066,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814557.6020594,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814557.8208702,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814558.0394065,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814558.2588446,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814558.4783602,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814558.7007701,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814558.9215097,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814559.1405537,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814559.3702145,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814559.5923176,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814559.8204613,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814560.0398066,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814560.2635765,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814560.4851794,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814560.7059789,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814560.9278133,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814561.1474228,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814561.3658633,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814561.5847762,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814561.805649,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814562.0245905,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814562.243812,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814562.4624813,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814562.682886,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814562.9018214,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814563.1207514,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814563.339969,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814563.5589013,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814563.7781246,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814563.9972115,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        }
+      ],
+      "backup_listing": {
+        "rc": 0,
+        "out": "total 168\ndrwxrwxr-x 3 runner runner   4096 Nov 16 07:35 .\ndrwxr-xr-x 3 runner runner   4096 Nov 16 07:36 ..\ndrwxrwxr-x 3 runner runner   4096 Nov 16 07:30 data\n-rw-r--r-- 1 root   root     3026 Nov 16 07:35 psiphon.config\n-rw-r--r-- 1 root   root   149753 Nov 16 07:36 psiphon.log\n-rw-r--r-- 1 root   root        4 Nov 16 07:35 psiphon.pid\n",
+        "err": "",
+        "seconds": 0.011
+      }
+    },
+    {
+      "step": "cache_bust_observation",
+      "attempt": 1,
+      "sampled_pids": [
+        6370,
+        6556
+      ],
+      "backup_seen": false
+    },
+    {
+      "step": "cache_bust_trial",
+      "attempt": 2,
+      "measured_blacklist": [
+        "192.241.163.32/32",
+        "146.185.143.64/32",
+        "172.235.191.183/32"
+      ],
+      "setup": {
+        "rc": 0,
+        "out": "",
+        "err": "",
+        "seconds": 0.085
+      },
+      "hop": {
+        "cmd": "hop --backend psiphon --wait 300",
+        "rc": 1,
+        "seconds": 100.058,
+        "json": null,
+        "out": "  old block: 172.235.191.183/32\n  new block: ?\n  backend: psiphon, region NL\n  \u2717 rotation failed: no working Psiphon exit right now [psiphon@NL=146.185.143.64/32 (already exhausted)]\n    the machine keeps its internet; try again, or run: ouc repair\n",
+        "err": ""
+      },
+      "state": {
+        "active_backend": "warp",
+        "active_socks_port": 40000,
+        "backend_after_failed_fallback": "warp",
+        "blacklist": [
+          "2a09:bac1:76a1:62b0",
+          "2a09:bac5:c82d:2832",
+          "192.241.163.32/32",
+          "146.185.143.64/32",
+          "172.235.191.183/32"
+        ],
+        "blacklist_ts": {
+          "146.185.143.64/32": 1794814564,
+          "172.235.191.183/32": 1794814564,
+          "192.241.163.32/32": 1794814564,
+          "2a09:bac1:76a1:62b0": 1794814473,
+          "2a09:bac5:c82d:2832": 1794814483
+        },
+        "current": "172.235.191.183",
+        "current_source": "periodic check",
+        "current_ts": 1794814236,
+        "degraded": false,
+        "fallback_activated_at": 1794814552,
+        "hops": 5,
+        "last_block_reused": false,
+        "last_error": "no working Psiphon exit right now [psiphon@NL=146.185.143.64/32 (already exhausted)]",
+        "last_hop": 1794814564,
+        "last_hop_request": "",
+        "last_rotate_ts": 1794814486,
+        "last_rotation": {
+          "attempts": [
+            {
+              "accepted": false,
+              "block": "146.185.143.64/32",
+              "cache_bust": true,
+              "cache_bust_connected": true,
+              "cache_bust_detail": "tunnel up",
+              "duplicate_block": "146.185.143.64/32",
+              "how": "psiphon@NL",
+              "reason": "already exhausted"
+            }
+          ],
+          "backend": "psiphon",
+          "degraded": false,
+          "duration": 99.49,
+          "error": "no working Psiphon exit right now [psiphon@NL=146.185.143.64/32 (already exhausted)]",
+          "how": "",
+          "new": "",
+          "ok": false,
+          "old": "172.235.191.183",
+          "region": "NL",
+          "verified": false,
+          "why": "manual-hop"
+        },
+        "last_wall": 0,
+        "log_id": "2049:7778655",
+        "offset": 21985,
+        "pending_since": 0,
+        "pending_wall": false,
+        "pin_lifted_for_backend": "",
+        "psiphon_cycle_count": 1,
+        "psiphon_cycle_visited": [
+          "NL"
+        ],
+        "psiphon_region_index": 0,
+        "psiphon_rotations": 4,
+        "rotate_stamps": [
+          1794814465,
+          1794814486
+        ],
+        "schema": 2,
+        "tail_sig": "258b5a012584669dd5c109fa9c3240e9abdede54e84e250310bd152921360870",
+        "updated": 1794814665,
+        "verify_log_id": "2049:7778655",
+        "verify_offset": 21985,
+        "wall_partial": "",
+        "warp_fail_streak": 0,
+        "warp_tun_down_for_fallback": false
+      },
+      "egress": "",
+      "pid_before": {
+        "rc": 0,
+        "out": "6556",
+        "err": "",
+        "seconds": 0.01
+      },
+      "pid_after": {
+        "rc": 1,
+        "out": "",
+        "err": "cat: /var/lib/opencode-unlimited/psiphon/psiphon.pid: No such file or directory\n",
+        "seconds": 0.009
+      },
+      "cache_process_samples": [
+        {
+          "timestamp": 1794814565.2919233,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814565.510806,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814565.7298384,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814565.949763,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814566.1688125,
+          "rc": 0,
+          "out": "   6556 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814566.3874457,
+          "rc": 0,
+          "out": "BACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814566.6125295,
+          "rc": 0,
+          "out": "   6929 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814566.8375766,
+          "rc": 0,
+          "out": "   6929 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814567.0586894,
+          "rc": 0,
+          "out": "   6929 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814567.2774785,
+          "rc": 0,
+          "out": "   6929 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814567.4965107,
+          "rc": 0,
+          "out": "   6929 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814567.7154205,
+          "rc": 0,
+          "out": "   6929 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814567.9349933,
+          "rc": 0,
+          "out": "   6929 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814568.1555223,
+          "rc": 0,
+          "out": "   6929 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814568.3742218,
+          "rc": 0,
+          "out": "   6929 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814568.5929344,
+          "rc": 0,
+          "out": "   6929 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814568.8115833,
+          "rc": 0,
+          "out": "   6929 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814569.0301147,
+          "rc": 0,
+          "out": "   6929 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814569.2492268,
+          "rc": 0,
+          "out": "   6929 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814569.468642,
+          "rc": 0,
+          "out": "   6929 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814569.687857,
+          "rc": 0,
+          "out": "   6929 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814569.9066215,
+          "rc": 0,
+          "out": "   6929 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814570.125687,
+          "rc": 0,
+          "out": "   6929 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814570.3448238,
+          "rc": 0,
+          "out": "BACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814570.563655,
+          "rc": 0,
+          "out": "BACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814570.7832513,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814571.0024588,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814571.221406,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814571.4403613,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814571.6595416,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814571.8781374,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814572.0971596,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814572.3160377,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814572.5349412,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814572.753879,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814572.972798,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814573.1917791,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814573.4106612,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814573.629536,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814573.8481033,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814574.0668926,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814574.2855718,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814574.5049179,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814574.7238815,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814574.94419,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814575.163241,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814575.3816216,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814575.6005764,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814575.819228,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814576.0376291,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814576.2563205,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814576.4754143,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814576.6942623,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814576.9133904,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814577.1324778,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814577.3509119,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814577.5697746,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814577.7884536,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814578.007351,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814578.226321,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814578.445193,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814578.6638331,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814578.88233,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814579.1010025,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814579.318942,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814579.5371957,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814579.7563245,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814579.9749768,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814580.1936936,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814580.4118063,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814580.6304133,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814580.848982,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814581.067589,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814581.2859278,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814581.504566,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814581.7228162,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814581.941525,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814582.1603494,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814582.379238,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814582.5978708,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814582.816274,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814583.0341332,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814583.2530184,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814583.4715471,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814583.6898077,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814583.908064,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814584.1262383,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814584.3447795,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814584.5628643,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814584.7814865,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814584.9994414,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814585.217481,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814585.4358022,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814585.6541476,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814585.8728194,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814586.0916212,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814586.3100405,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814586.5289276,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814586.7477942,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814586.9662147,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814587.184708,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814587.403365,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814587.6222825,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814587.8407805,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814588.059228,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814588.2774618,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814588.496196,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814588.7148275,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814588.9338064,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814589.1522825,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814589.3703969,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814589.5890527,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814589.807115,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814590.0252464,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814590.243688,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814590.4626455,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814590.681074,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814590.8995445,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814591.1177015,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814591.3354976,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814591.553865,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814591.7719934,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814591.9903395,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814592.2085354,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814592.4262705,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814592.6448388,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814592.863228,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814593.082016,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814593.3000188,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814593.5185115,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814593.7364664,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814593.9550886,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814594.17293,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814594.3908894,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814594.6092944,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814594.827922,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814595.0473177,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814595.2657979,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814595.4845338,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814595.7034106,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814595.921827,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814596.1402094,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814596.3585339,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814596.5768301,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814596.7957292,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814597.0144281,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814597.2329655,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814597.4512439,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814597.6694453,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814597.8874996,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814598.1057372,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814598.3241084,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814598.5427673,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814598.7611136,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814598.9796226,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814599.1980176,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814599.4160357,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814599.6336548,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814599.8515258,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814600.0688684,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814600.2884533,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814600.5072138,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814600.7253556,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814600.9441056,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814601.1629262,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814601.3812912,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814601.5996945,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814601.8220515,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814602.0410564,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814602.2610376,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814602.4835057,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814602.7021527,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814602.9208996,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814603.1397972,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814603.3584745,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814603.5774236,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814603.7960968,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814604.015055,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814604.2338407,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814604.4527392,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814604.6716204,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814604.890291,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814605.109749,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814605.328243,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814605.5479147,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814605.7666652,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814605.985495,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814606.2044568,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814606.4231777,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814606.642103,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814606.8614807,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814607.0801718,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814607.299163,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814607.517841,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814607.736739,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814607.9565492,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814608.1754804,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814608.3948293,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814608.6138535,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814608.8327737,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814609.051684,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814609.2705743,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814609.4889724,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814609.707615,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814609.9264102,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814610.1453047,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814610.3642697,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814610.583122,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814610.8031704,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814611.022324,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814611.2416153,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814611.460451,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814611.6791685,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814611.8980887,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814612.1168377,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814612.3357995,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814612.5547142,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814612.7739275,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814612.9928875,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814613.211923,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814613.430534,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814613.649943,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814613.868853,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814614.087966,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814614.3066556,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814614.5256267,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814614.7443283,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814614.9631367,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814615.1818118,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814615.4008284,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814615.6197805,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814615.838679,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814616.0569823,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814616.2760096,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814616.4959347,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814616.714864,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814616.9337232,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814617.1523132,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814617.3712292,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814617.5904758,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814617.809618,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814618.0288672,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814618.247962,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814618.4672122,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814618.686707,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814618.9067564,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814619.1256208,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814619.344184,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814619.5628831,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814619.7819266,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814620.0007749,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814620.2198896,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814620.4389832,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814620.6581647,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814620.8771482,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814621.0964,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814621.3149571,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814621.5341938,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814621.7534006,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814621.972472,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814622.1913893,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814622.4103918,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814622.6296365,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814622.8488839,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814623.0675936,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814623.2866635,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814623.5050547,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814623.7238474,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814623.942528,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814624.1616578,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814624.380959,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814624.5997212,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814624.8184597,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814625.0376194,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814625.256253,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814625.4750814,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814625.6938658,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814625.9124806,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814626.1316178,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814626.3509,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814626.5698435,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814626.7891808,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814627.0082555,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814627.2276955,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814627.4467,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814627.6656857,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814627.8842638,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814628.1028082,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814628.3222136,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814628.5410497,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814628.760126,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814628.978878,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814629.197442,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814629.4161222,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814629.6349351,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814629.853808,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814630.0723603,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814630.2910225,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814630.50977,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814630.7286348,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814630.9475305,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814631.1669307,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814631.3855376,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814631.604455,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814631.822629,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814632.0410829,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814632.25956,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814632.4782,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814632.696895,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814632.9153605,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814633.1339092,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814633.3522768,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814633.5707545,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814633.7891023,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814634.007482,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814634.2259476,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814634.4444923,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814634.663209,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814634.8820198,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814635.100394,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814635.3187494,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814635.5374138,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814635.7558327,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814635.9750705,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814636.19374,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814636.4123156,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814636.6314905,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814636.8500545,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814637.0683007,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814637.2871678,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814637.5056632,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814637.7245953,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814637.9436355,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814638.1624074,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814638.3809817,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814638.600128,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814638.8189547,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814639.0377731,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814639.2565804,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814639.475316,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814639.694235,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814639.912874,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814640.1321318,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814640.3511426,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814640.5697606,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814640.7887554,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814641.0077891,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814641.2261744,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814641.4453976,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814641.6640604,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814641.8827868,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814642.1017623,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814642.3199425,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814642.5385644,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814642.7574914,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814642.9762485,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814643.1962454,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814643.415008,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814643.6338565,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814643.8525803,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814644.071165,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814644.289857,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814644.5087087,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814644.7272832,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814644.9458282,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814645.1644022,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814645.3831792,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814645.6019325,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814645.820687,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814646.0396018,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814646.258224,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814646.476812,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814646.6954854,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814646.9139037,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814647.1321454,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814647.3511078,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814647.5691125,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814647.787901,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814648.0065877,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814648.2250078,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814648.4436572,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814648.6622994,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814648.8810139,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814649.099809,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814649.3182259,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814649.5368054,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814649.7554407,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814649.9743264,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814650.1931386,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814650.4119575,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814650.6316342,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814650.850527,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814651.0692956,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814651.2878292,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814651.5066657,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814651.7254071,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814651.9441903,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814652.1628628,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814652.3812993,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814652.599909,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814652.8178756,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814653.0364947,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814653.2547846,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814653.4734752,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814653.6920705,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814653.910648,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814654.1291964,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814654.3476925,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814654.566459,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814654.7852297,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814655.0037022,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814655.2226453,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814655.4409862,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814655.659497,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814655.8784525,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814656.0969212,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814656.315486,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814656.5341668,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814656.7525668,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814656.971281,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814657.1898348,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814657.4083433,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814657.6270366,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814657.8453097,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814658.0639877,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814658.2822566,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814658.5010712,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814658.7196252,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814658.938323,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814659.1569815,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814659.3753326,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814659.5938897,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814659.8128028,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814660.0314703,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814660.2501192,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814660.4687712,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814660.6882794,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814660.908257,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814661.128295,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814661.3472078,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814661.5658543,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814661.785147,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814662.004025,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814662.2237103,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814662.442756,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814662.6610353,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814662.8788466,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814663.1003304,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814663.3232439,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814663.545864,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814663.7687602,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814663.9871092,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814664.2053058,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814664.4246018,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814664.6429844,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814664.8613088,
+          "rc": 0,
+          "out": "   7049 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814665.0794077,
+          "rc": 0,
+          "out": "BACKUP_ABSENT\n"
+        }
+      ],
+      "backup_listing": {
+        "rc": 0,
+        "out": "total 248\ndrwxrwxr-x 3 runner runner   4096 Nov 16 07:37 .\ndrwxr-xr-x 3 runner runner   4096 Nov 16 07:37 ..\ndrwxrwxr-x 3 runner runner   4096 Nov 16 07:36 data\n-rw-r--r-- 1 root   root     3026 Nov 16 07:36 psiphon.config\n-rw-r--r-- 1 root   root   236260 Nov 16 07:37 psiphon.log\n",
+        "err": "",
+        "seconds": 0.01
+      }
+    },
+    {
+      "step": "cache_bust_observation",
+      "attempt": 2,
+      "sampled_pids": [
+        6556,
+        6929,
+        7049
+      ],
+      "backup_seen": true
+    },
+    {
+      "step": "cache_bust_trial",
+      "attempt": 3,
+      "measured_blacklist": [
+        "192.241.163.32/32",
+        "146.185.143.64/32",
+        "172.235.191.183/32"
+      ],
+      "setup": {
+        "rc": 0,
+        "out": "",
+        "err": "",
+        "seconds": 0.083
+      },
+      "hop": {
+        "cmd": "hop --backend psiphon --wait 300",
+        "rc": 0,
+        "seconds": 11.853,
+        "json": null,
+        "out": "  old block: ?\n  new block: 95.85.3.108/32\n  backend: psiphon, region NL\n  \u2713 rotated in 11.7s \u2014 resend your message\n",
+        "err": ""
+      },
+      "state": {
+        "active_backend": "psiphon",
+        "active_socks_port": 9060,
+        "backend_after_failed_fallback": "warp",
+        "blacklist": [
+          "2a09:bac1:76a1:62b0",
+          "2a09:bac5:c82d:2832",
+          "192.241.163.32/32",
+          "146.185.143.64/32",
+          "172.235.191.183/32"
+        ],
+        "blacklist_ts": {
+          "146.185.143.64/32": 1794814665,
+          "172.235.191.183/32": 1794814665,
+          "192.241.163.32/32": 1794814665,
+          "2a09:bac1:76a1:62b0": 1794814473,
+          "2a09:bac5:c82d:2832": 1794814483
+        },
+        "current": "95.85.3.108",
+        "current_source": "periodic check",
+        "current_ts": 1794814236,
+        "degraded": false,
+        "fallback_activated_at": 1794814552,
+        "hops": 6,
+        "last_block_reused": false,
+        "last_error": "",
+        "last_hop": 1794814677,
+        "last_hop_request": "",
+        "last_rotate_ts": 1794814486,
+        "last_rotation": {
+          "attempts": [
+            {
+              "accepted": true,
+              "block": "95.85.3.108/32",
+              "how": "psiphon@NL",
+              "verify": {
+                "detail": "opencode answered on the current block",
+                "failure_class": "",
+                "model": "opencode/deepseek-v4.1-flash-free",
+                "ok": true,
+                "ran": true,
+                "rc": 0,
+                "walled": false
+              }
+            }
+          ],
+          "backend": "psiphon",
+          "degraded": false,
+          "duration": 11.69,
+          "error": "",
+          "how": "psiphon@NL",
+          "new": "95.85.3.108",
+          "ok": true,
+          "old": "",
+          "region": "NL",
+          "verified": true,
+          "why": "manual-hop"
+        },
+        "last_wall": 0,
+        "log_id": "2049:7778655",
+        "offset": 21985,
+        "pending_since": 0,
+        "pending_wall": false,
+        "pin_lifted_for_backend": "",
+        "psiphon_cycle_count": 1,
+        "psiphon_cycle_visited": [
+          "NL"
+        ],
+        "psiphon_region_index": 0,
+        "psiphon_rotations": 5,
+        "rotate_stamps": [
+          1794814465,
+          1794814486
+        ],
+        "schema": 2,
+        "tail_sig": "258b5a012584669dd5c109fa9c3240e9abdede54e84e250310bd152921360870",
+        "updated": 1794814677,
+        "verify_log_id": "2049:7778655",
+        "verify_offset": 26366,
+        "wall_partial": "",
+        "warp_fail_streak": 0,
+        "warp_tun_down_for_fallback": false
+      },
+      "egress": "95.85.3.108",
+      "pid_before": {
+        "rc": 1,
+        "out": "",
+        "err": "cat: /var/lib/opencode-unlimited/psiphon/psiphon.pid: No such file or directory\n",
+        "seconds": 0.009
+      },
+      "pid_after": {
+        "rc": 0,
+        "out": "9432",
+        "err": "",
+        "seconds": 0.01
+      },
+      "cache_process_samples": [
+        {
+          "timestamp": 1794814665.4702961,
+          "rc": 0,
+          "out": "BACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814665.6893044,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814665.9079278,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814666.1264248,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814666.345656,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814666.5661936,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814666.7854512,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814667.0036566,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814667.2219193,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814667.4414847,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814667.660088,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814667.878906,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814668.0982559,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814668.3170295,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814668.535673,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814668.7546875,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814668.9742892,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814669.1934772,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814669.4127533,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814669.6319606,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814669.853761,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814670.080082,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814670.3045247,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814670.5234053,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814670.747546,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814670.9846303,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814671.2043352,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814671.4435422,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814671.663489,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814671.8827379,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814672.1065722,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814672.3279727,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814672.5474715,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814672.7685099,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814672.987558,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814673.2071126,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814673.4258971,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814673.6447027,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814673.8638728,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814674.0838861,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814674.3032784,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814674.523584,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814674.7463348,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814674.9667535,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814675.1867604,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814675.4057395,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814675.6250598,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814675.8444016,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814676.0640051,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814676.2911477,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814676.51018,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814676.7306542,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814676.9539864,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        }
+      ],
+      "backup_listing": {
+        "rc": 0,
+        "out": "total 280\ndrwxrwxr-x 3 runner runner   4096 Nov 16 07:37 .\ndrwxr-xr-x 3 runner runner   4096 Nov 16 07:37 ..\ndrwxrwxr-x 3 runner runner   4096 Nov 16 07:36 data\n-rw-r--r-- 1 root   root     3026 Nov 16 07:37 psiphon.config\n-rw-r--r-- 1 root   root   264395 Nov 16 07:37 psiphon.log\n-rw-r--r-- 1 root   root        4 Nov 16 07:37 psiphon.pid\n",
+        "err": "",
+        "seconds": 0.011
+      }
+    },
+    {
+      "step": "cache_bust_observation",
+      "attempt": 3,
+      "sampled_pids": [
+        9432
+      ],
+      "backup_seen": false
+    },
+    {
+      "step": "cache_bust_trial",
+      "attempt": 4,
+      "measured_blacklist": [
+        "192.241.163.32/32",
+        "146.185.143.64/32",
+        "172.235.191.183/32",
+        "95.85.3.108/32"
+      ],
+      "setup": {
+        "rc": 0,
+        "out": "",
+        "err": "",
+        "seconds": 0.09
+      },
+      "hop": {
+        "cmd": "hop --backend psiphon --wait 300",
+        "rc": 0,
+        "seconds": 14.326,
+        "json": null,
+        "out": "  old block: 95.85.3.108/32\n  new block: 172.233.51.123/32\n  backend: psiphon, region NL\n  \u2713 rotated in 14.17s \u2014 resend your message\n",
+        "err": ""
+      },
+      "state": {
+        "active_backend": "psiphon",
+        "active_socks_port": 9060,
+        "backend_after_failed_fallback": "warp",
+        "blacklist": [
+          "2a09:bac1:76a1:62b0",
+          "2a09:bac5:c82d:2832",
+          "192.241.163.32/32",
+          "146.185.143.64/32",
+          "172.235.191.183/32",
+          "95.85.3.108/32"
+        ],
+        "blacklist_ts": {
+          "146.185.143.64/32": 1794814677,
+          "172.235.191.183/32": 1794814677,
+          "192.241.163.32/32": 1794814677,
+          "2a09:bac1:76a1:62b0": 1794814473,
+          "2a09:bac5:c82d:2832": 1794814483,
+          "95.85.3.108/32": 1794814692
+        },
+        "current": "172.233.51.123",
+        "current_source": "periodic check",
+        "current_ts": 1794814236,
+        "degraded": false,
+        "fallback_activated_at": 1794814552,
+        "hops": 7,
+        "last_block_reused": false,
+        "last_error": "",
+        "last_hop": 1794814692,
+        "last_hop_request": "",
+        "last_rotate_ts": 1794814486,
+        "last_rotation": {
+          "attempts": [
+            {
+              "accepted": true,
+              "block": "172.233.51.123/32",
+              "cache_bust": true,
+              "cache_bust_connected": true,
+              "cache_bust_detail": "tunnel up",
+              "duplicate_block": "95.85.3.108/32",
+              "how": "psiphon@NL",
+              "verify": {
+                "detail": "opencode answered on the current block",
+                "failure_class": "",
+                "model": "opencode/deepseek-v4.1-flash-free",
+                "ok": true,
+                "ran": true,
+                "rc": 0,
+                "walled": false
+              }
+            }
+          ],
+          "backend": "psiphon",
+          "degraded": false,
+          "duration": 14.17,
+          "error": "",
+          "how": "psiphon@NL",
+          "new": "172.233.51.123",
+          "ok": true,
+          "old": "95.85.3.108",
+          "region": "NL",
+          "verified": true,
+          "why": "manual-hop"
+        },
+        "last_wall": 0,
+        "log_id": "2049:7778655",
+        "offset": 21985,
+        "pending_since": 0,
+        "pending_wall": false,
+        "pin_lifted_for_backend": "",
+        "psiphon_cycle_count": 1,
+        "psiphon_cycle_visited": [
+          "NL"
+        ],
+        "psiphon_region_index": 0,
+        "psiphon_rotations": 6,
+        "rotate_stamps": [
+          1794814465,
+          1794814486
+        ],
+        "schema": 2,
+        "tail_sig": "258b5a012584669dd5c109fa9c3240e9abdede54e84e250310bd152921360870",
+        "updated": 1794814692,
+        "verify_log_id": "2049:7778655",
+        "verify_offset": 31459,
+        "wall_partial": "",
+        "warp_fail_streak": 0,
+        "warp_tun_down_for_fallback": false
+      },
+      "egress": "172.233.51.123",
+      "pid_before": {
+        "rc": 0,
+        "out": "9432",
+        "err": "",
+        "seconds": 0.01
+      },
+      "pid_after": {
+        "rc": 0,
+        "out": "9981",
+        "err": "",
+        "seconds": 0.01
+      },
+      "cache_process_samples": [
+        {
+          "timestamp": 1794814678.197533,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814678.4159715,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814678.63467,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814678.8528614,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814679.0767543,
+          "rc": 0,
+          "out": "   9432 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814679.3002982,
+          "rc": 0,
+          "out": "   9867 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814679.518878,
+          "rc": 0,
+          "out": "   9867 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814679.7374494,
+          "rc": 0,
+          "out": "   9867 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814679.9559782,
+          "rc": 0,
+          "out": "   9867 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814680.176048,
+          "rc": 0,
+          "out": "   9867 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814680.3991256,
+          "rc": 0,
+          "out": "   9867 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814680.6187513,
+          "rc": 0,
+          "out": "   9867 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814680.8387876,
+          "rc": 0,
+          "out": "   9867 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814681.0575645,
+          "rc": 0,
+          "out": "   9867 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814681.2761786,
+          "rc": 0,
+          "out": "   9867 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814681.4946961,
+          "rc": 0,
+          "out": "   9867 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814681.7132592,
+          "rc": 0,
+          "out": "   9867 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814681.931792,
+          "rc": 0,
+          "out": "   9867 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814682.1497796,
+          "rc": 0,
+          "out": "   9867 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814682.368449,
+          "rc": 0,
+          "out": "   9867 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814682.5872467,
+          "rc": 0,
+          "out": "   9867 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814682.8059523,
+          "rc": 0,
+          "out": "   9867 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814683.0284145,
+          "rc": 0,
+          "out": "   9867 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814683.2474954,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814683.4686298,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814683.6872997,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814683.9063332,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814684.1248767,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814684.3432093,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814684.5629995,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814684.7818048,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814685.0005302,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814685.2192318,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814685.4378188,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814685.657186,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814685.8778307,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814686.098905,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814686.31783,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_PRESENT\n"
+        },
+        {
+          "timestamp": 1794814686.5368025,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814686.755559,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814686.9745667,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814687.1932752,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814687.4169867,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814687.6452239,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814687.8684633,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814688.0926747,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814688.3256884,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814688.5501318,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814688.7805552,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814689.032838,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814689.2547257,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814689.476434,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814689.6957362,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814689.9145238,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814690.133125,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814690.3512673,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814690.5701008,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814690.7890677,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814691.0076382,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814691.2269204,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814691.4455752,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814691.6641421,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814691.882843,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814692.1014707,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        },
+        {
+          "timestamp": 1794814692.3197103,
+          "rc": 0,
+          "out": "   9981 /usr/local/bin/psiphon-tunnel-core -config /var/lib/opencode-unlimited/psiphon/psiphon.config -formatNotices\nBACKUP_ABSENT\n"
+        }
+      ],
+      "backup_listing": {
+        "rc": 0,
+        "out": "total 352\ndrwxrwxr-x 3 runner runner   4096 Nov 16 07:38 .\ndrwxr-xr-x 3 runner runner   4096 Nov 16 07:38 ..\ndrwxrwxr-x 3 runner runner   4096 Nov 16 07:38 data\n-rw-r--r-- 1 root   root     3026 Nov 16 07:38 psiphon.config\n-rw-r--r-- 1 root   root   338461 Nov 16 07:38 psiphon.log\n-rw-r--r-- 1 root   root        4 Nov 16 07:38 psiphon.pid\n",
+        "err": "",
+        "seconds": 0.01
+      }
+    },
+    {
+      "step": "cache_bust_observation",
+      "attempt": 4,
+      "sampled_pids": [
+        9432,
+        9867,
+        9981
+      ],
+      "backup_seen": true
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+evidence: /home/runner/work/opencode-unlimited/opencode-unlimited/tests/lab3/evidence
+
+core (host baselines, code identity, Gap #1, Gap #2)
+------------------------------------------------------------------------------------------------------------------------------
+ 1  the machine still has its real internet                             PASS      direct public IP before 20.62.207.247 / after 20.62.207.247
+ 2  /etc/hosts is byte-identical to before the run                      PASS      sha256 b9a8cde896b2f2f3… / b9a8cde896b2f2f3…
+ 3  /etc/resolv.conf is byte-identical                                  PASS      sha256 9abd9d3d28d3fee5… / 9abd9d3d28d3fee5…
+ 4  the IPv4 routing table is unchanged                                 PASS      6 -> 6 entries
+ 5  the IPv6 routing table is unchanged                                 PASS      1 -> 1 entries
+ 6  the IPv4 policy-routing rules are unchanged                         PASS      4 -> 4 rules
+ 7  the IPv6 policy-routing rules are unchanged                         PASS      3 -> 3 rules
+ 8  the IPv4 firewall is unchanged (counters/timestamps ignored)        PASS      38 -> 38 normalised rules
+ 9  the IPv6 firewall is unchanged                                      PASS      25 -> 25 normalised rules
+10  no psiphon tunnel is left running after stop                        PASS      0 real tunnel process(es)
+11  the fallback SOCKS port is closed after stop                        PASS      :9060 listening = False
+12  the HTTP bridge is stopped after stop                               PASS      :8080 listening = False
+13  the host ran a clean, committed tree (no local-only edits)          PASS      git_head 7bbeab5; clean at start and end
+14  the controller that ran the tests is byte-identical start to end    PASS      sha256 a515bbc8da598479… / a515bbc8da598479…
+15  a quota wall is rotated away with no human involved                 PASS      217.160.153.135/32 -> 172.236.206.28/32 by psiphon@DE, region 1 -> 2, auto-resume pid 14562
+16  the same session survives the rotation and recalls its token        PASS      session ses_e1caf2e68ffeiqks9nD66tXCqX recalled TOKEN-GAP1-15085 after the wall
+17  the guard arms, then survives the Psiphon transition deadlock-free  PASS      armed 19 rules (tunnel), proxy dialect for Psiphon True, verify ok True in 5.586s, ssh alive True
+18  the window leaves the host exactly as it found it                   PASS      iptables True, ip6tables True, hosts baseline True, routes4 True, tun devices 0, egress ok True
+------------------------------------------------------------------------------------------------------------------------------
+
+§3 chaos
+------------------------------------------------------------------------------------------------------------------------
+19  a SIGKILLed tunnel is respawned and traffic verified unaided  PASS      recovered {'both_ports': True, 'psiphon_count': '1', 'bridge_count': '1', 'egress': '137.184.17.119', 'supervisor': {'alive': True, 'pid': 18486, 'reason': 'ok', 'heartbeat_age_s': 2}, 'verify': {'ran': True, 'ok': True, 'walled': False, 'detail': 'opencode answered on the current block', 'failure_class': '', 'rc': 0, 'model': 'opencode/deepseek-v4.1-flash-free', 'ipv6_egress': '137.184.17.119'}, 'log': '2026-11-16T08:00:24 INFO  supervisor up (pid 18486, mode portable, warp proxy, kill-switch disabled at install time)\n2026-11-16T08:00:24 INFO  bridge up on http://127.0.0.1:8080 -> socks5://127.0.0.1:40000\n2026-11-16T08:00:24 INFO  proxy mode: opencode must use HTTP_PROXY=http://127.0.0.1:8080\n2026-11-16T08:00:24 WARN  fallback: the Psiphon tunnel is gone — restarting it\n2026-11-16T08:00:24 INFO  psiphon: started pid 18494 region=NL (DisableReplay=true, socks 9060)\n2026-11-16T08:00:27 INFO  fallback: tunnel restored on NL\n2026-11-16T08:00:37 WARN  fallback: the Psiphon tunnel is gone — restarting it\n2026-11-16T08:00:37 INFO  psiphon: started pid 18563 region=NL (DisableReplay=true, socks 9060)\n2026-11-16T08:00:38 WARN  psiphon: launch did not produce a tunnel — pid 18563 stopped (psiphon exited rc=0 2026-11-16T08:00:37.939Z Exiting {} | 2026-11-16T08:00:37.939Z Info {"message":"HTTP proxy stopped"})\n2026-11-16T08:00:38 ERROR fallback: could not restore the tunnel (psiphon exited rc=0 2026-11-16T08:00:37.939Z Exiting {} | 2026-11-16T08:00:37.939Z Info {"message":"HTTP proxy stopped"} | 2026-11-16T08:00:37.939Z Info {"message":"SOCKS proxy stopped"})\n2026-11-16T08:00:54 INFO  bridge up on http://127.0.0.1:8080 -> socks5://127.0.0.1:40000\n2026-11-16T08:00:54 WARN  fallback: the Psiphon tunnel is gone — restarting it\n2026-11-16T08:00:54 INFO  psiphon: started pid 18756 region=US (DisableReplay=true, socks 9060)\n2026-11-16T08:00:57 INFO  fallback: tunnel restored on US\n'}, supervisor alive True, egress None
+20  a squatter on 9060/8080 is refused, not trusted               PASS      refusal said security: True, sq_rc None
+21  corrupt state, pid 999999 and a stale lock self-heal          PASS      tracebacks 0, state valid True
+22  five parallel hops give one tunnel, one bridge, no orphans    PASS      ran 1 refused 4, tunnels 1, bridges 2, listeners on :8080 1
+23  saturation skips burned exits and honours the budget          PASS      burned 2 blocks, rotation 11.3s, bounded True
+24  monkey fuzzing during a rotation leaves state byte-intact     PASS      32 commands, tracebacks 0, state valid True
+------------------------------------------------------------------------------------------------------------------------
+
+18/18 core checks passed (6/6 chaos checks)

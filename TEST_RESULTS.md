@@ -18,6 +18,10 @@ link-integrity check across the flagship docs), and `t100` (persistent PTY
 stand-in across cross-port and same-port route changes). `t105` exercises local
 bridge-log rotation and privacy, and `t106` injects local datastore/state faults
 and mixed concurrent CLI work. These tests do not constitute live provider proof.
+The killed-bootstrap fault uses a sleep stand-in, not a real tunnel bootstrap.
+The telemetry-error unit test uses a very small limit, so its oversized-record
+short circuit may prevent the patched `os.open` failure from being exercised;
+it does not establish live ENOSPC/EACCES behavior.
 
 ### pytest suite
 
@@ -25,6 +29,14 @@ and mixed concurrent CLI work. These tests do not constitute live provider proof
 python3 -m pytest tests -q
 → 129 passed, 16 subtests passed
 ```
+
+### Fresh forensic verification: disposable Actions run 43824245505
+
+[Run 43824245505](https://github.com/aminmozaffari23-cmyk/opencode-unlimited/actions/runs/43824245505), at `7bbeab5`, passed on a fresh hosted runner. The retained [reverse lifecycle](tests/lab3/evidence/43824245505/live_reverse_lifecycle.json) shows automatic TTL return from Psiphon `192.241.163.32` to WARP `2a09:bac5:c82d:2832::401:8`, and a deliberately stopped-WARP return bouncing to verified Psiphon `146.185.143.64` with refreshed fallback activation. This does not establish every WARP failure mode.
+
+The successful controlled duplicate trial recorded `95.85.3.108/32` as the duplicate and verified `172.233.51.123/32` after cache bust. It recorded PID 9432 before and 9981 after, sampled PIDs 9432, 9867 and 9981 during the operation, and observed the backup while present. A prior failed cache-bust trial is retained in the same artifact. Samples are observations, not proof of non-overlap or a complete process history.
+
+The [four-turn PTY evidence](tests/lab3/evidence/43824245505/pingpong_4turn_live.json) records the same OpenCode PID 11899, recalled token, WARP→Psiphon→WARP→Psiphon egress and correct advancing epochs 9–12. Correlated bridge events include nonzero byte counts and drains on the first three transitions. The isolated UID direct-connect negative control and [teardown](tests/lab3/evidence/43824245505/t4-teardown.json) are retained. The [audit](tests/lab3/evidence/43824245505/audit.txt) reports 18/18 core and 6/6 chaos checks, but its parallel-hop check counted two bridge processes despite one listener; it therefore does not prove at most one bridge process at every instant. Periodic socket/process sampling can miss short-lived events.
 
 ### Live reverse lifecycle and four-turn TUI: disposable Actions run 43819127051
 

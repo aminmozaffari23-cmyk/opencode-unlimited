@@ -1,0 +1,37 @@
+{
+  "commands": {
+    "status": {
+      "rc": 0,
+      "seconds": 0.216,
+      "traceback": false,
+      "tail": "\n    \"fallback_activated_at\": 0,\n    \"fallback_age_seconds\": 0,\n    \"warp_probe_at\": 0,\n    \"pin_lifted_for_backend\": \"\"\n  },\n  \"last_rotation\": {},\n  \"pending_wall\": false,\n  \"last_error\": \"\",\n  \"path\": {\n    \"state\": \"/var/lib/opencode-unlimited/state.json\",\n    \"log\": \"/home/runner/.local/share/opencode/log/opencode.log\",\n    \"supervisor_log\": \"/var/lib/opencode-unlimited/supervisor.log\"\n  }\n}\n"
+    },
+    "config": {
+      "rc": 0,
+      "seconds": 0.153,
+      "traceback": false,
+      "tail": " 2,\n  \"transport_diagnostic_model\": \"opencode/deepseek-v4.1-flash-free\",\n  \"transport_diagnostic_timeout\": 25,\n  \"recycle_hours\": 3,\n  \"recycle_turns\": 40,\n  \"agent_root\": \"/home/runner/work/opencode-unlimited/opencode-unlimited\",\n  \"agent_model\": \"\",\n  \"journal\": \"/home/runner/.local/state/opencode-unlimited/journal.json\",\n  \"run_status\": \"/home/runner/.local/state/opencode-unlimited/run.json\"\n}\n"
+    },
+    "doctor": {
+      "rc": 1,
+      "seconds": 0.189,
+      "traceback": false,
+      "tail": "roxy mode (no TUN):\n    warp mode            : proxy\n    SOCKS5 127.0.0.1:40000 : open\n    HTTP bridge http://127.0.0.1:8080 : open\n    egress via the proxy : (none \u2014 proxy broken?)\n    egress family        : unknown\n    opencode must run with HTTPS_PROXY=http://127.0.0.1:8080\n    or simply            : ouc lane <your opencode args>\n\n  ! supervisor not running: 'sudo ouc start'\n  ! no IPv6 egress\n"
+    },
+    "pin": {
+      "rc": 0,
+      "seconds": 0.206,
+      "traceback": false,
+      "tail": "{\n  \"enabled\": false,\n  \"installed\": false,\n  \"hosts_file\": \"/etc/hosts\",\n  \"hosts\": [\n    \"opencode.ai\",\n    \"api.opencode.ai\"\n  ],\n  \"addresses\": [\n    \"2606:4700::6812:a42\",\n    \"2606:4700::6812:b42\"\n  ]\n}\n"
+    },
+    "hop": {
+      "rc": 0,
+      "seconds": 10.958,
+      "traceback": false,
+      "tail": "  old block: ?\n  new block: 172.235.154.195/32\n  backend: psiphon, region US\n  \u2713 rotated in 10.79s \u2014 resend your message\n"
+    }
+  },
+  "state_valid_after": true,
+  "tracebacks": 0,
+  "backend_after": "psiphon"
+}

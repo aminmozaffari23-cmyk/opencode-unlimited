@@ -7,6 +7,10 @@
   errors are best-effort and do not terminate a bridge connection.
 * Scope offline test cleanup to a unique run identifier and sandbox, replacing
   broad process-name kills. Add offline bridge-log and datastore-fault tests.
+* Fresh disposable run `43824245505` captured matching initial WARP epoch,
+  an in-flight backup and before/after Psiphon PIDs on a successful duplicate
+  cache bust, plus a four-turn TUI and 18/18 core audit. The audit's two
+  sampled bridge processes limit the single-process claim; see `TEST_RESULTS.md`.
 * Live disposable run `43819127051` exercised TTL return, a deliberately
   stopped-WARP bounce, a controlled measured-address duplicate cache bust, and
   four interactive TUI turns. Its artifacts and qualifications, including a
