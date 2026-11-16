@@ -325,7 +325,7 @@ def main():
             return text
         def alive(pid):
             try:
-                return bool(pid) and pathlib.Path("/proc", str(pid), "cmdline").read_bytes().find(b"opencode") >= 0
+                return bool(pid) and os.path.basename(pathlib.Path("/proc", str(pid), "cmdline").read_bytes().split(b"\0", 1)[0]) == b"opencode"
             except OSError:
                 return False
         def wait_screen(predicate, timeout, name):
@@ -343,7 +343,7 @@ def main():
         def monitor():
             while not monitor_stop.wait(0.25):
                 snap = sh(["sudo", "ss", "-tnp"], timeout=10)
-                ps = sh(["ps", "-eo", "pid=,ppid=,args="], timeout=10)
+                ps = sh(["ps", "-eo", "pid=,ppid=,comm="], timeout=10)
                 samples.append({"timestamp": time.time(),
                                 "ss": "\n".join(line for line in snap["out"].splitlines() if ":8080" in line),
                                 "processes": ps["out"]})
@@ -448,11 +448,16 @@ def main():
             deadline = time.monotonic() + 30
             pid = 0
             while time.monotonic() < deadline:
-                children = sh(["pgrep", "-P", str(pane_pid)])["out"].split()
-                for child in children:
-                    if alive(int(child)):
-                        pid = int(child)
-                        break
+                frontier = [pane_pid]
+                while frontier and not pid:
+                    parent = frontier.pop()
+                    children = sh(["pgrep", "-P", str(parent)])["out"].split()
+                    for child in children:
+                        child = int(child)
+                        if alive(child):
+                            pid = child
+                            break
+                        frontier.append(child)
                 if pid:
                     break
                 time.sleep(0.2)
