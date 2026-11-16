@@ -315,7 +315,7 @@ def main():
         def tmux(*args):
             return sh(["tmux", *args], timeout=30)
         def screen(name):
-            r = tmux("capture-pane", "-p", "-e", "-S", "-2000", "-t", "ouc-tui:0.0")
+            r = tmux("capture-pane", "-p", "-S", "-2000", "-t", "ouc-tui:0.0")
             text = r["out"]
             (EV / ("tui_" + name + ".txt")).write_text(text)
             return text
@@ -367,7 +367,7 @@ def main():
             pid = int(pid_result["out"].strip())
             record(tui_pid_before=pid, token=token, ack=ack,
                    opencode_version=sh([OC, "--version"])["out"].strip())
-            ready, text = wait_screen(lambda t: bool(t.strip()) and alive(pid), 90, "ready")
+            ready, text = wait_screen(lambda t: "Ask anything" in t and alive(pid), 90, "ready")
             if not ready:
                 raise RuntimeError("TUI did not become ready")
             # Unique response marker appears in the prompt too; require a
