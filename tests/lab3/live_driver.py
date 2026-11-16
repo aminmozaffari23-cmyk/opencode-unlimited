@@ -24,6 +24,7 @@ import os
 import re
 import pathlib
 import subprocess
+import threading
 import sys
 import time
 
@@ -333,8 +334,45 @@ def main():
                     return True, text
                 time.sleep(2)
             return False, text
+        monitor_stop = threading.Event()
+        samples = []
+        uid = None
+        def monitor():
+            while not monitor_stop.wait(0.25):
+                snap = sh(["sudo", "ss", "-tnp"], timeout=10)
+                samples.append({"timestamp": time.time(), "ss": snap["out"]})
+        def events():
+            path = pathlib.Path("/var/lib/opencode-unlimited/bridge-events.jsonl")
+            try:
+                return [json.loads(x) for x in path.read_text().splitlines() if x]
+            except (OSError, ValueError):
+                return []
+        def matched(events_list, port, begin, end, proc_pid):
+            # Match the bridge's client port with the kernel's process-labelled
+            # outbound socket; byte counts alone do not attribute a request.
+            out = []
+            for e in events_list:
+                if e.get("event") != "connect" or e.get("socks_port") != port:
+                    continue
+                ep = e.get("client_addr", "").rsplit(":", 1)[-1]
+                for sample in samples:
+                    if not begin <= sample["timestamp"] <= end:
+                        continue
+                    for line in sample["ss"].splitlines():
+                        if (re.search(r"127\.0\.0\.1:" + re.escape(ep) + r"\s+127\.0\.0\.1:8080\b", line)
+                            and re.search(r"pid=" + str(proc_pid) + r"\b", line)):
+                            out.append(e)
+                            break
+                    if e in out:
+                        break
+            return out
         try:
             ouc(["stop"], timeout=120)
+            sh(["sudo", "rm", "-f", "/var/lib/opencode-unlimited/bridge-events.jsonl"])
+            add = sh(["sudo", "useradd", "-m", "-d", "/tmp/ouc-tui-home", "ouc-tui-test"])
+            if add["rc"] != 0:
+                raise RuntimeError("isolated TUI account creation failed: " + add["err"])
+            uid = int(sh(["id", "-u", "ouc-tui-test"])["out"].strip())
             # A fresh proxy-mode install starts on WARP. Publish the actual WARP
             # endpoint before ensuring the dynamic bridge; do not fabricate an
             # exit or change the product's backend implementation.
@@ -360,12 +398,26 @@ def main():
             start = sh(["tmux", "new-session", "-d", "-s", "ouc-tui", "-x", "120", "-y", "40",
                         "env", "HTTPS_PROXY=" + env["HTTPS_PROXY"], "HTTP_PROXY=" + env["HTTP_PROXY"],
                         "ALL_PROXY=" + env["ALL_PROXY"], "NO_PROXY=" + env["NO_PROXY"],
-                        "TERM=xterm-256color", OC, "-m", MODEL], env=env)
+                        "TERM=xterm-256color", "sudo", "-u", "ouc-tui-test", "env", "HOME=/tmp/ouc-tui-home", "HTTPS_PROXY=" + env["HTTPS_PROXY"], "HTTP_PROXY=" + env["HTTP_PROXY"], "ALL_PROXY=" + env["ALL_PROXY"], "NO_PROXY=" + env["NO_PROXY"], OC, "-m", MODEL], env=env)
             if start["rc"] != 0:
                 raise RuntimeError("tmux startup failed: " + start["err"])
             pid_result = tmux("display-message", "-p", "-t", "ouc-tui:0.0", "#{pane_pid}")
-            pid = int(pid_result["out"].strip())
-            record(tui_pid_before=pid, token=token, ack=ack,
+            pane_pid = int(pid_result["out"].strip())
+            deadline = time.monotonic() + 30
+            pid = 0
+            while time.monotonic() < deadline:
+                children = sh(["pgrep", "-P", str(pane_pid)])["out"].split()
+                for child in children:
+                    if alive(int(child)):
+                        pid = int(child)
+                        break
+                if pid:
+                    break
+                time.sleep(0.2)
+            if not pid:
+                raise RuntimeError("cannot identify actual OpenCode child of tmux pane")
+            threading.Thread(target=monitor, daemon=True).start()
+            record(tui_pid_before=pid, pane_pid=pane_pid, tui_uid=uid, token=token, ack=ack,
                    opencode_version=sh([OC, "--version"])["out"].strip())
             ready, text = wait_screen(lambda t: "Ask anything" in t and alive(pid), 90, "ready")
             if not ready:
@@ -373,12 +425,18 @@ def main():
             # Unique response marker appears in the prompt too; require a
             # second occurrence to avoid confusing echoed input with output.
             prompt1 = f"Remember the exact secret token {token}. Reply with only {ack}."
+            turn1_start = time.time()
             tmux("send-keys", "-t", "ouc-tui:0.0", "-l", prompt1)
             tmux("send-keys", "-t", "ouc-tui:0.0", "Enter")
             turn1, text = wait_screen(lambda t: t.count(ack) >= 2, 240, "turn1")
             record(turn1_response_visible=turn1, screen_turn1=text[-12000:])
             if not turn1 or not alive(pid):
                 raise RuntimeError("Turn 1 response not proven or TUI exited")
+            turn1_end = time.time()
+            warp_connections = matched(events(), 40000, turn1_start, turn1_end, pid)
+            record(warp_tui_connections=warp_connections)
+            if not warp_connections:
+                raise RuntimeError("no WARP CONNECT correlated with TUI PID in kernel socket samples")
             ok, attempts = escalate_psiphon(tries=2)
             after = egress()
             after_state = state()
@@ -395,19 +453,55 @@ def main():
             record(psiphon_ipv4=ipv4, egress_changed=bool(before and after and before != after))
             if not (ok and ipv4 and before != after and alive(pid) and after_epoch != epoch(before_state)):
                 raise RuntimeError("Psiphon rotation or same-process precondition not proven")
+            # Arm the product guard for the isolated account. Add a stricter
+            # temporary owner rule before its ESTABLISHED exceptions, preventing
+            # existing direct sockets as well as new ones from bypassing it.
+            guard = sh(["sudo", "env", "OUC_WARP_MODE=warp", "OUC_KILLSWITCH=1",
+                        "OUC_IGNORE_TUN_CHECK=1", "OUC_TARGET_UID=" + str(uid), PY, "-c",
+                        "import ouc; c=ouc.Config(); s=ouc.State(c); f=ouc.Firewall(c,ouc.Log(c.state_dir+'/ouc.log'),s); raise SystemExit(0 if f.install(ouc.GUARD_PROXY) else 1)"])
+            if guard["rc"] != 0:
+                raise RuntimeError("could not install product proxy guard: " + guard["err"])
+            for binary in ("iptables", "ip6tables"):
+                rule = sh(["sudo", binary, "-I", "OUTPUT", "1", "-m", "owner", "--uid-owner", str(uid), "!", "-o", "lo", "-j", "REJECT"])
+                if rule["rc"] != 0:
+                    raise RuntimeError("strict direct-egress rule failed: " + rule["err"])
+            stop_warp = sh(["sudo", "systemctl", "stop", "warp-svc"], timeout=90)
+            time.sleep(3)
+            # Negative controls are run under the exact same UID as the TUI.
+            direct = sh(["sudo", "-u", "ouc-tui-test", "curl", "--noproxy", "*", "-fsS", "--max-time", "8", "https://1.1.1.1/"])
+            wport = listening(40000)
+            guard_dump = sh("sudo iptables-save; sudo ip6tables-save")["out"]
+            (EV / "tui_firewall.txt").write_text(guard_dump)
+            record(warp_stop=stop_warp, warp_port_listening=wport,
+                   direct_negative_control=direct, guard_mode=state().get("guard_mode"),
+                   product_guard_rules=guard_rules())
+            if stop_warp["rc"] != 0 or wport or direct["rc"] == 0 or state().get("guard_mode") != "proxy":
+                raise RuntimeError("burn-the-boats isolation preconditions not proven")
+            drain_events = [e for e in events() if e.get("event") == "epoch_drain" and
+                            e.get("client_addr") in {c["client_addr"] for c in warp_connections}]
+            record(warp_tui_drains=drain_events)
+            if not drain_events:
+                raise RuntimeError("TUI's WARP CONNECT was not observed being epoch-drained")
             # The recall prompt does not contain the token. Require it to
             # appear after the recall prompt in captured scrollback.
             marker = "Recall the secret token from the previous turn"
             prompt2 = marker + ". Reply with only the exact token."
+            turn2_start = time.time()
             tmux("send-keys", "-t", "ouc-tui:0.0", "-l", prompt2)
             tmux("send-keys", "-t", "ouc-tui:0.0", "Enter")
             recalled, text = wait_screen(lambda t: marker in t and token in t.split(marker, 1)[1], 240, "turn2")
-            pid2 = int(tmux("display-message", "-p", "-t", "ouc-tui:0.0", "#{pane_pid}")["out"].strip())
-            same = pid == pid2 and alive(pid)
+            turn2_end = time.time()
+            pane2 = int(tmux("display-message", "-p", "-t", "ouc-tui:0.0", "#{pane_pid}")["out"].strip())
+            same = pane2 == pane_pid and alive(pid)
+            pid2 = pid if same else 0
+            psiphon_connections = matched(events(), 9060, turn2_start, turn2_end, pid)
+            record(psiphon_tui_connections=psiphon_connections, turn2_start=turn2_start, turn2_end=turn2_end)
+            if not psiphon_connections:
+                raise RuntimeError("no Psiphon CONNECT correlated with TUI PID during turn 2")
             record(tui_pid_after=pid2, same_pid_alive=same,
                    token_recalled_on_screen=recalled, screen_snippet=text[-12000:],
                    passed=bool(recalled and same),
-                   routing_note="Egress verified through bridge; per-request CONNECT attribution not independently instrumented")
+                   routing_note="CONNECT client port matched to TUI PID in ss during turn 2")
             if not (recalled and same):
                 raise RuntimeError("token recall or persistent TUI PID not proven")
         except Exception as exc:
@@ -415,6 +509,33 @@ def main():
             log("TUI phase failed:", exc)
         finally:
             tmux("kill-session", "-t", "ouc-tui")
+            monitor_stop.set()
+            time.sleep(1)
+            (EV / "tui_socket_samples.json").write_text(json.dumps(samples, indent=2))
+            path = pathlib.Path("/var/lib/opencode-unlimited/bridge-events.jsonl")
+            if path.exists():
+                (EV / "tui_bridge_events.jsonl").write_text(path.read_text())
+            if uid is not None:
+                for binary in ("iptables", "ip6tables"):
+                    sh(["sudo", binary, "-D", "OUTPUT", "-m", "owner", "--uid-owner", str(uid), "!", "-o", "lo", "-j", "REJECT"])
+                sh(["sudo", "env", "OUC_WARP_MODE=warp", PY, "-c", "import ouc; c=ouc.Config(); ouc.Firewall(c,ouc.Log(c.state_dir+'/ouc.log'),ouc.State(c)).teardown()"])
+                sh(["sudo", "systemctl", "start", "warp-svc"], timeout=90)
+        # Closing the TUI flushes final per-tunnel byte counters. Require
+        # lifecycle evidence correlated by the kernel to this exact process.
+        if res.get("passed"):
+            ev = events()
+            def closes_for(key):
+                ports = {x["client_addr"] for x in res.get(key, [])}
+                return [e for e in ev if e.get("event") == "close" and e.get("client_addr") in ports]
+            wc = closes_for("warp_tui_connections")
+            pc = closes_for("psiphon_tui_connections")
+            record(warp_tui_close_events=wc, psiphon_tui_close_events=pc)
+            warp_bytes = any(c.get("drained") and c.get("bytes_up", 0) > 0 and c.get("bytes_down", 0) > 0 for c in wc)
+            ps_bytes = any(c.get("bytes_up", 0) > 500 and c.get("bytes_down", 0) > 500 for c in pc)
+            record(warp_bytes_and_drain_proven=warp_bytes, psiphon_payload_proven=ps_bytes,
+                   passed=bool(warp_bytes and ps_bytes))
+            if not (warp_bytes and ps_bytes):
+                record(error="PID-correlated tunnel close/byte evidence incomplete")
         if not res.get("passed"):
             raise SystemExit(1)
         return

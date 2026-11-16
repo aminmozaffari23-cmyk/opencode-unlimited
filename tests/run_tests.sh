@@ -3512,6 +3512,27 @@ PY
         "$(grep -c 'TUI_ALIVE True' "$T/pty.out")" "1"
   check "no traceback from the TUI harness" \
         "$(grep -c 'Traceback (most recent call last)' "$T/pty.out")" "0"
+  local telemetry_check
+  telemetry_check=$(python3 - "$OUC_STATE_DIR/bridge-events.jsonl" <<'PYTEL'
+import json, sys
+try:
+    events = [json.loads(line) for line in open(sys.argv[1])]
+    conns = [e for e in events if e['event'] == 'connect']
+    drains = [e for e in events if e['event'] == 'epoch_drain']
+    closes = [e for e in events if e['event'] == 'close']
+    def matched(d):
+        return any(c['client_addr'] == d['client_addr'] and c['socks_port'] == d['socks_port']
+                   and c['epoch'] == d['old_epoch'] for c in conns) and any(
+            c['client_addr'] == d['client_addr'] and c['drained']
+            and c['bytes_up'] > 0 and c['bytes_down'] > 0 for c in closes)
+    cross = any(d['socks_port'] == 14021 and d['new_epoch'][2] == 14022 and matched(d) for d in drains)
+    same = any(d['socks_port'] == 14022 and d['new_epoch'][2] == 14022 and matched(d) for d in drains)
+    print('yes' if cross and same else 'no')
+except (OSError, ValueError, KeyError, TypeError):
+    print('no')
+PYTEL
+  )
+  check "structured connect, epoch_drain and byte-counted close events match" "$telemetry_check" "yes"
   a_note "bridge ouc.log:"; sed 's/^/    /' "$OUC_STATE_DIR/ouc.log" 2>/dev/null
   a_note "pty.out:"; sed 's/^/    /' "$T/pty.out" 2>/dev/null
   kill "$pida" "$pidb" "$pidecho" "$pidbr" 2>/dev/null || true

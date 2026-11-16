@@ -1470,13 +1470,15 @@ def _socks5_connect(socks_host: str, socks_port: int, host: str, port: int,
     return sock
 
 
-def _pump(a, b) -> None:
+def _pump(a, b, on_bytes=None) -> None:
     try:
         while True:
             data = a.recv(65536)
             if not data:
                 break
             b.sendall(data)
+            if on_bytes:
+                on_bytes(len(data))
     except OSError:
         pass
     finally:
@@ -1545,7 +1547,21 @@ def run_bridge(listen: str, socks: str, log: "Log | None" = None,
     # collide on filesystems with coarse timestamp resolution.
     route_lock = threading.RLock()
     observed = {"signature": None, "epoch": None}
-    clients = {}  # client socket -> (upstream socket, route epoch)
+    clients = {}  # client socket -> lifecycle record
+    telemetry_path = os.environ.get("OUC_BRIDGE_LOG") or os.path.join(_state_dir_default(), "bridge-events.jsonl")
+    telemetry_lock = threading.Lock()
+
+    def emit(event, **fields):
+        # Metadata only: no HTTP headers or TLS payloads.  Each record is a
+        # single locked append so concurrent relays cannot interleave JSON.
+        try:
+            record = dict(event=event, timestamp=time.time(), **fields)
+            with telemetry_lock:
+                with open(telemetry_path, "a") as out:
+                    out.write(json.dumps(record, separators=(",", ":")) + "\n")
+        except (OSError, ValueError, TypeError) as exc:
+            if log:
+                log(f"bridge: telemetry write failed: {exc}", "WARN")
     state_path = os.path.join(_state_dir_default(), "state.json")
     default_port = int(os.environ.get("OUC_PROXY_SOCKS_PORT") or 40000)
 
@@ -1576,10 +1592,14 @@ def run_bridge(listen: str, socks: str, log: "Log | None" = None,
         """Shut down only tunnels tagged with an obsolete route."""
         with route_lock:
             epoch = route()
-            stale = [(client, upstream) for client, (upstream, tag)
-                     in clients.items() if tag != epoch]
-            for client, upstream in stale:
-                for sock in (client, upstream):
+            stale = [(client, rec) for client, rec in clients.items()
+                     if rec["epoch"] != epoch]
+            for client, rec in stale:
+                rec["drained"] = True
+                emit("epoch_drain", client_addr=rec["client_addr"],
+                     socks_port=rec["socks_port"], old_epoch=rec["epoch"],
+                     new_epoch=epoch, drained=True)
+                for sock in (client, rec["upstream"]):
                     try:
                         sock.shutdown(socket.SHUT_RDWR)
                     except OSError:
@@ -1597,6 +1617,9 @@ def run_bridge(listen: str, socks: str, log: "Log | None" = None,
     def handle(conn):
         upstream = None
         registered = False
+        rec = None
+        addr = conn.getpeername()
+        client_addr = f"{addr[0]}:{addr[1]}"
         try:
             head = b""
             while b"\r\n\r\n" not in head:
@@ -1622,13 +1645,29 @@ def run_bridge(listen: str, socks: str, log: "Log | None" = None,
                 with route_lock:
                     if route() != epoch:
                         raise OSError("route changed during SOCKS handshake")
-                    clients[conn] = (upstream, epoch)
+                    rec = {"upstream": upstream, "epoch": epoch,
+                           "client_addr": client_addr, "socks_port": epoch[2],
+                           "target_host": host.strip("[]"), "drained": False,
+                           "bytes_up": 0, "bytes_down": 0}
+                    clients[conn] = rec
                     registered = True
+                    emit("connect", client_addr=client_addr, target_host=rec["target_host"],
+                         socks_port=rec["socks_port"], epoch=epoch)
             else:
                 upstream = _socks5_connect(sh, int(sp), host.strip("[]"), int(port))
+                rec = {"epoch": None, "client_addr": client_addr,
+                       "socks_port": int(sp), "target_host": host.strip("[]"),
+                       "drained": False, "bytes_up": 0, "bytes_down": 0}
+                emit("connect", client_addr=client_addr, target_host=rec["target_host"],
+                     socks_port=rec["socks_port"], epoch=None)
             conn.sendall(b"HTTP/1.1 200 Connection Established\r\n\r\n")
-            threading.Thread(target=_pump, args=(upstream, conn), daemon=True).start()
-            _pump(conn, upstream)
+            def count(key, n):
+                rec[key] += n  # exactly one pump thread owns each counter
+            down = threading.Thread(target=_pump, args=(upstream, conn,
+                                    lambda n: count("bytes_down", n)), daemon=True)
+            down.start()
+            _pump(conn, upstream, lambda n: count("bytes_up", n))
+            down.join()
         except Exception as exc:
             try:
                 conn.sendall(b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
@@ -1640,6 +1679,10 @@ def run_bridge(listen: str, socks: str, log: "Log | None" = None,
             if registered:
                 with route_lock:
                     clients.pop(conn, None)
+            if rec is not None:
+                emit("close", client_addr=rec["client_addr"], socks_port=rec["socks_port"],
+                     epoch=rec["epoch"], bytes_up=rec["bytes_up"],
+                     bytes_down=rec["bytes_down"], drained=rec["drained"])
             for sock in (conn, upstream):
                 if sock is not None:
                     try:
