@@ -1,0 +1,1039 @@
+{
+  "phase": "tui_live",
+  "passed": true,
+  "warp_preflight": [
+    {
+      "attempt": 1,
+      "verify": {
+        "cmd": "verify -m opencode/deepseek-v4.1-flash-free",
+        "rc": 0,
+        "seconds": 3.776,
+        "json": {
+          "ran": true,
+          "ok": true,
+          "walled": false,
+          "detail": "opencode answered on the current block",
+          "failure_class": "",
+          "rc": 0,
+          "model": "opencode/deepseek-v4.1-flash-free",
+          "ipv6_egress": "2a09:bac5:b1ba:26be::3dc:3b"
+        },
+        "out": "{\n  \"ran\": true,\n  \"ok\": true,\n  \"walled\": false,\n  \"detail\": \"opencode answered on the current block\",\n  \"failure_class\": \"\",\n  \"rc\": 0,\n  \"model\": \"opencode/deepseek-v4.1-flash-free\",\n  \"ipv6_egress\": \"2a09:bac5:b1ba:26be::3dc:3b\"\n}\n",
+        "err": ""
+      }
+    }
+  ],
+  "egress_before": "2a09:bac5:b1ba:26be::3dc:3b",
+  "epoch_before": [
+    0,
+    "warp",
+    40000,
+    "2a09:bac5:b1ba:26be::3dc:3b"
+  ],
+  "bridge_ready": true,
+  "tui_pid_before": 5064,
+  "pane_pid": 4999,
+  "tui_uid": 1002,
+  "token": "TOKEN-TUI-2CF207DFFD82",
+  "ack": "ACK-TUI-70AF113A",
+  "opencode_version": "1.19.5",
+  "turn1_response_visible": true,
+  "screen_turn1": "\n  \u2503\n  \u2503  Remember the exact secret token TOKEN-TUI-2CF207DFFD82. Reply with only ACK-TUI-70AF113A.\n  \u2503\n\n     + Thought: 1.0s\n\n     ACK-TUI-70AF113A\n\n     \u25a3  Build \u00b7 DeepSeek V4.1 Flash Free \u00b7 3.4s\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n  \u2503\n  \u2503\n  \u2503\n  \u2503  Build \u00b7 DeepSeek V4.1 Flash Free OpenCode\n  \u2579\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\n   /tmp/ouc-tui-home                                                                        8.3K (4%)  ctrl+p commands\n\n",
+  "warp_tui_connections": [
+    {
+      "event": "connect",
+      "timestamp": 1794801393.504255,
+      "client_addr": "127.0.0.1:43336",
+      "target_host": "models.opencode.ai",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    },
+    {
+      "event": "connect",
+      "timestamp": 1794801394.7557983,
+      "client_addr": "127.0.0.1:43352",
+      "target_host": "registry.npmjs.org",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    },
+    {
+      "event": "connect",
+      "timestamp": 1794801396.454982,
+      "client_addr": "127.0.0.1:43374",
+      "target_host": "opencode.ai",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    },
+    {
+      "event": "connect",
+      "timestamp": 1794801397.1819036,
+      "client_addr": "127.0.0.1:43376",
+      "target_host": "opencode.ai",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    },
+    {
+      "event": "connect",
+      "timestamp": 1794801397.740089,
+      "client_addr": "127.0.0.1:43400",
+      "target_host": "registry.npmjs.org",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    },
+    {
+      "event": "connect",
+      "timestamp": 1794801397.7410398,
+      "client_addr": "127.0.0.1:43386",
+      "target_host": "registry.npmjs.org",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    },
+    {
+      "event": "connect",
+      "timestamp": 1794801398.7492733,
+      "client_addr": "127.0.0.1:43428",
+      "target_host": "registry.npmjs.org",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    },
+    {
+      "event": "connect",
+      "timestamp": 1794801398.7912426,
+      "client_addr": "127.0.0.1:43470",
+      "target_host": "registry.npmjs.org",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    },
+    {
+      "event": "connect",
+      "timestamp": 1794801398.791511,
+      "client_addr": "127.0.0.1:43496",
+      "target_host": "registry.npmjs.org",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    },
+    {
+      "event": "connect",
+      "timestamp": 1794801398.7921596,
+      "client_addr": "127.0.0.1:43510",
+      "target_host": "registry.npmjs.org",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    },
+    {
+      "event": "connect",
+      "timestamp": 1794801398.7930334,
+      "client_addr": "127.0.0.1:43438",
+      "target_host": "registry.npmjs.org",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    },
+    {
+      "event": "connect",
+      "timestamp": 1794801398.7931614,
+      "client_addr": "127.0.0.1:43534",
+      "target_host": "registry.npmjs.org",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    },
+    {
+      "event": "connect",
+      "timestamp": 1794801398.7933824,
+      "client_addr": "127.0.0.1:43484",
+      "target_host": "registry.npmjs.org",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    },
+    {
+      "event": "connect",
+      "timestamp": 1794801398.7940469,
+      "client_addr": "127.0.0.1:43554",
+      "target_host": "registry.npmjs.org",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    },
+    {
+      "event": "connect",
+      "timestamp": 1794801398.794151,
+      "client_addr": "127.0.0.1:43544",
+      "target_host": "registry.npmjs.org",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    },
+    {
+      "event": "connect",
+      "timestamp": 1794801398.7944942,
+      "client_addr": "127.0.0.1:43568",
+      "target_host": "registry.npmjs.org",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    },
+    {
+      "event": "connect",
+      "timestamp": 1794801398.796616,
+      "client_addr": "127.0.0.1:43526",
+      "target_host": "registry.npmjs.org",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    },
+    {
+      "event": "connect",
+      "timestamp": 1794801398.796741,
+      "client_addr": "127.0.0.1:43454",
+      "target_host": "registry.npmjs.org",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    },
+    {
+      "event": "connect",
+      "timestamp": 1794801398.7970407,
+      "client_addr": "127.0.0.1:43430",
+      "target_host": "registry.npmjs.org",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ]
+    }
+  ],
+  "hop_ok": true,
+  "hop_attempts": [
+    {
+      "try_index": 1,
+      "rc": 0,
+      "backend": "psiphon",
+      "region_index": 1,
+      "tail": "  old block: 2a09:bac5:b1ba:26be\n  new block: 162.243.139.135/32\n  backend: psiphon, region US\n  \u2713 rotated in 70.08s \u2014 resend your message\n"
+    }
+  ],
+  "egress_after": "162.243.139.135",
+  "epoch_after": [
+    1,
+    "psiphon",
+    9060,
+    "162.243.139.135"
+  ],
+  "backend_after": "psiphon",
+  "epoch_advanced": true,
+  "tui_alive_after_rotation": true,
+  "psiphon_ipv4": true,
+  "egress_changed": true,
+  "warp_stop": {
+    "rc": 0,
+    "out": "",
+    "err": "",
+    "seconds": 0.02
+  },
+  "warp_port_listening": false,
+  "direct_negative_control": {
+    "rc": 7,
+    "out": "",
+    "err": "curl: (7) Failed to connect to 1.1.1.1 port 443 after 0 ms: Could not connect to server\n",
+    "seconds": 0.01
+  },
+  "guard_mode": "proxy",
+  "product_guard_rules": [
+    ":OUC_LEAKGUARD - [0:0]",
+    "-A OUTPUT -j OUC_LEAKGUARD",
+    "-A OUC_LEAKGUARD -o lo -j ACCEPT",
+    "-A OUC_LEAKGUARD -m state --state RELATED,ESTABLISHED -j ACCEPT",
+    "-A OUC_LEAKGUARD -d 10.0.0.0/8 -j ACCEPT",
+    "-A OUC_LEAKGUARD -d 172.16.0.0/12 -j ACCEPT",
+    "-A OUC_LEAKGUARD -d 192.168.0.0/16 -j ACCEPT",
+    "-A OUC_LEAKGUARD -d 162.159.0.0/16 -j ACCEPT",
+    "-A OUC_LEAKGUARD -d 188.114.0.0/16 -j ACCEPT",
+    "-A OUC_LEAKGUARD -p udp -m owner --uid-owner 1002 -m udp --dport 53 -j ACCEPT",
+    "-A OUC_LEAKGUARD -p tcp -m owner --uid-owner 1002 -m tcp --dport 53 -j ACCEPT",
+    "-A OUC_LEAKGUARD -m owner --uid-owner 1002 -j DROP",
+    ":OUC_LEAKGUARD - [0:0]",
+    "-A OUTPUT -j OUC_LEAKGUARD",
+    "-A OUC_LEAKGUARD -o lo -j ACCEPT",
+    "-A OUC_LEAKGUARD -m state --state RELATED,ESTABLISHED -j ACCEPT",
+    "-A OUC_LEAKGUARD -d fe80::/10 -j ACCEPT",
+    "-A OUC_LEAKGUARD -d 2606:4700::/32 -j ACCEPT",
+    "-A OUC_LEAKGUARD -m owner --uid-owner 1002 -j DROP"
+  ],
+  "warp_tui_drains": [
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.3612866,
+      "client_addr": "127.0.0.1:43336",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    },
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.361357,
+      "client_addr": "127.0.0.1:43352",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    },
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.361465,
+      "client_addr": "127.0.0.1:43374",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    },
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.3615644,
+      "client_addr": "127.0.0.1:43376",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    },
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.3616004,
+      "client_addr": "127.0.0.1:43400",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    },
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.3617213,
+      "client_addr": "127.0.0.1:43386",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    },
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.3617766,
+      "client_addr": "127.0.0.1:43428",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    },
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.361853,
+      "client_addr": "127.0.0.1:43470",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    },
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.361955,
+      "client_addr": "127.0.0.1:43496",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    },
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.362173,
+      "client_addr": "127.0.0.1:43510",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    },
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.362321,
+      "client_addr": "127.0.0.1:43438",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    },
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.3624055,
+      "client_addr": "127.0.0.1:43534",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    },
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.362463,
+      "client_addr": "127.0.0.1:43484",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    },
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.362537,
+      "client_addr": "127.0.0.1:43554",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    },
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.3626182,
+      "client_addr": "127.0.0.1:43544",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    },
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.362676,
+      "client_addr": "127.0.0.1:43568",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    },
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.3627386,
+      "client_addr": "127.0.0.1:43526",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    },
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.3627884,
+      "client_addr": "127.0.0.1:43454",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    },
+    {
+      "event": "epoch_drain",
+      "timestamp": 1794801463.3628423,
+      "client_addr": "127.0.0.1:43430",
+      "socks_port": 40000,
+      "old_epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "new_epoch": [
+        0,
+        "psiphon",
+        9060,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "drained": true
+    }
+  ],
+  "psiphon_tui_connections": [
+    {
+      "event": "connect",
+      "timestamp": 1794801473.9846108,
+      "client_addr": "127.0.0.1:51888",
+      "target_host": "opencode.ai",
+      "socks_port": 9060,
+      "epoch": [
+        1,
+        "psiphon",
+        9060,
+        "162.243.139.135"
+      ]
+    }
+  ],
+  "turn2_start": 1794801473.8123033,
+  "turn2_end": 1794801479.8355987,
+  "tui_pid_after": 5064,
+  "same_pid_alive": true,
+  "token_recalled_on_screen": true,
+  "screen_snippet": "\n  \u2503\n  \u2503  Remember the exact secret token TOKEN-TUI-2CF207DFFD82. Reply with only ACK-TUI-70AF113A.\n  \u2503\n\n     + Thought: 1.0s\n\n     ACK-TUI-70AF113A\n\n     \u25a3  Build \u00b7 DeepSeek V4.1 Flash Free \u00b7 3.4s\n\n  \u2503\n  \u2503  Recall the secret token from the previous turn. Reply with only the exact token.\n  \u2503\n\n     TOKEN-TUI-2CF207DFFD82\n\n     \u25a3  Build \u00b7 DeepSeek V4.1 Flash Free \u00b7 4.2s\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n  \u2503\n  \u2503\n  \u2503\n  \u2503  Build \u00b7 DeepSeek V4.1 Flash Free OpenCode\n  \u2579\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\n   /tmp/ouc-tui-home                                                                        8.3K (4%)  ctrl+p commands\n\n",
+  "routing_note": "CONNECT client port matched to TUI PID in ss during turn 2",
+  "warp_tui_close_events": [
+    {
+      "event": "close",
+      "timestamp": 1794801463.3630822,
+      "client_addr": "127.0.0.1:43336",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 1910,
+      "bytes_down": 689422,
+      "drained": true
+    },
+    {
+      "event": "close",
+      "timestamp": 1794801463.3631928,
+      "client_addr": "127.0.0.1:43352",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 11951,
+      "bytes_down": 7093928,
+      "drained": true
+    },
+    {
+      "event": "close",
+      "timestamp": 1794801463.3632991,
+      "client_addr": "127.0.0.1:43376",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 36413,
+      "bytes_down": 8928,
+      "drained": true
+    },
+    {
+      "event": "close",
+      "timestamp": 1794801463.3633928,
+      "client_addr": "127.0.0.1:43374",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 4700,
+      "bytes_down": 18894,
+      "drained": true
+    },
+    {
+      "event": "close",
+      "timestamp": 1794801463.3634098,
+      "client_addr": "127.0.0.1:43400",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 7042,
+      "bytes_down": 4103970,
+      "drained": true
+    },
+    {
+      "event": "close",
+      "timestamp": 1794801463.3634262,
+      "client_addr": "127.0.0.1:43470",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 2654,
+      "bytes_down": 112799,
+      "drained": true
+    },
+    {
+      "event": "close",
+      "timestamp": 1794801463.3634346,
+      "client_addr": "127.0.0.1:43386",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 6713,
+      "bytes_down": 776987,
+      "drained": true
+    },
+    {
+      "event": "close",
+      "timestamp": 1794801463.363456,
+      "client_addr": "127.0.0.1:43428",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 1958,
+      "bytes_down": 4795,
+      "drained": true
+    },
+    {
+      "event": "close",
+      "timestamp": 1794801463.363473,
+      "client_addr": "127.0.0.1:43496",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 2067,
+      "bytes_down": 117408,
+      "drained": true
+    },
+    {
+      "event": "close",
+      "timestamp": 1794801463.3634815,
+      "client_addr": "127.0.0.1:43510",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 2608,
+      "bytes_down": 11071,
+      "drained": true
+    },
+    {
+      "event": "close",
+      "timestamp": 1794801463.36349,
+      "client_addr": "127.0.0.1:43438",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 2207,
+      "bytes_down": 9552,
+      "drained": true
+    },
+    {
+      "event": "close",
+      "timestamp": 1794801463.3634984,
+      "client_addr": "127.0.0.1:43484",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 2452,
+      "bytes_down": 30629,
+      "drained": true
+    },
+    {
+      "event": "close",
+      "timestamp": 1794801463.3635054,
+      "client_addr": "127.0.0.1:43534",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 2499,
+      "bytes_down": 362166,
+      "drained": true
+    },
+    {
+      "event": "close",
+      "timestamp": 1794801463.3635132,
+      "client_addr": "127.0.0.1:43544",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 3023,
+      "bytes_down": 2534148,
+      "drained": true
+    },
+    {
+      "event": "close",
+      "timestamp": 1794801463.3635213,
+      "client_addr": "127.0.0.1:43526",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 2459,
+      "bytes_down": 121225,
+      "drained": true
+    },
+    {
+      "event": "close",
+      "timestamp": 1794801463.3635461,
+      "client_addr": "127.0.0.1:43554",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 2099,
+      "bytes_down": 341681,
+      "drained": true
+    },
+    {
+      "event": "close",
+      "timestamp": 1794801463.3635557,
+      "client_addr": "127.0.0.1:43454",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 2102,
+      "bytes_down": 11677,
+      "drained": true
+    },
+    {
+      "event": "close",
+      "timestamp": 1794801463.363568,
+      "client_addr": "127.0.0.1:43430",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 3191,
+      "bytes_down": 174124,
+      "drained": true
+    },
+    {
+      "event": "close",
+      "timestamp": 1794801463.363572,
+      "client_addr": "127.0.0.1:43568",
+      "socks_port": 40000,
+      "epoch": [
+        0,
+        "warp",
+        40000,
+        "2a09:bac5:b1ba:26be::3dc:3b"
+      ],
+      "bytes_up": 2635,
+      "bytes_down": 8186395,
+      "drained": true
+    }
+  ],
+  "psiphon_tui_close_events": [
+    {
+      "event": "close",
+      "timestamp": 1794801479.9379222,
+      "client_addr": "127.0.0.1:51888",
+      "socks_port": 9060,
+      "epoch": [
+        1,
+        "psiphon",
+        9060,
+        "162.243.139.135"
+      ],
+      "bytes_up": 36753,
+      "bytes_down": 5856,
+      "drained": false
+    }
+  ],
+  "warp_bytes_and_drain_proven": true,
+  "psiphon_payload_proven": true
+}

@@ -24,6 +24,43 @@ python3 -m pytest tests -q
 → 104 passed, 11 subtests passed
 ```
 
+### Interactive TUI socket forensics: disposable Actions run 43800873631
+
+[Run 43800873631](https://github.com/aminmozaffari23-cmyk/opencode-unlimited/actions/runs/43800873631)
+used OpenCode 1.19.5 in tmux under an isolated account. Actual OpenCode PID
+**5064** was alive and unchanged across the hop. Kernel `ss` identified its
+outbound loopback sockets; the bridge JSONL correlated them by client port:
+
+* WARP `opencode.ai` tunnels `127.0.0.1:43374` and `:43376` used SOCKS
+  **40000** and emitted epoch-drain and byte-counted close events.
+* WARP service was stopped, port **40000** was no longer listening, the product
+  `OUC_LEAKGUARD` reported proxy mode, and a stricter owner-scoped IPv4/IPv6
+  non-loopback reject was inserted ahead of established-connection exceptions.
+  A direct curl under the TUI UID failed (exit 7). This isolation was scoped to
+  that account; the runner and Psiphon daemon retained network access.
+* During Turn 2, `ss` identified PID 5064 at `127.0.0.1:51888 → :8080`.
+  The bridge recorded a fresh `opencode.ai` CONNECT to SOCKS **9060** at the
+  new epoch, then a close with **36,753 bytes up / 5,856 down**. The captured
+  screen shows the recalled token. Bridge egress changed from WARP
+  `2a09:bac5:b1ba:26be::3dc:3b` to Psiphon `162.243.139.135/32`.
+* Teardown reported no Psiphon or bridge processes, listening ports, or guard
+  rules. The raw screen, firewall dump, socket/process samples, JSONL lifecycle
+  events and summary are in `tests/lab3/evidence/43800873631/`.
+
+These counters measure encrypted bytes on the correlated CONNECT tunnel, not
+the decrypted HTTP request. The time-window, target, socket attribution,
+isolation and on-screen response together support the measured Turn 2 route;
+they are not a TLS plaintext trace or a guarantee for every future client.
+Earlier failed startup, quota and attribution attempts are retained in their
+own evidence directories. `t100` also checks structured connect, drain and
+byte-counted close events for cross-port and same-port transitions.
+
+**Telemetry privacy:** bridge lifecycle JSONL defaults to
+`/var/lib/opencode-unlimited/bridge-events.jsonl` (override with
+`OUC_BRIDGE_LOG`). It contains destination hostnames, loopback client ports,
+route epochs, timestamps and byte counts, but not TLS payloads. It currently
+appends without automatic rotation; operators should protect and manage it.
+
 ### Real interactive TUI: separate disposable Actions run
 
 Run [43796201166](https://github.com/aminmozaffari23-cmyk/opencode-unlimited/actions/runs/43796201166)

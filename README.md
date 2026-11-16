@@ -17,6 +17,13 @@ starting over.
 
 </div>
 
+**Interactive TUI:** a disposable [socket-forensic run](tests/lab3/evidence/43800873631/tui_live.json)
+observed the same OpenCode process recall a token after a WARP→Psiphon hop,
+with its new bridge socket correlated to Psiphon while direct egress was
+blocked. See [test results](TEST_RESULTS.md) for the evidence and limits.
+Bridge telemetry records destination metadata and currently requires manual
+log rotation; see the privacy note there.
+
 ---
 
 > **What this is.** Free-tier model access is metered per source address. This
