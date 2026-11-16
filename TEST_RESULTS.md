@@ -8,11 +8,11 @@ The current release. Every number below was measured, not typed in by hand.
 
 ```
 bash tests/run_tests.sh --offline
-→ 83 passed / 0 failed / 11 skipped
+→ 87 passed / 0 failed / 11 skipped
 ```
 
-The 11 skips are the destructive real-WARP tests (explicit disposable-host
-opt-in required). New in this release: `t98` (installer wires up
+The 11 skips comprise five legacy installer tests requiring explicit disposable-host
+permission and six destructive real-WARP tests excluded from the offline run. New in this release: `t98` (installer wires up
 `psiphon-tunnel-core` end to end, offline stub) and `t99` (markdown
 link-integrity check across the flagship docs), and `t100` (persistent PTY
 stand-in across cross-port and same-port route changes).
@@ -21,8 +21,29 @@ stand-in across cross-port and same-port route changes).
 
 ```
 python3 -m pytest tests -q
-→ 104 passed, 11 subtests passed
+→ 116 passed, 11 subtests passed
 ```
+
+### Interactive reverse ping-pong: disposable Actions run 43814088627
+
+[Run 43814088627](https://github.com/aminmozaffari23-cmyk/opencode-unlimited/actions/runs/43814088627)
+passed on a fresh hosted runner with one real OpenCode TUI process, PID **4845**,
+across WARP → Psiphon → WARP. The token was recalled on the second and third
+turns; the forced CLI WARP return succeeded and the Psiphon listener stopped.
+Egress was `2a09:bac5:9f22:32b4::50d:67` → `192.241.155.6/32` →
+`2a09:bac1:76a1:5e78::39d:4b`. Kernel `ss` correlated the TUI process tree's
+loopback socket to bridge CONNECT ports: Psiphon `48362` (drained, 36,595
+bytes up / 6,879 down) and returning WARP `39778` (36,780 up / 10,869 down).
+Teardown recorded no tunnel, bridge, controller or guard rules. Full captured
+[evidence](tests/lab3/evidence/43814088627/pingpong_live.json) includes
+socket samples, bridge events, screen captures and teardown.
+
+The earlier [run 43812441685](tests/lab3/evidence/43812441685/pingpong_live.json)
+failed before starting the TUI because its WARP preflight encountered free
+usage limits; its evidence is retained. The four-turn PTY and duplicate /32
+cache-bust tests are **offline simulations**. This live run does not establish
+a live cache bust or an automatic failed-return bounce, nor uninterrupted
+in-flight requests during a route change.
 
 ### Interactive TUI socket forensics: disposable Actions run 43800873631
 

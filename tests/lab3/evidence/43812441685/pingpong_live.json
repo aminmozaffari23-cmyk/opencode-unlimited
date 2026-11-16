@@ -1,0 +1,92 @@
+{
+  "phase": "pingpong_live",
+  "passed": false,
+  "warp_preflight": [
+    {
+      "attempt": 1,
+      "verify": {
+        "cmd": "verify -m opencode/deepseek-v4.1-flash-free",
+        "rc": 1,
+        "seconds": 170.74,
+        "json": {
+          "ran": true,
+          "ok": false,
+          "walled": true,
+          "detail": "native quota error: AI_APICallError: Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going: https://opencode.ai/go",
+          "failure_class": "quota",
+          "rc": -9,
+          "model": "opencode/deepseek-v4.1-flash-free",
+          "ipv6_egress": "2a09:bac5:b1bb:26be::3dc:3a"
+        },
+        "out": "{\n  \"ran\": true,\n  \"ok\": false,\n  \"walled\": true,\n  \"detail\": \"native quota error: AI_APICallError: Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going: https://opencode.ai/go\",\n  \"failure_class\": \"quota\",\n  \"rc\": -9,\n  \"model\": \"opencode/deepseek-v4.1-flash-free\",\n  \"ipv6_egress\": \"2a09:bac5:b1bb:26be::3dc:3a\"\n}\n",
+        "err": ""
+      },
+      "hop": {
+        "cmd": "hop --backend warp --wait 300",
+        "rc": 1,
+        "seconds": 153.856,
+        "json": null,
+        "out": "  old block: 2a09:bac5:b1bb:26be\n  new block: ?\n  \u2717 rotation failed: no fresh /64 available right now; every candidate was spent or unverifiable [rotate-keys#1=2a09:bac1:76c0:de10 (verification hit the quota wall)]\n    the machine keeps its internet; try again, or run: ouc repair\n",
+        "err": ""
+      }
+    },
+    {
+      "attempt": 2,
+      "verify": {
+        "cmd": "verify -m opencode/deepseek-v4.1-flash-free",
+        "rc": 1,
+        "seconds": 150.73,
+        "json": {
+          "ran": true,
+          "ok": false,
+          "walled": true,
+          "detail": "native quota error: AI_RetryError: Failed after 3 attempts. Last error: Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going: https://opencode.ai/go",
+          "failure_class": "quota",
+          "rc": -15,
+          "model": "opencode/deepseek-v4.1-flash-free",
+          "ipv6_egress": "2a09:bac5:b1ba:26be::3dc:50"
+        },
+        "out": "{\n  \"ran\": true,\n  \"ok\": false,\n  \"walled\": true,\n  \"detail\": \"native quota error: AI_RetryError: Failed after 3 attempts. Last error: Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going: https://opencode.ai/go\",\n  \"failure_class\": \"quota\",\n  \"rc\": -15,\n  \"model\": \"opencode/deepseek-v4.1-flash-free\",\n  \"ipv6_egress\": \"2a09:bac5:b1ba:26be::3dc:50\"\n}\n",
+        "err": ""
+      },
+      "hop": {
+        "cmd": "hop --backend warp --wait 300",
+        "rc": 1,
+        "seconds": 0.111,
+        "json": null,
+        "out": "  old block: ?\n  new block: ?\n  \u2717 rotation failed: rotation already in progress\n    the machine keeps its internet; try again, or run: ouc repair\n",
+        "err": ""
+      }
+    },
+    {
+      "attempt": 3,
+      "verify": {
+        "cmd": "verify -m opencode/deepseek-v4.1-flash-free",
+        "rc": 1,
+        "seconds": 150.795,
+        "json": {
+          "ran": true,
+          "ok": false,
+          "walled": true,
+          "detail": "native quota error: AI_RetryError: Failed after 3 attempts. Last error: Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going: https://opencode.ai/go",
+          "failure_class": "quota",
+          "rc": -15,
+          "model": "opencode/deepseek-v4.1-flash-free",
+          "ipv6_egress": "2a09:bac1:7680:de10::3dc:77"
+        },
+        "out": "{\n  \"ran\": true,\n  \"ok\": false,\n  \"walled\": true,\n  \"detail\": \"native quota error: AI_RetryError: Failed after 3 attempts. Last error: Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going: https://opencode.ai/go\",\n  \"failure_class\": \"quota\",\n  \"rc\": -15,\n  \"model\": \"opencode/deepseek-v4.1-flash-free\",\n  \"ipv6_egress\": \"2a09:bac1:7680:de10::3dc:77\"\n}\n",
+        "err": ""
+      },
+      "hop": {
+        "cmd": "hop --backend warp --wait 300",
+        "rc": 1,
+        "seconds": 153.197,
+        "json": null,
+        "out": "  old block: 2a09:bac1:7680:de10\n  new block: ?\n  \u2717 rotation failed: no fresh /64 available right now; every candidate was spent or unverifiable [rotate-keys#1=2a09:bac5:b1be:26be (verification hit the quota wall)]\n    the machine keeps its internet; try again, or run: ouc repair\n",
+        "err": ""
+      }
+    }
+  ],
+  "error": "could not verify an unwalled WARP exit before the TUI seed",
+  "screen_snippet": ""
+}

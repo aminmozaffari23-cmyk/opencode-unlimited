@@ -1,0 +1,40 @@
+
+  ┃
+  ┃  Remember the exact secret token TOKEN-TUI-B6951F89753E. Reply with only ACK-TUI-47BA43D0.
+  ┃
+
+     ACK-TUI-47BA43D0
+
+     ▣  Build · DeepSeek V4.1 Flash Free · 1.9s
+
+  ┃
+  ┃  Recall the secret token from the previous turn. Reply with only the exact token.
+  ┃
+
+     TOKEN-TUI-B6951F89753E
+
+     ▣  Build · DeepSeek V4.1 Flash Free · 1.5s
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ┃
+  ┃
+  ┃
+  ┃  Build · DeepSeek V4.1 Flash Free OpenCode
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+   /tmp/ouc-tui-home                                                                        8.2K (4%)  ctrl+p commands
+

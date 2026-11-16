@@ -1,0 +1,39 @@
+live	Live phases	﻿2026-11-16T05:47:52.2997148Z ##[group]Run set -x
+live	Live phases	2026-11-16T05:47:52.2997471Z ^[[36;1mset -x^[[0m
+live	Live phases	2026-11-16T05:47:52.2997719Z ^[[36;1mrc=0^[[0m
+live	Live phases	2026-11-16T05:47:52.2997961Z ^[[36;1mfor phase in pingpong_live; do^[[0m
+live	Live phases	2026-11-16T05:47:52.2998254Z ^[[36;1m  echo "::group::phase $phase"^[[0m
+live	Live phases	2026-11-16T05:47:52.2998620Z ^[[36;1m  # gap1 seeds a real conversation and may have to survive several^[[0m
+live	Live phases	2026-11-16T05:47:52.2999063Z ^[[36;1m  # rotations while free-tier quota walls are being walked off; the^[[0m
+live	Live phases	2026-11-16T05:47:52.2999433Z ^[[36;1m  # chaos phases are bounded by their own loops.^[[0m
+live	Live phases	2026-11-16T05:47:52.2999821Z ^[[36;1m  t=1500; [ "$phase" = "gap1" ] && t=2700; [ "$phase" = "pingpong_live" ] && t=2700^[[0m
+live	Live phases	2026-11-16T05:47:52.3000243Z ^[[36;1m  timeout "$t" python3 tests/lab3/live_driver.py "$phase" || rc=1^[[0m
+live	Live phases	2026-11-16T05:47:52.3001157Z ^[[36;1m  echo "::endgroup::"^[[0m
+live	Live phases	2026-11-16T05:47:52.3001454Z ^[[36;1mdone^[[0m
+live	Live phases	2026-11-16T05:47:52.3001672Z ^[[36;1mexit $rc^[[0m
+live	Live phases	2026-11-16T05:47:52.3018986Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+live	Live phases	2026-11-16T05:47:52.3019496Z env:
+live	Live phases	2026-11-16T05:47:52.3019720Z   DEBIAN_FRONTEND: noninteractive
+live	Live phases	2026-11-16T05:47:52.3020002Z   OUC_TARGET_HOME: /home/runner
+live	Live phases	2026-11-16T05:47:52.3020280Z   OUC_OC_BIN: /usr/local/bin/opencode
+live	Live phases	2026-11-16T05:47:52.3020757Z   OUC_LIVE_REPO: /home/runner/work/opencode-unlimited/opencode-unlimited
+live	Live phases	2026-11-16T05:47:52.3021238Z   OUC_LIVE_EV: /home/runner/work/opencode-unlimited/opencode-unlimited/tests/lab3/evidence
+live	Live phases	2026-11-16T05:47:52.3021613Z   OUC_WARP_MODE: proxy
+live	Live phases	2026-11-16T05:47:52.3021856Z   OUC_IGNORE_TUN_CHECK: 1
+live	Live phases	2026-11-16T05:47:52.3022106Z ##[endgroup]
+live	Live phases	2026-11-16T05:47:52.3055220Z + rc=0
+live	Live phases	2026-11-16T05:47:52.3056005Z ##[group]phase pingpong_live
+live	Live phases	2026-11-16T05:47:52.3056439Z + for phase in pingpong_live
+live	Live phases	2026-11-16T05:47:52.3056799Z + echo '::group::phase pingpong_live'
+live	Live phases	2026-11-16T05:47:52.3057164Z + t=1500
+live	Live phases	2026-11-16T05:47:52.3057580Z + '[' pingpong_live = gap1 ']'
+live	Live phases	2026-11-16T05:47:52.3057952Z + '[' pingpong_live = pingpong_live ']'
+live	Live phases	2026-11-16T05:47:52.3058373Z + t=2700
+live	Live phases	2026-11-16T05:47:52.3058700Z + timeout 2700 python3 tests/lab3/live_driver.py pingpong_live
+live	Live phases	2026-11-16T05:47:52.3371043Z [05:47:52] TUI: real interactive OpenCode, same process across Psiphon hop
+live	Live phases	2026-11-16T06:01:39.9674986Z [06:01:39] TUI phase failed: could not verify an unwalled WARP exit before the TUI seed
+live	Live phases	2026-11-16T06:01:41.0781581Z + rc=1
+live	Live phases	2026-11-16T06:01:41.0782245Z + echo ::endgroup::
+live	Live phases	2026-11-16T06:01:41.0782532Z + exit 1
+live	Live phases	2026-11-16T06:01:41.0783170Z ##[endgroup]
+live	Live phases	2026-11-16T06:01:41.0796342Z ##[error]Process completed with exit code 1.
