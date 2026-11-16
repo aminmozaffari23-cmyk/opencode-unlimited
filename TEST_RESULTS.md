@@ -8,13 +8,14 @@ The current release. Every number below was measured, not typed in by hand.
 
 ```
 bash tests/run_tests.sh --offline
-→ 82 passed / 0 failed / 11 skipped
+→ 83 passed / 0 failed / 11 skipped
 ```
 
 The 11 skips are the destructive real-WARP tests (explicit disposable-host
 opt-in required). New in this release: `t98` (installer wires up
 `psiphon-tunnel-core` end to end, offline stub) and `t99` (markdown
-link-integrity check across the flagship docs).
+link-integrity check across the flagship docs), and `t100` (persistent PTY
+stand-in across cross-port and same-port route changes).
 
 ### pytest suite
 
@@ -22,6 +23,29 @@ link-integrity check across the flagship docs).
 python3 -m pytest tests -q
 → 104 passed, 11 subtests passed
 ```
+
+### Real interactive TUI: separate disposable Actions run
+
+Run [43796201166](https://github.com/aminmozaffari23-cmyk/opencode-unlimited/actions/runs/43796201166)
+launched OpenCode 1.19.5 in an interactive tmux PTY with the HTTP proxy pointed
+at the OUC bridge. PID **4753** remained alive and unchanged across the hop.
+The first model reply and the token recalled on the second turn are visible in
+`tests/lab3/evidence/43796201166/tui_turn2.txt`. The bridge egress probe changed
+from `2a09:bac5:c82c:32aa::50c:66` (WARP) to `206.81.0.180/32` (Psiphon),
+and the recorded route epoch advanced from WARP port 40000 to Psiphon port
+9060. The hop succeeded on its first attempt.
+
+**Limit:** The run did not independently attribute the second model request to
+a particular CONNECT socket, so it does not prove whether OpenCode opened a
+fresh CONNECT or which socket carried that turn. The egress probe verifies the
+bridge route separately, not the TUI request itself. Closing obsolete tunnels
+can interrupt an in-flight response; client retry behavior is not guaranteed.
+The initial run [43795643573](https://github.com/aminmozaffari23-cmyk/opencode-unlimited/actions/runs/43795643573)
+failed before its first turn because the harness sent keys before the input
+screen was ready; its failure evidence is retained alongside the successful run.
+
+The 83/0/11 offline measurement preceded a final small change to t90's second
+lock-holder synchronization; the revised t90 was rerun in isolation and passed.
 
 ### Live verification (fresh disposable root runner)
 

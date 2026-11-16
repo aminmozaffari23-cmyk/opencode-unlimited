@@ -1,0 +1,12 @@
+{
+  "stop_rc": 0,
+  "psiphon_processes": [],
+  "psiphon_port_listening": false,
+  "bridge_listening": false,
+  "psiphon_port_lines": [],
+  "bridge_port_lines": [],
+  "bridge_procs": [],
+  "ouc_procs": [],
+  "guard_rules": [],
+  "backend_before_stop": "psiphon"
+}

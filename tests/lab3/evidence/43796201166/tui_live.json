@@ -1,0 +1,45 @@
+{
+  "phase": "tui_live",
+  "passed": true,
+  "egress_before": "2a09:bac5:c82c:32aa::50c:66",
+  "epoch_before": [
+    0,
+    "warp",
+    40000,
+    "2a09:bac5:c82c:32aa::50c:66"
+  ],
+  "bridge_ready": true,
+  "tui_pid_before": 4753,
+  "token": "TOKEN-TUI-E3DF4B4D250E",
+  "ack": "ACK-TUI-CD337B6A",
+  "opencode_version": "1.19.5",
+  "turn1_response_visible": true,
+  "screen_turn1": "\n  \u2503\n  \u2503  Remember the exact secret token TOKEN-TUI-E3DF4B4D250E. Reply with only ACK-TUI-CD337B6A.\n  \u2503\n\n     + Thought: 774ms\n\n     ACK-TUI-CD337B6A\n\n     \u25a3  Build \u00b7 DeepSeek V4.1 Flash Free \u00b7 3.9s\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n  \u2503\n  \u2503\n  \u2503\n  \u2503  Build \u00b7 DeepSeek V4.1 Flash Free OpenCode\n  \u2579\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\n   /home/runner/work/opencode-unlimited/opencode-unlimited                                  8.3K (4%)  ctrl+p commands\n\n",
+  "hop_ok": true,
+  "hop_attempts": [
+    {
+      "try_index": 1,
+      "rc": 0,
+      "backend": "psiphon",
+      "region_index": 1,
+      "tail": "  old block: 2a09:bac5:c82c:32aa\n  new block: 206.81.0.180/32\n  backend: psiphon, region US\n  \u2713 rotated in 67.73s \u2014 resend your message\n"
+    }
+  ],
+  "egress_after": "206.81.0.180",
+  "epoch_after": [
+    1,
+    "psiphon",
+    9060,
+    "206.81.0.180"
+  ],
+  "backend_after": "psiphon",
+  "epoch_advanced": true,
+  "tui_alive_after_rotation": true,
+  "psiphon_ipv4": true,
+  "egress_changed": true,
+  "tui_pid_after": 4753,
+  "same_pid_alive": true,
+  "token_recalled_on_screen": true,
+  "screen_snippet": "\n  \u2503\n  \u2503  Remember the exact secret token TOKEN-TUI-E3DF4B4D250E. Reply with only ACK-TUI-CD337B6A.\n  \u2503\n\n     + Thought: 774ms\n\n     ACK-TUI-CD337B6A\n\n     \u25a3  Build \u00b7 DeepSeek V4.1 Flash Free \u00b7 3.9s\n\n  \u2503\n  \u2503  Recall the secret token from the previous turn. Reply with only the exact token.\n  \u2503\n\n     + Thought: 345ms\n\n     TOKEN-TUI-E3DF4B4D250E\n\n     \u25a3  Build \u00b7 DeepSeek V4.1 Flash Free \u00b7 1.4s\n\n\n\n\n\n\n\n\n\n\n\n\n\n  \u2503\n  \u2503\n  \u2503\n  \u2503  Build \u00b7 DeepSeek V4.1 Flash Free OpenCode\n  \u2579\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\n   /home/runner/work/opencode-unlimited/opencode-unlimited                                  8.4K (4%)  ctrl+p commands\n\n",
+  "routing_note": "Egress verified through bridge; per-request CONNECT attribution not independently instrumented"
+}

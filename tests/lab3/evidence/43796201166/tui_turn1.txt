@@ -1,0 +1,40 @@
+
+  ┃
+  ┃  Remember the exact secret token TOKEN-TUI-E3DF4B4D250E. Reply with only ACK-TUI-CD337B6A.
+  ┃
+
+     + Thought: 774ms
+
+     ACK-TUI-CD337B6A
+
+     ▣  Build · DeepSeek V4.1 Flash Free · 3.9s
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ┃
+  ┃
+  ┃
+  ┃  Build · DeepSeek V4.1 Flash Free OpenCode
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+   /home/runner/work/opencode-unlimited/opencode-unlimited                                  8.3K (4%)  ctrl+p commands
+

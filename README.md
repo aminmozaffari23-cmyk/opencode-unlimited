@@ -9,7 +9,7 @@ session to Psiphon — automatically, verified, and without the conversation
 starting over.
 
 [![Version](https://img.shields.io/badge/version-2.6.5-1f6feb?style=flat-square)](CHANGELOG.md)
-[![Offline suite](https://img.shields.io/badge/offline%20suite-82%20passed%20%7C%200%20failed-2ea043?style=flat-square)](tests/run_tests.sh)
+[![Offline suite](https://img.shields.io/badge/offline%20suite-83%20passed%20%7C%200%20failed-2ea043?style=flat-square)](tests/run_tests.sh)
 [![pytest](https://img.shields.io/badge/pytest-104%20passed-2ea043?style=flat-square)](tests/test_runner_v2.py)
 [![Backends](https://img.shields.io/badge/backends-WARP%20%2B%20Psiphon%20fallback-8957e5?style=flat-square)](#how-the-dual-engine-works)
 [![Dependencies](https://img.shields.io/badge/dependencies-Python%203.8%2B%20stdlib%20only%20%C2%B7%20zero%20pip-0b7285?style=flat-square)](#requirements)
