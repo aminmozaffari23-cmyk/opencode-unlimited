@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       phases:
-        description: "space-separated phases (tui_live gap1 c1 c2 c3 c4 c5 c6)"
+        description: "space-separated phases (pingpong_live tui_live gap1 c1 c2 c3 c4 c5 c6)"
         required: false
         default: "gap1 c1 c2 c3 c4 c5 c6"
       tunnel_window:
@@ -142,7 +142,7 @@ jobs:
             # gap1 seeds a real conversation and may have to survive several
             # rotations while free-tier quota walls are being walked off; the
             # chaos phases are bounded by their own loops.
-            t=1500; [ "$phase" = "gap1" ] && t=2700
+            t=1500; [ "$phase" = "gap1" ] && t=2700; [ "$phase" = "pingpong_live" ] && t=2700
             timeout "$t" python3 tests/lab3/live_driver.py "$phase" || rc=1
             echo "::endgroup::"
           done

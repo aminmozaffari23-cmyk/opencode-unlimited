@@ -157,6 +157,10 @@ def main() -> int:
                         conn, _ = listener.accept()
                     except OSError:
                         return
+                    if os.environ.get("FAKE_PSIPHON_FORWARD") == "1":
+                        from fake_socks5 import handle
+                        threading.Thread(target=handle, args=(conn,), daemon=True).start()
+                        continue
                     try:
                         greeting = conn.recv(2)
                         if len(greeting) < 2:

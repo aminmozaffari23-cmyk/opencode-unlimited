@@ -308,12 +308,13 @@ def main():
         log("pre-snapshot saved")
         return
 
-    if "tui_live" in which:
+    if "tui_live" in which or "pingpong_live" in which:
+        pingpong = "pingpong_live" in which
         log("TUI: real interactive OpenCode, same process across Psiphon hop")
-        res = {"phase": "tui_live", "passed": False}
+        res = {"phase": "pingpong_live" if pingpong else "tui_live", "passed": False}
         def record(**fields):
             res.update(fields)
-            save("tui_live.json", res)
+            save(("pingpong_live.json" if pingpong else "tui_live.json"), res)
         def tmux(*args):
             return sh(["tmux", *args], timeout=30)
         def screen(name):
@@ -553,6 +554,42 @@ def main():
                    routing_note="CONNECT client port matched to TUI PID in ss during turn 2")
             if not (recalled and same):
                 raise RuntimeError("token recall or persistent TUI PID not proven")
+            if pingpong:
+                record(passed=False)
+                restart = sh(["sudo", "systemctl", "start", "warp-svc"], timeout=90)
+                record(warp_restart=restart)
+                if restart["rc"] != 0:
+                    raise RuntimeError("could not restart WARP service")
+                sh(["warp-cli", "--accept-tos", "mode", "proxy"], timeout=90)
+                sh(["warp-cli", "--accept-tos", "connect"], timeout=90)
+                for _ in range(60):
+                    if listening(40000):
+                        break
+                    time.sleep(2)
+                back = ouc(["hop", "--backend", "warp", "--wait", "300"], timeout=400,
+                           extra={"OUC_COOLDOWN_SECONDS": "0"})
+                warp_state = state()
+                warp_ip = egress()
+                stopped = not listening(9060)
+                record(return_hop=back, return_state=warp_state, return_egress=warp_ip,
+                       psiphon_listener_stopped=stopped, return_epoch=epoch(warp_state))
+                if back["rc"] != 0 or warp_state.get("active_backend") != "warp" or not stopped or not ident(warp_ip):
+                    raise RuntimeError("return to WARP or Psiphon stop not proven")
+                marker3 = "Recall the secret token from the first turn"
+                turn3_start = time.time()
+                tmux("send-keys", "-t", "ouc-tui:0.0", "-l", marker3 + ". Reply with only the exact token.")
+                tmux("send-keys", "-t", "ouc-tui:0.0", "Enter")
+                turn3, text3 = wait_screen(lambda t: marker3 in t and token in t.split(marker3, 1)[1], 240, "turn3")
+                turn3_end = time.time()
+                warp_return_connections = matched(events(), 40000, turn3_start, turn3_end, pid)
+                ps_drains = [e for e in events() if e.get("event") == "epoch_drain" and
+                             e.get("client_addr") in {c["client_addr"] for c in psiphon_connections}]
+                record(turn3_recalled=turn3, screen_turn3=text3[-12000:],
+                       warp_return_tui_connections=warp_return_connections,
+                       psiphon_tui_drains=ps_drains, final_same_pid=alive(pid),
+                       passed=bool(turn3 and alive(pid) and warp_return_connections and ps_drains))
+                if not res["passed"]:
+                    raise RuntimeError("return turn, PID-correlated WARP socket or Psiphon drain missing")
         except Exception as exc:
             record(error=str(exc), screen_snippet=screen("failure")[-12000:])
             log("TUI phase failed:", exc)
@@ -581,9 +618,12 @@ def main():
             record(warp_tui_close_events=wc, psiphon_tui_close_events=pc)
             warp_bytes = any(c.get("drained") and c.get("bytes_up", 0) > 0 and c.get("bytes_down", 0) > 0 for c in wc)
             ps_bytes = any(c.get("bytes_up", 0) > 500 and c.get("bytes_down", 0) > 500 for c in pc)
-            record(warp_bytes_and_drain_proven=warp_bytes, psiphon_payload_proven=ps_bytes,
-                   passed=bool(warp_bytes and ps_bytes))
-            if not (warp_bytes and ps_bytes):
+            rc = closes_for("warp_return_tui_connections") if pingpong else []
+            return_bytes = (not pingpong or any(c.get("bytes_up", 0) > 500 and c.get("bytes_down", 0) > 500 for c in rc))
+            record(warp_return_tui_close_events=rc, warp_bytes_and_drain_proven=warp_bytes,
+                   psiphon_payload_proven=ps_bytes, warp_return_payload_proven=return_bytes,
+                   passed=bool(warp_bytes and ps_bytes and return_bytes))
+            if not (warp_bytes and ps_bytes and return_bytes):
                 record(error="PID-correlated tunnel close/byte evidence incomplete")
         if not res.get("passed"):
             raise SystemExit(1)

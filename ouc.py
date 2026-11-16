@@ -672,6 +672,8 @@ EMPTY_STATE = {
     "warp_fail_streak": 0,
     "fallback_activated_at": 0,
     "psiphon_region_index": 0,
+    "psiphon_cycle_visited": [],
+    "psiphon_cycle_count": 0,
     "psiphon_rotations": 0,
     "pin_lifted_for_backend": "",
 }
@@ -679,6 +681,24 @@ EMPTY_STATE = {
 
 _LOCK_REGISTRY: dict[str, list] = {}
 _LOCK_REGISTRY_GUARD = threading.RLock()
+_LOCK_THREAD_GATES: dict[str, object] = {}
+
+
+def _reset_locks_after_fork() -> None:
+    """The child must not inherit thread ownership or unlock the parent's flock."""
+    global _LOCK_REGISTRY, _LOCK_REGISTRY_GUARD, _LOCK_THREAD_GATES
+    for held in _LOCK_REGISTRY.values():
+        try:
+            held[0].close()  # close only; LOCK_UN would release the parent's flock
+        except Exception:
+            pass
+    _LOCK_REGISTRY = {}
+    _LOCK_THREAD_GATES = {}
+    _LOCK_REGISTRY_GUARD = threading.RLock()
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_reset_locks_after_fork)
 
 
 class StateLockError(RuntimeError):
@@ -729,16 +749,23 @@ class StateLock:
         self.reentered = False
 
     def __enter__(self):
+        # flock alone does not serialize sibling threads that use our registry:
+        # reentrancy belongs to the *owning thread*, not the whole process.
+        # Wait on the per-path RLock outside the registry guard so another
+        # thread can release it. Only after that acquire the interprocess flock.
         with _LOCK_REGISTRY_GUARD:
-            held = _LOCK_REGISTRY.get(self.path)
-            if held is not None:
-                held[1] += 1
-                self.reentered = True
-                return self
+            gate = _LOCK_THREAD_GATES.setdefault(self.path, threading.RLock())
+        if not gate.acquire(blocking=self.blocking):
+            raise BlockingIOError("lock held by another thread")
+        self._thread_gate = gate
+        try:
+            with _LOCK_REGISTRY_GUARD:
+                held = _LOCK_REGISTRY.get(self.path)
+                if held is not None:
+                    held[1] += 1
+                    self.reentered = True
+                    return self
             mkdirp(os.path.dirname(self.path) or ".")
-            # The lock is shared by root (the supervisor) and the user (the
-            # daily commands).  Whoever creates it must leave it openable by
-            # the other side, or `ouc run` dies with EACCES on state.lock.
             try:
                 fd = os.open(self.path, os.O_CREAT | os.O_RDWR, 0o666)
                 try:
@@ -760,28 +787,38 @@ class StateLock:
             except OSError:
                 fh.close()
                 raise
-            _LOCK_REGISTRY[self.path] = [fh, 1]
+            with _LOCK_REGISTRY_GUARD:
+                _LOCK_REGISTRY[self.path] = [fh, 1]
             self.fh = fh
             return self
+        except BaseException:
+            gate.release()
+            self._thread_gate = None
+            raise
 
     def __exit__(self, *exc):
-        with _LOCK_REGISTRY_GUARD:
-            if self.reentered:
-                held = _LOCK_REGISTRY.get(self.path)
+        try:
+            with _LOCK_REGISTRY_GUARD:
+                if self.reentered:
+                    held = _LOCK_REGISTRY.get(self.path)
+                    if held:
+                        held[1] -= 1
+                    return False
+                held = _LOCK_REGISTRY.pop(self.path, None)
                 if held:
-                    held[1] -= 1
-                return False
-            held = _LOCK_REGISTRY.pop(self.path, None)
-            if held:
-                try:
-                    fcntl.flock(held[0].fileno(), fcntl.LOCK_UN)
-                except Exception:
-                    pass
-                try:
-                    held[0].close()
-                except Exception:
-                    pass
+                    try:
+                        fcntl.flock(held[0].fileno(), fcntl.LOCK_UN)
+                    except Exception:
+                        pass
+                    try:
+                        held[0].close()
+                    except Exception:
+                        pass
             return False
+        finally:
+            if getattr(self, "_thread_gate", None) is not None:
+                self._thread_gate.release()
+                self._thread_gate = None
 
 
 class State:
@@ -822,6 +859,16 @@ HEX_RE = re.compile(r"^[0-9a-fA-F:]+$")
 
 def sync_current(cfg: "Config", state, log=None, egress: str = "",
                  why: str = "") -> str:
+    """Refresh the route only if no other process owns the rotation lease."""
+    try:
+        with StateLock(cfg.rotation_lock, blocking=False, fix_mode=False):
+            return _sync_current_locked(cfg, state, log, egress, why)
+    except (BlockingIOError, StateLockError):
+        return (egress or "").strip()
+
+
+def _sync_current_locked(cfg: "Config", state, log=None, egress: str = "",
+                         why: str = "") -> str:
     """Keep state.json's `current` in step with the address WARP is really using.
 
     A rotation records the address it moved to — but WARP also changes the
@@ -2428,6 +2475,67 @@ class Psiphon:
         self._close_log()
         return True
 
+    def rebootstrap(self, region: str) -> tuple:
+        """Try a clean datastore; preserve the old one if bootstrap fails.
+
+        The caller must hold rotation.lock. The backup is a sibling directory
+        so it remains on the same filesystem. A prior interrupted transaction
+        is restored before another clean bootstrap is attempted.
+        """
+        data = os.path.abspath(self.cfg.psiphon_data)
+        backup = data + ".ouc-cache-backup"
+        self.stop()
+        if self._orphan_pids() or self.socks_open():
+            return False, "Psiphon did not release its tunnel; cache unchanged"
+        try:
+            if os.path.lexists(backup):
+                if os.path.islink(backup) or not os.path.isdir(backup) or os.path.islink(data):
+                    return False, "cannot safely restore Psiphon datastore backup"
+                if os.path.exists(data):
+                    shutil.rmtree(data)
+                os.rename(backup, data)
+                self.log("psiphon: restored an interrupted cache backup", "WARN")
+            if os.path.islink(data) or not os.path.isdir(data):
+                return False, "Psiphon datastore is not a real directory; cache unchanged"
+            config = os.path.abspath(self.cfg.psiphon_config)
+            relative = os.path.relpath(config, data)
+            config_inside = relative != os.pardir and not relative.startswith(os.pardir + os.sep)
+            if config_inside and (os.path.islink(config) or not os.path.isfile(config)):
+                return False, "cannot safely preserve Psiphon config; cache unchanged"
+            os.rename(data, backup)
+        except OSError as exc:
+            return False, f"could not back up Psiphon datastore: {exc}"
+        try:
+            os.mkdir(data, os.stat(backup).st_mode & 0o777)
+            if config_inside:
+                target = os.path.join(data, relative)
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                shutil.copy2(os.path.join(backup, relative), target)
+            ok, detail = self.start(region)
+            if ok:
+                try:
+                    shutil.rmtree(backup)
+                except OSError as exc:
+                    self.log(f"psiphon: clean bootstrap succeeded; backup retained at {backup}: {exc}", "WARN")
+                return True, detail
+            self.stop()
+            if self._orphan_pids() or self.socks_open():
+                return False, f"clean bootstrap failed; backup retained at {backup}: {detail}"
+            shutil.rmtree(data)
+            os.rename(backup, data)
+            return False, f"clean bootstrap failed; datastore restored: {detail}"
+        except Exception as exc:
+            self.stop()
+            try:
+                if self._orphan_pids() or self.socks_open():
+                    raise OSError("tunnel still running")
+                if os.path.isdir(data) and not os.path.islink(data):
+                    shutil.rmtree(data)
+                os.rename(backup, data)
+            except OSError as restore_exc:
+                return False, f"cache recovery failed; backup retained at {backup}: {restore_exc}"
+            return False, f"clean bootstrap failed; datastore restored: {exc}"
+
     def _close_log(self) -> None:
         fh, self._log_fh = self._log_fh, None
         if fh is not None:
@@ -2677,7 +2785,10 @@ def choose_backend(cfg: Config, state: "State", requested: str = "",
         return BACKEND_WARP
     since = int(st.get("fallback_activated_at") or 0)
     aged_out = not since or (now() - since) >= cfg.blacklist_ttl
-    regions_done = int(st.get("psiphon_region_index") or 0) >= len(cfg.psiphon_regions)
+    regions = set(cfg.psiphon_regions or [])
+    visited = st.get("psiphon_cycle_visited")
+    visited = set(visited) if isinstance(visited, list) else set()
+    regions_done = bool(regions) and regions.issubset(visited)
     if aged_out or regions_done:
         if log:
             log("backend: the WARP blacklist window has elapsed — probing WARP "
@@ -2855,6 +2966,7 @@ def _activate_backend(cfg: Config, state: "State", log: Log, backend: str,
                 log(f"pin: could not lift the pin for Psiphon ({exc})", "WARN")
     elif backend == BACKEND_WARP:
         fields.update({"fallback_activated_at": 0, "warp_fail_streak": 0,
+                       "psiphon_cycle_visited": [], "psiphon_cycle_count": 0,
                        "warp_tun_down_for_fallback": False})
         if not cfg.proxy_mode and st.get("warp_tun_down_for_fallback"):
             try:
@@ -2971,6 +3083,33 @@ def _rotate_psiphon(cfg: Config, log: Log, state: State, why: str,
                 log("psiphon: LEAK — the probe returned the host's own address; "
                     "refusing to count this as a rotation", "SECURITY")
                 continue
+            if not entry["block"].endswith("/32"):
+                entry["reason"] = "Psiphon egress is not a valid IPv4 /32"
+                continue
+            previous_visits = st.get("psiphon_cycle_visited")
+            previous_visits = set(previous_visits) if isinstance(previous_visits, list) else set()
+            pass_two = (int(st.get("psiphon_cycle_count") or 0) > 0 or
+                        candidate_region in previous_visits)
+            if (pass_two and entry["block"].endswith("/32") and
+                    (entry["block"] in spent or entry["block"] == old_block)):
+                entry["cache_bust"] = True
+                log(f"psiphon: duplicate {entry['block']} on a later pass; "
+                    f"trying one clean bootstrap for {candidate_region}", "WARN")
+                ok, detail = psiphon.rebootstrap(candidate_region)
+                if not ok:
+                    entry["reason"] = detail
+                    continue
+                cand = ""
+                for _ in range(20):
+                    cand = (probe_egress(cfg, proxy_url=via, strict=True) or "").strip()
+                    if cand:
+                        break
+                    time.sleep(0.5)
+                entry["block"] = norm_block(cand)
+                if (not cand or not entry["block"].endswith("/32") or
+                        (direct and cand == direct)):
+                    entry["reason"] = "clean bootstrap has no safe IPv4 egress"
+                    continue
             if entry["block"] == old_block:
                 entry["reason"] = "same block"
                 log(f"psiphon: still on {entry['block']} — asking again", "WARN")
@@ -3005,12 +3144,19 @@ def _rotate_psiphon(cfg: Config, log: Log, state: State, why: str,
         # --- success: record it exactly like a WARP rotation -----------------
         entries, ts_map = blacklist_state(cfg, state, old_block)
         st = state.load()
-        next_index = (index + 1) % max(1, len(regions))
-        if not region:
-            next_index = (int(st.get("psiphon_region_index") or 0) + 1) % max(1, len(regions))
+        # Continue after the region actually accepted, not merely the first
+        # attempted region. Preserve visits across commands; a modulo index
+        # alone cannot represent a completed pass.
+        accepted_region = result.get("region")
+        next_index = ((regions.index(accepted_region) + 1) % len(regions)
+                      if accepted_region in regions else (index + 1) % len(regions))
+        prior = st.get("psiphon_cycle_visited")
+        visited = set(prior) if isinstance(prior, list) else set()
+        visited.update(r for r in seen if r in regions)
         result["duration"] = round(time.monotonic() - t0, 2)
         state.update(
             blacklist=entries, blacklist_ts=ts_map, current=result["new"],
+            psiphon_cycle_visited=[r for r in dict.fromkeys(regions) if r in visited],
             hops=int(st.get("hops", 0)) + 1, last_hop=now(),
             pending_wall=False, pending_since=0, last_error="", degraded=False,
             active_backend=BACKEND_PSIPHON,
@@ -3061,6 +3207,17 @@ def _rotate_psiphon(cfg: Config, log: Log, state: State, why: str,
     finally:
         result["duration"] = round(time.monotonic() - t0, 2)
         if not result["ok"]:
+            # Remember attempted regions even when the entire pass fails;
+            # otherwise every retry looks like pass one forever.
+            try:
+                progress = state.load().get("psiphon_cycle_visited")
+                progress = set(progress) if isinstance(progress, list) else set()
+                progress.update(r for r in locals().get("seen", [])
+                                if r in (cfg.psiphon_regions or []))
+                state.update(psiphon_cycle_visited=[r for r in dict.fromkeys(cfg.psiphon_regions or [])
+                                                   if r in progress])
+            except Exception:
+                pass
             log(f"psiphon rotation FAILED after {result['duration']}s: "
                 f"{result['error']}", "ERROR")
             # A failed escalation must hand the machine back in a state we can
@@ -3460,6 +3617,22 @@ def _rotate_warp(cfg: Config, log: Log, state: State, why: str) -> dict:
 
 def rotate(cfg: Config, log: Log, state: State, why: str = "",
            backend: str = "") -> dict:
+    """Take the rotation lease before route, firewall, pin or state changes."""
+    lock = StateLock(cfg.rotation_lock, blocking=False, fix_mode=False)
+    try:
+        lock.__enter__()
+    except (BlockingIOError, StateLockError) as exc:
+        return {"ok": False, "error": ("rotation already in progress"
+                if isinstance(exc, BlockingIOError) else str(exc)),
+                "why": why, "attempts": []}
+    try:
+        return _rotate_locked(cfg, log, state, why, backend)
+    finally:
+        lock.__exit__(*sys.exc_info())
+
+
+def _rotate_locked(cfg: Config, log: Log, state: State, why: str = "",
+                   backend: str = "") -> dict:
     """Rotate on the escalation ladder: WARP first, Psiphon when WARP is spent.
 
     Every caller (hop, run, resume, agent, repair, the supervisor) goes through
@@ -3504,6 +3677,17 @@ def rotate(cfg: Config, log: Log, state: State, why: str = "",
                 return alt
         return result
 
+    # A completed cycle may request a WARP probe once. Reset progress only
+    # under the outer rotation lease so a failed probe can start a new pass.
+    regions = set(cfg.psiphon_regions or [])
+    visited = st.get("psiphon_cycle_visited")
+    visited = set(visited) if isinstance(visited, list) else set()
+    if (not forced and cfg.backend_mode == "auto" and
+            st.get("active_backend") == BACKEND_PSIPHON and regions and
+            regions.issubset(visited)):
+        state.update(psiphon_cycle_visited=[],
+                     psiphon_cycle_count=int(st.get("psiphon_cycle_count") or 0) + 1)
+
     # ---- WARP phase -----------------------------------------------------
     # If a fallback episode left WARP's TUN down, put it back *before* probing.
     # Measured live: `ouc hop --backend warp` from a Psiphon episode rotated
@@ -3520,8 +3704,33 @@ def rotate(cfg: Config, log: Log, state: State, why: str = "",
     result = _rotate_warp(cfg, log, state, why or "rotation")
     if result.get("ok"):
         _activate_backend(cfg, state, log, BACKEND_WARP, pinner)
+        # Only after WARP has passed rotation/verification and become active:
+        # until then the existing fallback is the recovery path.
+        if (st.get("active_backend") or BACKEND_WARP) == BACKEND_PSIPHON:
+            Psiphon(cfg, log).stop()
         return result
-    if forced == BACKEND_WARP:
+
+    # A failed automatic return is not an ordinary WARP-first failure: the
+    # machine was already relying on Psiphon, and the bridge was pointed at
+    # WARP for the probe. Bounce immediately instead of waiting to accumulate
+    # a new fallback threshold. Do not compete with a rotation already holding
+    # the lock, and do not silently override an operator's explicit WARP pin.
+    returning = (st.get("active_backend") == BACKEND_PSIPHON)
+    auto_return = not forced and cfg.backend_mode == "auto"
+    if returning and auto_return and result.get("error") != "rotation already in progress":
+        log("backend: WARP return failed; attempting Psiphon recovery", "WARN")
+        _clear_warp_tun_for_psiphon(cfg, state, log)
+        recovered = _rotate_psiphon(cfg, log, state, why or "failed WARP return")
+        if recovered.get("ok"):
+            state.update(fallback_activated_at=now())
+            recovered["returned_after_failed_warp"] = True
+            recovered["failed_warp_return"] = result
+            return recovered
+        log("backend: Psiphon recovery after failed WARP return also failed", "ERROR")
+        _restore_warp_tun(cfg, state, log, why="both return and recovery failed")
+        result["psiphon_recovery"] = recovered
+        return result
+    if forced == BACKEND_WARP or cfg.backend_mode == BACKEND_WARP:
         return result
 
     # ---- escalation -----------------------------------------------------

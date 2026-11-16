@@ -1896,7 +1896,7 @@ t76_escalation_after_five_warp_failures(){
 
   out=$(ouc hop --wait 60 2>&1); rc=$?
   echo "$out" | sed 's/^/    /'
-  [ "$rc" = 0 ] || { fail "hop did not succeed after escalation"; return; }
+  [ "$rc" = 0 ] || { a_note "hop did not succeed after escalation"; A_FAILED=1; kill "$socks_pid" 2>/dev/null || true; sb_cleanup; finish "t76"; return 1; }
 
   local backend port act streak
   backend=$(state_of "d.get('active_backend')")
@@ -1939,6 +1939,7 @@ t76_escalation_after_five_warp_failures(){
         '"region": "DE"'
   kill "$socks_pid" 2>/dev/null || true
   wait "$socks_pid" 2>/dev/null || true
+  ouc stop >/dev/null 2>&1 || true
   pkill -f "bridge --listen 127.0.0.1:18086" 2>/dev/null || true
   finish "t76"
 }
@@ -1959,14 +1960,16 @@ t77_psiphon_region_round_robin(){
   local i
   for i in 1 2 3; do
     ouc hop --backend psiphon --wait 60 > "$T/hop$i.out" 2>&1 \
-      || { fail "hop $i failed"; cat "$T/hop$i.out" | sed 's/^/    /'; finish "t77"; return; }
+      || { a_note "hop $i failed"; cat "$T/hop$i.out" | sed 's/^/    /'; A_FAILED=1; sb_cleanup; finish "t77"; return 1; }
   done
   local regions
   regions=$(grep -o '"region": "[A-Z]*"' "$FAKE_PSIPHON_LOG" | sed 's/.*: "//;s/"//' \
             | awk '!seen[$0]++' | tr '\n' ',')
   check "regions advanced round-robin" "$regions" "US,DE,NL,"
-  check "region index wrapped and persisted" \
-        "$(state_of "d.get('psiphon_region_index')")" "0"
+  check "region index advances after the region actually accepted" \
+        "$(state_of "d.get('psiphon_region_index') == (['US','DE','NL'].index(d.get('last_rotation',{}).get('region')) + 1) % 3")" "True"
+  check "all visited regions persist even across wrap-around" \
+        "$(state_of "set(d.get('psiphon_cycle_visited', [])) == {'US','DE','NL'}")" "True"
   check "three rotations counted" "$(state_of "d.get('psiphon_rotations')")" "3"
   local starts
   starts=$(grep -c '"event": "start"' "$FAKE_PSIPHON_LOG")
@@ -1983,7 +1986,9 @@ t77_psiphon_region_round_robin(){
         "$(state_of "d.get('pin_lifted_for_backend') or ''")" ""
   cp "$FAKE_PSIPHON_LOG" "$LOGDIR/77-psiphon.log" 2>/dev/null || true
   cp "$OUC_STATE_DIR/ouc.log" "$LOGDIR/77-ouc.log" 2>/dev/null || true
+  ouc stop > "$T/stop.out" 2>&1 || true
   pkill -f "bridge --listen 127.0.0.1:18087" 2>/dev/null || true
+  sb_cleanup
   finish "t77"
 }
 
@@ -3540,7 +3545,31 @@ PYTEL
   finish "100-interactive-tui.log"
 }
 
-ALL_TESTS="t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions t73_transport_resilience_regressions t74_orphaned_bridge_is_stopped t75_block_normalisation_and_ttl t76_escalation_after_five_warp_failures t77_psiphon_region_round_robin t78_bridge_follows_the_active_backend t79_hop_backend_override t80_tunnel_notice_dialects t81_a_daemons_writeonly_stdin_cannot_break_a_child t82_the_tunnel_outlives_the_command_that_started_it t89_tunnel_to_proxy_guard_transition t83_chaos_corrupt_state_and_stale_locks t84_chaos_process_assassination t85_chaos_port_squatting t86_chaos_concurrent_hop_stampede t87_chaos_blacklist_saturation t88_chaos_cli_monkey t90_auto_resume_waits_for_a_rotation t91_chaos_every_region_walled t92_cold_bootstrap_is_retried_once t93_stop_reaps_an_orphan_tunnel_with_no_pidfile t94_auto_resume_defaults_to_the_verified_model t95_fallback_takes_the_tunnel_down t96_bridge_refuses_a_port_nobody_can_find t97_stop_reaps_an_inflight_rotation t98_installer_psiphon_lifecycle t99_markdown_link_integrity t100_interactive_tui_survives_rotation"
+t101_psiphon_to_warp_ttl_return(){
+  begin "offline CLI TTL return and failed-return bounce"
+  python3 "$ROOT/tests/t101_psiphon_to_warp_ttl_return.py" > "$LOGDIR/t101.log" 2>&1 || A_FAILED=1
+  finish "t101.log"
+}
+
+t103_tui_cli_full_pingpong(){
+  begin "offline PTY and CLI four-turn ping-pong"
+  python3 "$ROOT/tests/t103_tui_cli_full_pingpong.py" > "$LOGDIR/t103.log" 2>&1 || A_FAILED=1
+  finish "t103.log"
+}
+
+t104_concurrent_pingpong_monkey_chaos(){
+  begin "offline concurrent CLI rotation contention"
+  python3 "$ROOT/tests/t104_concurrent_pingpong_monkey_chaos.py" > "$LOGDIR/t104.log" 2>&1 || A_FAILED=1
+  finish "t104.log"
+}
+
+t102_psiphon_region_wraparound_cache_bust(){
+  begin "offline simulated two-region wrap and cache transaction"
+  python3 "$ROOT/tests/t102_psiphon_region_wraparound_cache_bust.py" > "$LOGDIR/t102.log" 2>&1 || A_FAILED=1
+  finish "t102.log"
+}
+
+ALL_TESTS="t101_psiphon_to_warp_ttl_return t102_psiphon_region_wraparound_cache_bust t103_tui_cli_full_pingpong t104_concurrent_pingpong_monkey_chaos t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions t73_transport_resilience_regressions t74_orphaned_bridge_is_stopped t75_block_normalisation_and_ttl t76_escalation_after_five_warp_failures t77_psiphon_region_round_robin t78_bridge_follows_the_active_backend t79_hop_backend_override t80_tunnel_notice_dialects t81_a_daemons_writeonly_stdin_cannot_break_a_child t82_the_tunnel_outlives_the_command_that_started_it t89_tunnel_to_proxy_guard_transition t83_chaos_corrupt_state_and_stale_locks t84_chaos_process_assassination t85_chaos_port_squatting t86_chaos_concurrent_hop_stampede t87_chaos_blacklist_saturation t88_chaos_cli_monkey t90_auto_resume_waits_for_a_rotation t91_chaos_every_region_walled t92_cold_bootstrap_is_retried_once t93_stop_reaps_an_orphan_tunnel_with_no_pidfile t94_auto_resume_defaults_to_the_verified_model t95_fallback_takes_the_tunnel_down t96_bridge_refuses_a_port_nobody_can_find t97_stop_reaps_an_inflight_rotation t98_installer_psiphon_lifecycle t99_markdown_link_integrity t100_interactive_tui_survives_rotation"
 REAL_TESTS="t30_real_install t31_real_auto_rotation t32_real_no_deadlock t33_real_hop t34_real_uninstall t45_real_proxy_rotation"
 TEST_TIMEOUT="${TEST_TIMEOUT:-240}"
 
