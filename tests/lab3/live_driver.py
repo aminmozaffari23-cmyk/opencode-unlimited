@@ -399,6 +399,10 @@ def main():
                        NO_PROXY="localhost,127.0.0.1,::1", TERM="xterm-256color")
             tmux("kill-session", "-t", "ouc-tui")
             launch = ["sudo", "-n", "-u", "ouc-tui-test", "env", "HOME=/tmp/ouc-tui-home",
+                      "XDG_CONFIG_HOME=/tmp/ouc-tui-home/.config",
+                      "XDG_DATA_HOME=/tmp/ouc-tui-home/.local/share",
+                      "XDG_CACHE_HOME=/tmp/ouc-tui-home/.cache",
+                      "XDG_STATE_HOME=/tmp/ouc-tui-home/.local/state",
                       "HTTPS_PROXY=" + env["HTTPS_PROXY"], "HTTP_PROXY=" + env["HTTP_PROXY"],
                       "ALL_PROXY=" + env["ALL_PROXY"], "NO_PROXY=" + env["NO_PROXY"],
                       "TERM=xterm-256color", OC, "-m", MODEL]

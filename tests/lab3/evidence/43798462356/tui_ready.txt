@@ -1,0 +1,41 @@
+EACCES: permission denied, mkdir '/home/runner/.config/opencode'
+    path: "/home/runner/.config/opencode",
+ syscall: "mkdir",
+   errno: -13,
+    code: "EACCES"
+
+
+Bun v1.4.4 (Linux x64)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Pane is dead (status 1, Mon Nov 16 03:30:42 2026)
