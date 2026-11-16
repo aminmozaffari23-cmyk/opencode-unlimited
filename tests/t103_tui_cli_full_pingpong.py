@@ -88,7 +88,7 @@ class PingPong(unittest.TestCase):
                 self.assertEqual(child.pid, pid)
                 self.assertIsNone(child.poll())
             child.terminate(); child.wait(timeout=5); time.sleep(1)
-            events = [json.loads(line) for line in (f.state/'bridge-events.jsonl').read_text().splitlines()]
+            events = [json.loads(line) for line in f.read_file(f.state/'bridge-events.jsonl').splitlines()]
             connects = [e for e in events if e['event'] == 'connect']
             drains = [e for e in events if e['event'] == 'epoch_drain']
             closes = [e for e in events if e['event'] == 'close']

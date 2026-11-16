@@ -53,6 +53,8 @@ class RunnerRegression(unittest.TestCase):
         stub = self.script('import sys\nif sys.argv[1:]==["--version"]: print("opencode v1.0.0")\nelse: sys.exit(91)\n', 'no-provider.py')
         hosts = self.root / 'hosts'; hosts.write_text('127.0.0.1 localhost\n')
         env = {k: v for k, v in os.environ.items() if not k.startswith(('OUC_', 'FAKE_'))}
+        if os.environ.get('OUC_TEST_RUN_ID'):
+            env['OUC_TEST_RUN_ID'] = os.environ['OUC_TEST_RUN_ID']
         env.update(OUC_STATE_DIR=str(self.root / 'state'),
                    OUC_TARGET_HOME=str(self.root / 'home'),
                    OUC_USER_STATE_DIR=str(self.root / 'user-state'),

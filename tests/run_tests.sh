@@ -26,6 +26,8 @@ for a in "$@"; do
   esac
 done
 TEST_ONLY="${TEST_ONLY:-}"
+# Inherited by every child, including detached bridges. Never identify ownership by name alone.
+export OUC_TEST_RUN_ID="${OUC_TEST_RUN_ID:-$(python3 -c "import uuid; print(uuid.uuid4().hex)")}"
 
 # Re-exec as root so install/uninstall/rotation tests can do their job.
 if [ "$(id -u)" != 0 ]; then
@@ -35,7 +37,7 @@ if [ "$(id -u)" != 0 ]; then
     [ "$OFFLINE_ONLY" = 1 ] && extra="$extra --offline"
     [ "$SINGLE" = 1 ] && extra="$extra --single"
     [ -n "$TEST_ONLY" ] && extra="$extra --select=$TEST_ONLY"
-    exec sudo -n env OUC_TEST_REAL="${OUC_TEST_REAL:-0}" OUC_TEST_DESTRUCTIVE_REAL="${OUC_TEST_DESTRUCTIVE_REAL:-0}" OUC_TEST_DISPOSABLE_HOST="${OUC_TEST_DISPOSABLE_HOST:-0}" bash "$0" $extra
+    exec sudo -n env OUC_TEST_RUN_ID="$OUC_TEST_RUN_ID" OUC_TEST_REAL="${OUC_TEST_REAL:-0}" OUC_TEST_DESTRUCTIVE_REAL="${OUC_TEST_DESTRUCTIVE_REAL:-0}" OUC_TEST_DISPOSABLE_HOST="${OUC_TEST_DISPOSABLE_HOST:-0}" bash "$0" $extra
   else
     echo "no passwordless sudo: running the offline subset only"
     OFFLINE_ONLY=1
@@ -117,28 +119,11 @@ sandbox_pids(){ # $1 = pgrep pattern
 }
 
 kill_sandbox_daemons(){
-  local pid st
-  for pid in $(pgrep -f "ouc.py (start|supervise|bridge|watchdog)" 2>/dev/null); do
-    st=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | sed -n 's/^OUC_STATE_DIR=//p' | head -1)
-    case "${T:-}" in
-      /tmp/ouc-test.*)
-        # Prefix, not equality: some daemons are given the sandbox itself as the
-        # state dir, and those used to survive every cleanup.
-        case "$st" in
-          "$T"|"$T"/*) ;;
-          *) continue ;;
-        esac
-        kill "$pid" >/dev/null 2>&1 || true
-        # A daemon that ignores SIGTERM is a daemon that follows the next test
-        # around. Escalate, and say so rather than leaking it silently.
-        sleep 0.2
-        if kill -0 "$pid" >/dev/null 2>&1; then
-          kill -9 "$pid" >/dev/null 2>&1 || \
-            echo "  !! could not kill leftover pid $pid ($(tr '\0' ' ' < /proc/$pid/cmdline 2>/dev/null))"
-        fi ;;
-      *) : ;;
-    esac
-  done
+  case "${T:-}" in
+    /tmp/ouc-test.*)
+      python3 "$HELPER/orphan_scope.py" --run-id "$OUC_TEST_RUN_ID" \
+        --sandbox "$T" --terminate || A_FAILED=1 ;;
+  esac
 }
 
 sb(){ # fresh sandbox for one test
@@ -1080,7 +1065,7 @@ t41_proxy_rotation_verified(){
   assert_eq "$(cat "$OUC_HOSTS_FILE")" "127.0.0.1 localhost"
   kill "$socks_pid" 2>/dev/null || true
   # the bridge that rotate() spawned belongs to this sandbox: never leak it
-  pkill -f "bridge --listen 127.0.0.1:18081" 2>/dev/null || true
+  kill_sandbox_daemons
   sb_cleanup
   finish "41-proxy-rotation.log"
 }
@@ -1940,7 +1925,7 @@ t76_escalation_after_five_warp_failures(){
   kill "$socks_pid" 2>/dev/null || true
   wait "$socks_pid" 2>/dev/null || true
   ouc stop >/dev/null 2>&1 || true
-  pkill -f "bridge --listen 127.0.0.1:18086" 2>/dev/null || true
+  kill_sandbox_daemons
   finish "t76"
 }
 
@@ -1987,7 +1972,7 @@ t77_psiphon_region_round_robin(){
   cp "$FAKE_PSIPHON_LOG" "$LOGDIR/77-psiphon.log" 2>/dev/null || true
   cp "$OUC_STATE_DIR/ouc.log" "$LOGDIR/77-ouc.log" 2>/dev/null || true
   ouc stop > "$T/stop.out" 2>&1 || true
-  pkill -f "bridge --listen 127.0.0.1:18087" 2>/dev/null || true
+  kill_sandbox_daemons
   sb_cleanup
   finish "t77"
 }
@@ -2085,12 +2070,12 @@ t79_hop_backend_override(){
   sleep 1
 
   ouc hop --backend psiphon --wait 60 > "$T/sp.out" 2>&1 \
-    || { fail "forced psiphon hop failed"; cat "$T/sp.out" | sed 's/^/    /'; finish "t79"; return; }
+    || { a_note "forced psiphon hop failed"; cat "$T/sp.out" | sed 's/^/    /'; A_FAILED=1; finish "t79"; return 1; }
   check "forced rotation used Psiphon" \
         "$(state_of "d.get('active_backend')")" "psiphon"
 
   ouc hop --backend warp --wait 60 > "$T/wp.out" 2>&1 \
-    || { fail "forced warp hop failed"; cat "$T/wp.out" | sed 's/^/    /'; finish "t79"; return; }
+    || { a_note "forced warp hop failed"; cat "$T/wp.out" | sed 's/^/    /'; A_FAILED=1; finish "t79"; return 1; }
   check "forced rotation returned to WARP" \
         "$(state_of "d.get('active_backend')")" "warp"
   check "and pointed the bridge back at WARP's SOCKS port" \
@@ -2101,7 +2086,7 @@ t79_hop_backend_override(){
         "$(state_of "d.get('fallback_activated_at')")" "0"
   kill "$socks_pid" 2>/dev/null || true
   wait "$socks_pid" 2>/dev/null || true
-  pkill -f "bridge --listen 127.0.0.1:18089" 2>/dev/null || true
+  kill_sandbox_daemons
   finish "t79"
 }
 
@@ -2232,7 +2217,7 @@ except OSError:
         "$([ -s "$OUC_STATE_DIR/psiphon/psiphon.log" ] && echo yes || echo no)" "yes"
   kill "$socks_pid" 2>/dev/null || true
   wait "$socks_pid" 2>/dev/null || true
-  pkill -f "fake_psiphon.py" 2>/dev/null || true
+  kill_sandbox_daemons
   finish "t82"
 }
 
@@ -2351,7 +2336,7 @@ PY
         "$(sed -n 's/^L4_guard_mode //p' "$T/t89.out")" "off"
   check "/etc/hosts is back to its baseline bytes" \
         "$(sed -n 's/^L4_hosts //p' "$T/t89.out")" "'127.0.0.1 localhost\\n'"
-  pkill -f fake_psiphon.py 2>/dev/null || true
+  kill_sandbox_daemons
   sb_cleanup
   finish "t89"
 }
@@ -2411,7 +2396,7 @@ t83_chaos_corrupt_state_and_stale_locks(){
   check "zero unhandled tracebacks across status/config/doctor/pin/hop" "$tb" "0"
   kill "$socks_pid" 2>/dev/null || true
   wait "$socks_pid" 2>/dev/null || true
-  pkill -f fake_psiphon.py 2>/dev/null || true
+  kill_sandbox_daemons
   sb_cleanup
   finish "83-chaos-corrupt.log"
 }
@@ -2495,8 +2480,8 @@ PY
 )" "ok"
   kill "$socks_pid" 2>/dev/null || true
   wait "$socks_pid" 2>/dev/null || true
-  pkill -f fake_psiphon.py 2>/dev/null || true
-  pkill -f "bridge --listen 127.0.0.1:19189" 2>/dev/null || true
+  kill_sandbox_daemons
+  kill_sandbox_daemons
   sb_cleanup
   finish "84-chaos-assassination.log"
 }
@@ -2700,7 +2685,7 @@ t91_chaos_every_region_walled(){
         "$(grep -c 'Traceback (most recent call last)' "$T/e-hop.out")" "0"
   kill "$socks_pid" 2>/dev/null || true
   wait "$socks_pid" 2>/dev/null || true
-  pkill -f fake_psiphon.py 2>/dev/null || true
+  kill_sandbox_daemons
   sb_cleanup
   finish "91-chaos-all-regions-walled.log"
 }
@@ -2745,7 +2730,7 @@ t92_cold_bootstrap_is_retried_once(){
         "$(state_of "bool(d.get('last_rotation', {}).get('ok'))")" "True"
   kill "$socks_pid" 2>/dev/null || true
   wait "$socks_pid" 2>/dev/null || true
-  pkill -f fake_psiphon.py 2>/dev/null || true
+  kill_sandbox_daemons
   sb_cleanup
   finish "92-cold-bootstrap.log"
 }
@@ -2790,7 +2775,7 @@ except OSError:
         "$(grep -c 'Traceback (most recent call last)' "$T/o-stop.out")" "0"
   kill "$socks_pid" 2>/dev/null || true
   wait "$socks_pid" 2>/dev/null || true
-  pkill -f fake_psiphon.py 2>/dev/null || true
+  kill_sandbox_daemons
   sb_cleanup
   finish "93-orphan-stop.log"
 }
@@ -3011,7 +2996,7 @@ print(ouc.opencode_env(ouc.Config()).get('HTTPS_PROXY',''))")" ""
         "$(cat "$T"/*.out "$OUC_STATE_DIR/ouc.log" 2>/dev/null | grep -c 'Traceback (most recent call last)')" "0"
   kill "$socks_pid" 2>/dev/null || true
   wait "$socks_pid" 2>/dev/null || true
-  pkill -f fake_psiphon.py 2>/dev/null || true
+  kill_sandbox_daemons
   sb_cleanup
   finish "95-tunnel-fallback.log"
 }
@@ -3089,7 +3074,7 @@ PY
         "$(sed -n 's/^START_OK //p' "$T/s-socks.out")" "False"
   kill "$squat_pid" "$squat2" 2>/dev/null || true
   wait "$squat_pid" "$squat2" 2>/dev/null || true
-  pkill -f 'fake_[p]siphon' 2>/dev/null || true
+  kill_sandbox_daemons
   sleep 0.5
   sb_cleanup
   finish "85-chaos-squat.log"
@@ -3135,8 +3120,8 @@ t86_chaos_concurrent_hop_stampede(){
         "$(pgrep -cf 'bridge --listen 127.0.0.1:19189')" "1"
   kill "$socks_pid" 2>/dev/null || true
   wait "$socks_pid" 2>/dev/null || true
-  pkill -f fake_psiphon.py 2>/dev/null || true
-  pkill -f "bridge --listen 127.0.0.1:19189" 2>/dev/null || true
+  kill_sandbox_daemons
+  kill_sandbox_daemons
   sb_cleanup
   finish "86-chaos-stampede.log"
 }
@@ -3220,7 +3205,7 @@ PY
         "$([ $((t1-t0)) -le 120 ] && echo yes || echo no)" "yes"
   kill "$socks_pid" 2>/dev/null || true
   wait "$socks_pid" 2>/dev/null || true
-  pkill -f fake_psiphon.py 2>/dev/null || true
+  kill_sandbox_daemons
   sb_cleanup
   finish "87-chaos-blacklist.log"
 }
@@ -3271,8 +3256,8 @@ t88_chaos_cli_monkey(){
   check "exactly one tunnel process, no orphans" "$(pgrep -cf 'fake_psiphon.py')" "1"
   kill "$socks_pid" 2>/dev/null || true
   wait "$socks_pid" 2>/dev/null || true
-  pkill -f fake_psiphon.py 2>/dev/null || true
-  pkill -f "bridge --listen 127.0.0.1:19189" 2>/dev/null || true
+  kill_sandbox_daemons
+  kill_sandbox_daemons
   sb_cleanup
   finish "88-chaos-monkey.log"
 }
@@ -3563,13 +3548,25 @@ t104_concurrent_pingpong_monkey_chaos(){
   finish "t104.log"
 }
 
+t106_fault_injection_and_mixed_concurrency(){
+  begin "offline datastore faults and mixed rotation contention"
+  python3 "$ROOT/tests/t106_fault_injection_and_mixed_concurrency.py" > "$LOGDIR/t106.log" 2>&1 || A_FAILED=1
+  finish "t106.log"
+}
+
+t105_bridge_log_rotation_and_perms(){
+  begin "bridge telemetry rotation, permissions and hostname redaction"
+  python3 "$ROOT/tests/t105_bridge_log_rotation_and_perms.py" > "$LOGDIR/t105.log" 2>&1 || A_FAILED=1
+  finish "t105.log"
+}
+
 t102_psiphon_region_wraparound_cache_bust(){
   begin "offline simulated two-region wrap and cache transaction"
   python3 "$ROOT/tests/t102_psiphon_region_wraparound_cache_bust.py" > "$LOGDIR/t102.log" 2>&1 || A_FAILED=1
   finish "t102.log"
 }
 
-ALL_TESTS="t101_psiphon_to_warp_ttl_return t102_psiphon_region_wraparound_cache_bust t103_tui_cli_full_pingpong t104_concurrent_pingpong_monkey_chaos t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions t73_transport_resilience_regressions t74_orphaned_bridge_is_stopped t75_block_normalisation_and_ttl t76_escalation_after_five_warp_failures t77_psiphon_region_round_robin t78_bridge_follows_the_active_backend t79_hop_backend_override t80_tunnel_notice_dialects t81_a_daemons_writeonly_stdin_cannot_break_a_child t82_the_tunnel_outlives_the_command_that_started_it t89_tunnel_to_proxy_guard_transition t83_chaos_corrupt_state_and_stale_locks t84_chaos_process_assassination t85_chaos_port_squatting t86_chaos_concurrent_hop_stampede t87_chaos_blacklist_saturation t88_chaos_cli_monkey t90_auto_resume_waits_for_a_rotation t91_chaos_every_region_walled t92_cold_bootstrap_is_retried_once t93_stop_reaps_an_orphan_tunnel_with_no_pidfile t94_auto_resume_defaults_to_the_verified_model t95_fallback_takes_the_tunnel_down t96_bridge_refuses_a_port_nobody_can_find t97_stop_reaps_an_inflight_rotation t98_installer_psiphon_lifecycle t99_markdown_link_integrity t100_interactive_tui_survives_rotation"
+ALL_TESTS="t106_fault_injection_and_mixed_concurrency t105_bridge_log_rotation_and_perms t101_psiphon_to_warp_ttl_return t102_psiphon_region_wraparound_cache_bust t103_tui_cli_full_pingpong t104_concurrent_pingpong_monkey_chaos t01_no_advertising_in_tree t02_lane_is_transparent t03_detect_real_message t04_detection_is_idempotent t05_detects_legacy_message t06_cooldown_and_pending t07_blacklist_never_empty t08_rotation_respects_settle t09_retry_with_backoff t10_failure_keeps_internet t11_firewall_restored_on_success t12_disable_killswitch_env t13_portable_lifecycle t14_supervisor_does_the_rotation t15_supervisor_repairs_dead_tunnel t16_log_rotation t17_state_corruption_recovery t18_install_portable t19_install_systemd_unit t20_install_idempotent t21_uninstall_complete t22_doctor t23_blacklist_skips_spent_block t24_fast_path_rotate_keys t25_recycled_block_is_retried t26_verification_gates_success t27_pin_lifecycle t28_verify_command t40_proxy_mode_config t41_proxy_rotation_verified t42_bridge_end_to_end t43_proxy_status_and_doctor t44_proxy_installer t46_run_resumes_after_wall t47_run_without_wall_is_one_call t48_run_stops_after_resume_max t49_resume_command_verifies_then_continues t50_run_can_resume_by_session_id t51_state_lock_shared_by_root_and_user t52_watchdog_restarts_a_dead_supervisor t53_watchdog_notices_a_silent_supervisor t54_only_one_supervisor_ever t55_journal_reconciles_an_interrupted_step t56_journal_survives_corruption t57_conversation_is_recycled t58_second_agent_is_refused t59_rate_limit_never_rotates t60_network_problem_never_rotates t61_rotation_spacing_is_15_to_20_seconds t62_no_caps_on_walls_or_rotations t63_consecutive_failures_stop_the_run t64_default_budgets_are_ten_hours_and_sixty_failures t65_a_stalled_step_is_killed_and_retried t66_live_status_file_stays_fresh t67_final_report_is_honest t68_guardrails_refuse_irreversible_tasks t69_no_reset_wait_anywhere t70_a_new_task_never_inherits_an_old_journal t71_a_touched_key_file_is_not_tampering t72_native_v2_runner_regressions t73_transport_resilience_regressions t74_orphaned_bridge_is_stopped t75_block_normalisation_and_ttl t76_escalation_after_five_warp_failures t77_psiphon_region_round_robin t78_bridge_follows_the_active_backend t79_hop_backend_override t80_tunnel_notice_dialects t81_a_daemons_writeonly_stdin_cannot_break_a_child t82_the_tunnel_outlives_the_command_that_started_it t89_tunnel_to_proxy_guard_transition t83_chaos_corrupt_state_and_stale_locks t84_chaos_process_assassination t85_chaos_port_squatting t86_chaos_concurrent_hop_stampede t87_chaos_blacklist_saturation t88_chaos_cli_monkey t90_auto_resume_waits_for_a_rotation t91_chaos_every_region_walled t92_cold_bootstrap_is_retried_once t93_stop_reaps_an_orphan_tunnel_with_no_pidfile t94_auto_resume_defaults_to_the_verified_model t95_fallback_takes_the_tunnel_down t96_bridge_refuses_a_port_nobody_can_find t97_stop_reaps_an_inflight_rotation t98_installer_psiphon_lifecycle t99_markdown_link_integrity t100_interactive_tui_survives_rotation"
 REAL_TESTS="t30_real_install t31_real_auto_rotation t32_real_no_deadlock t33_real_hop t34_real_uninstall t45_real_proxy_rotation"
 TEST_TIMEOUT="${TEST_TIMEOUT:-240}"
 
@@ -3595,6 +3592,11 @@ run_isolated(){ # $1 = function name ; runs it in its own process with a timeout
     $( [ "$OFFLINE_ONLY" = 1 ] && echo --offline ) > "$out" 2>&1
   local rc=$?
   cat "$out"
+  if ! python3 "$HELPER/orphan_scope.py" --run-id "$OUC_TEST_RUN_ID"; then
+    echo "  !! $fn leaked an owned sandbox process; terminating it"
+    python3 "$HELPER/orphan_scope.py" --run-id "$OUC_TEST_RUN_ID" --terminate || true
+    rc=1
+  fi
   if [ "$rc" = 0 ]; then
     pass
   elif [ "$rc" = 124 ]; then
@@ -3620,6 +3622,9 @@ if [ "$SINGLE" = 1 ]; then
       echo "refusing destructive real test without explicit opt-in" >&2; exit 2
     fi ;;
   esac
+  # EXIT runs on ordinary failures and TERM from timeout; the parent also
+  # checks by run ID after every isolated test, including a SIGKILL timeout.
+  trap 'sb_cleanup' EXIT
   $TEST_ONLY
   [ "$A_FAILED" = 0 ] && exit 0 || exit 1
 fi
@@ -3649,6 +3654,13 @@ else
   for fn in $REAL_TESTS; do
     case "$fn" in ${TEST_ONLY:-t}*) SKIP=$((SKIP+1)) ;; *) : ;; esac
   done
+fi
+
+# Final independent check: do not report a clean suite if owned processes survive.
+if ! python3 "$HELPER/orphan_scope.py" --run-id "$OUC_TEST_RUN_ID"; then
+  CURRENT="post-suite orphan check"
+  fail "owned sandbox processes remain"
+  python3 "$HELPER/orphan_scope.py" --run-id "$OUC_TEST_RUN_ID" --terminate || true
 fi
 
 echo ""

@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 HELPER = ROOT / 'tests' / 'helpers'
@@ -27,7 +28,8 @@ class Fixture:
         (self.root / 'home').mkdir()
         self.warp_port, self.ps_port, self.bridge_port = free_port(), free_port(), free_port()
         self.env = dict(os.environ)
-        self.env.update(OUC_TEST_SANDBOX=str(self.root), OUC_STATE_DIR=str(self.state),
+        self.env.update(OUC_TEST_RUN_ID=os.environ.get('OUC_TEST_RUN_ID') or uuid.uuid4().hex,
+            OUC_TEST_SANDBOX=str(self.root), OUC_STATE_DIR=str(self.state),
             OUC_TARGET_HOME=str(self.root / 'home'), OUC_USER_STATE_DIR=str(self.root / 'home' / 'user-state'),
             OUC_HOSTS_FILE=str(self.root / 'hosts'), OUC_INSTANCE_LOCK=str(self.state / 'supervisor.lock'),
             OUC_WARP_BIN=str(HELPER / 'fake_warp.py'), OUC_PSIPHON_BIN=str(HELPER / 'fake_psiphon.py'),
@@ -70,8 +72,15 @@ class Fixture:
             except OSError: time.sleep(.05)
         raise RuntimeError(f'port {port} not listening')
 
+    def read_file(self, path):
+        try:
+            return Path(path).read_text()
+        except PermissionError:
+            return subprocess.run(['sudo', '-n', 'cat', str(path)], capture_output=True,
+                                  text=True, check=True).stdout
+
     def read_state(self):
-        return json.loads((self.state/'state.json').read_text())
+        return json.loads(self.read_file(self.state/'state.json'))
 
     def write_state(self, value):
         path = self.state/'state.json'
@@ -82,12 +91,21 @@ class Fixture:
                            text=True, stdout=subprocess.DEVNULL, check=True)
 
     def __exit__(self, *args):
-        self.command('stop', timeout=30)
-        for p in self.procs:
-            p.terminate()
-            try: p.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                p.kill(); p.wait()
-        if os.geteuid() != 0:
-            subprocess.run(['sudo', '-n', 'chown', '-R', f'{os.getuid()}:{os.getgid()}', str(self.root)], capture_output=True)
-        self.tmp.cleanup()
+        try:
+            self.command('stop', timeout=30)
+        finally:
+            for p in self.procs:
+                if p.poll() is None:
+                    p.terminate()
+                    try: p.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        p.kill(); p.wait()
+            # A failed stop or detached child must still be reaped, but only
+            # when both the unique run ID and this exact sandbox match.
+            prefix = [] if os.geteuid() == 0 else ['sudo', '-n']
+            subprocess.run(prefix + [sys.executable, str(HELPER/'orphan_scope.py'),
+                '--run-id', self.env['OUC_TEST_RUN_ID'], '--sandbox', str(self.root), '--terminate'],
+                capture_output=True, timeout=10)
+            if os.geteuid() != 0:
+                subprocess.run(['sudo', '-n', 'chown', '-R', f'{os.getuid()}:{os.getgid()}', str(self.root)], capture_output=True)
+            self.tmp.cleanup()

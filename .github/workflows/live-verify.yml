@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       phases:
-        description: "space-separated phases (pingpong_live tui_live gap1 c1 c2 c3 c4 c5 c6)"
+        description: "space-separated phases (pingpong_4turn_live live_reverse_lifecycle pingpong_live tui_live gap1 c1 c2 c3 c4 c5 c6)"
         required: false
         default: "gap1 c1 c2 c3 c4 c5 c6"
       tunnel_window:
@@ -32,7 +32,7 @@ concurrency:
 jobs:
   live:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 240
     defaults:
       run:
         shell: bash
@@ -142,7 +142,7 @@ jobs:
             # gap1 seeds a real conversation and may have to survive several
             # rotations while free-tier quota walls are being walked off; the
             # chaos phases are bounded by their own loops.
-            t=1500; [ "$phase" = "gap1" ] && t=2700; [ "$phase" = "pingpong_live" ] && t=2700
+            t=1500; [ "$phase" = "gap1" ] && t=2700; [ "$phase" = "pingpong_live" ] && t=2700; [ "$phase" = "pingpong_4turn_live" ] && t=2700; [ "$phase" = "live_reverse_lifecycle" ] && t=2700
             timeout "$t" python3 tests/lab3/live_driver.py "$phase" || rc=1
             echo "::endgroup::"
           done
@@ -171,6 +171,12 @@ jobs:
           sudo pkill -f '[p]siphon-tunnel-core' || true
           sudo pkill -f '[o]uc.py' || true
           ls -la tests/lab3/evidence
+
+      - name: Audit measured preservation and chaos evidence
+        if: ${{ always() && (contains(inputs.phases, 'pingpong_4turn_live') || contains(inputs.phases, 'live_reverse_lifecycle')) }}
+        run: |
+          set -o pipefail
+          python3 tests/lab3/audit.py tests/lab3/evidence | tee tests/lab3/evidence/audit.txt
 
       - name: Summarise
         if: always()

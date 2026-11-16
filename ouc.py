@@ -56,6 +56,7 @@ import re
 import shutil
 import signal
 import socket
+import stat
 import struct
 import subprocess
 import sys
@@ -511,6 +512,14 @@ class Config:
         self.http_proxy = os.environ.get(
             "OUC_HTTP_PROXY", f"http://127.0.0.1:{self.proxy_http_port}")
         self.bridge_pid_file = os.path.join(self.state_dir, "bridge.pid")
+        self.bridge_log = (os.environ.get("OUC_BRIDGE_LOG") or disk.get("bridge_log")
+                           or os.path.join(self.state_dir, "bridge-events.jsonl"))
+        self.bridge_log_max_bytes = env_int("OUC_BRIDGE_LOG_MAX_BYTES",
+                                            int(disk.get("bridge_log_max_bytes", 5242880)))
+        self.bridge_log_backups = max(0, env_int("OUC_BRIDGE_LOG_BACKUPS",
+                                                  int(disk.get("bridge_log_backups", 2))))
+        self.bridge_log_redact = env_bool("OUC_BRIDGE_LOG_REDACT",
+                                          bool(disk.get("bridge_log_redact", False)))
 
         if self.proxy_mode:
             # both are meaningless (and unsafe) without a TUN interface
@@ -605,6 +614,10 @@ class Config:
             "warp_mode": self.warp_mode,
             "proxy_socks_port": self.proxy_socks_port,
             "proxy_http_port": self.proxy_http_port,
+            "bridge_log": self.bridge_log,
+            "bridge_log_max_bytes": self.bridge_log_max_bytes,
+            "bridge_log_backups": self.bridge_log_backups,
+            "bridge_log_redact": self.bridge_log_redact,
             "http_proxy": self.http_proxy,
             "pin": self.pin,
             "pin_hosts": self.pin_hosts,
@@ -1569,8 +1582,88 @@ def bridge_upstream(static: str, cache: "dict | None" = None) -> str:
     return upstream
 
 
+class BridgeTelemetry:
+    """Best-effort, thread-serialized JSONL metadata with bounded retention."""
+
+    def __init__(self, path: str, max_bytes: int, backups: int, redact: bool, log=None):
+        self.path, self.max_bytes, self.backups = path, max_bytes, max(0, backups)
+        self.redact, self.log = redact, log
+        self.lock = threading.Lock()
+
+    @staticmethod
+    def _open(path: str, flags: int) -> int:
+        fd = os.open(path, flags | getattr(os, "O_NOFOLLOW", 0), 0o600)
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise OSError("telemetry path is not a regular file")
+            os.fchmod(fd, 0o600)
+            return fd
+        except BaseException:
+            os.close(fd)
+            raise
+
+    def _rotate(self) -> None:
+        # Every source is opened without following links and made private before
+        # rename. Replacement is atomic per file; no unrelated path is traversed.
+        for i in range(self.backups - 1, 0, -1):
+            source = f"{self.path}.{i}"
+            try:
+                fd = self._open(source, os.O_WRONLY)
+            except FileNotFoundError:
+                continue
+            os.close(fd)
+            os.replace(source, f"{self.path}.{i + 1}")
+        if self.backups:
+            os.replace(self.path, self.path + ".1")
+        else:
+            os.unlink(self.path)
+
+    def emit(self, event: str, **fields) -> None:
+        try:
+            record = dict(event=event, timestamp=time.time(), **fields)
+            if self.redact and record.get("target_host"):
+                record["target_host"] = "sha256:" + hashlib.sha256(
+                    str(record["target_host"]).encode("utf-8")).hexdigest()
+            line = (json.dumps(record, separators=(",", ":")) + "\n").encode("utf-8")
+            if self.max_bytes > 0 and len(line) > self.max_bytes:
+                return  # a single oversized record cannot fit without breaking the bound
+            with self.lock:
+                fd = self._open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT)
+                try:
+                    size = os.fstat(fd).st_size
+                    if self.max_bytes > 0 and size and size + len(line) > self.max_bytes:
+                        os.close(fd)
+                        fd = -1
+                        self._rotate()
+                        fd = self._open(self.path, os.O_WRONLY | os.O_APPEND | os.O_CREAT)
+                        size = 0
+                    try:
+                        written = 0
+                        while written < len(line):
+                            n = os.write(fd, line[written:])
+                            if not n:
+                                raise OSError("short telemetry write")
+                            written += n
+                    except OSError:
+                        # Avoid leaving a partial JSONL record after ENOSPC.
+                        try: os.ftruncate(fd, size)
+                        except OSError: pass
+                        raise
+                finally:
+                    if fd >= 0:
+                        os.close(fd)
+        except (OSError, ValueError, TypeError) as exc:
+            # Telemetry must never take down the relay, including when the
+            # controller's regular diagnostic log is also unwritable.
+            try:
+                if self.log:
+                    self.log(f"bridge: telemetry write failed: {exc}", "WARN")
+            except Exception:
+                pass
+
+
 def run_bridge(listen: str, socks: str, log: "Log | None" = None,
-               dynamic: bool = False) -> int:
+               dynamic: bool = False, cfg: "Config | None" = None) -> int:
     """HTTP CONNECT proxy in front of whichever SOCKS5 backend is active.
 
     opencode's fetch() understands HTTP proxies and rejects socks5:// outright
@@ -1595,20 +1688,10 @@ def run_bridge(listen: str, socks: str, log: "Log | None" = None,
     route_lock = threading.RLock()
     observed = {"signature": None, "epoch": None}
     clients = {}  # client socket -> lifecycle record
-    telemetry_path = os.environ.get("OUC_BRIDGE_LOG") or os.path.join(_state_dir_default(), "bridge-events.jsonl")
-    telemetry_lock = threading.Lock()
-
-    def emit(event, **fields):
-        # Metadata only: no HTTP headers or TLS payloads.  Each record is a
-        # single locked append so concurrent relays cannot interleave JSON.
-        try:
-            record = dict(event=event, timestamp=time.time(), **fields)
-            with telemetry_lock:
-                with open(telemetry_path, "a") as out:
-                    out.write(json.dumps(record, separators=(",", ":")) + "\n")
-        except (OSError, ValueError, TypeError) as exc:
-            if log:
-                log(f"bridge: telemetry write failed: {exc}", "WARN")
+    cfg = cfg or Config()
+    telemetry = BridgeTelemetry(cfg.bridge_log, cfg.bridge_log_max_bytes,
+                                cfg.bridge_log_backups, cfg.bridge_log_redact, log)
+    emit = telemetry.emit
     state_path = os.path.join(_state_dir_default(), "state.json")
     default_port = int(os.environ.get("OUC_PROXY_SOCKS_PORT") or 40000)
 
@@ -1644,6 +1727,7 @@ def run_bridge(listen: str, socks: str, log: "Log | None" = None,
             for client, rec in stale:
                 rec["drained"] = True
                 emit("epoch_drain", client_addr=rec["client_addr"],
+                     target_host=rec["target_host"],
                      socks_port=rec["socks_port"], old_epoch=rec["epoch"],
                      new_epoch=epoch, drained=True)
                 for sock in (client, rec["upstream"]):
@@ -1728,7 +1812,7 @@ def run_bridge(listen: str, socks: str, log: "Log | None" = None,
                     clients.pop(conn, None)
             if rec is not None:
                 emit("close", client_addr=rec["client_addr"], socks_port=rec["socks_port"],
-                     epoch=rec["epoch"], bytes_up=rec["bytes_up"],
+                     target_host=rec["target_host"], epoch=rec["epoch"], bytes_up=rec["bytes_up"],
                      bytes_down=rec["bytes_down"], drained=rec["drained"])
             for sock in (conn, upstream):
                 if sock is not None:
@@ -1940,7 +2024,7 @@ def cmd_bridge(args, cfg: Config, log: Log) -> int:
         return 2
     socks = getattr(args, "socks", "") or ""
     dynamic = bool(getattr(args, "dynamic", False)) or not socks
-    return run_bridge(listen, socks, log, dynamic=dynamic)
+    return run_bridge(listen, socks, log, dynamic=dynamic, cfg=cfg)
 
 
 def probe_egress(cfg: Config, proxy_url: str = "", strict: bool = False) -> str:
@@ -2484,9 +2568,12 @@ class Psiphon:
         """
         data = os.path.abspath(self.cfg.psiphon_data)
         backup = data + ".ouc-cache-backup"
-        self.stop()
-        if self._orphan_pids() or self.socks_open():
-            return False, "Psiphon did not release its tunnel; cache unchanged"
+        try:
+            self.stop()
+            if self._orphan_pids() or self.socks_open():
+                return False, "Psiphon did not release its tunnel; cache unchanged"
+        except OSError as exc:
+            return False, f"could not stop Psiphon; cache unchanged: {exc}"
         try:
             if os.path.lexists(backup):
                 if os.path.islink(backup) or not os.path.isdir(backup) or os.path.islink(data):
@@ -2525,12 +2612,16 @@ class Psiphon:
             os.rename(backup, data)
             return False, f"clean bootstrap failed; datastore restored: {detail}"
         except Exception as exc:
-            self.stop()
             try:
+                self.stop()
                 if self._orphan_pids() or self.socks_open():
                     raise OSError("tunnel still running")
-                if os.path.isdir(data) and not os.path.islink(data):
+                if os.path.islink(data):
+                    raise OSError("refusing to overwrite a datastore symlink")
+                if os.path.isdir(data):
                     shutil.rmtree(data)
+                if os.path.lexists(data):
+                    raise OSError("refusing to overwrite an unexpected datastore path")
                 os.rename(backup, data)
             except OSError as restore_exc:
                 return False, f"cache recovery failed; backup retained at {backup}: {restore_exc}"
@@ -3093,11 +3184,20 @@ def _rotate_psiphon(cfg: Config, log: Log, state: State, why: str,
             if (pass_two and entry["block"].endswith("/32") and
                     (entry["block"] in spent or entry["block"] == old_block)):
                 entry["cache_bust"] = True
+                entry["duplicate_block"] = entry["block"]
                 log(f"psiphon: duplicate {entry['block']} on a later pass; "
                     f"trying one clean bootstrap for {candidate_region}", "WARN")
                 ok, detail = psiphon.rebootstrap(candidate_region)
+                entry["cache_bust_connected"] = bool(ok)
+                entry["cache_bust_detail"] = detail
                 if not ok:
                     entry["reason"] = detail
+                    # If restoration failed, never start another region over a
+                    # partially recovered datastore. Keep the original backup
+                    # intact and propagate the precise failure to last_error.
+                    data_path = getattr(cfg, "psiphon_data", "")
+                    if data_path and os.path.lexists(data_path + ".ouc-cache-backup"):
+                        raise PsiphonError(detail)
                     continue
                 cand = ""
                 for _ in range(20):

@@ -308,13 +308,110 @@ def main():
         log("pre-snapshot saved")
         return
 
-    if "tui_live" in which or "pingpong_live" in which:
-        pingpong = "pingpong_live" in which
+    if "live_reverse_lifecycle" in which:
+        # Measurements are real. The test setup explicitly blacklists addresses
+        # actually observed from the provider; it never injects a fake egress.
+        res = {"phase":"live_reverse_lifecycle", "passed":False, "steps":[]}
+        def step(name, **fields):
+            res["steps"].append(dict(step=name, **fields))
+            save("live_reverse_lifecycle.json", res)
+        def state_update(fields):
+            code = "import json,sys,ouc; c=ouc.Config(); ouc.State(c).update(**json.loads(sys.argv[1]))"
+            return sh(["sudo", "env", "OUC_WARP_MODE=proxy", PY, "-c", code, json.dumps(fields)], timeout=30)
+        try:
+            ouc(["stop"], timeout=120)
+            ok, starts = escalate_psiphon(tries=2)
+            ps_before = state()
+            initial_ip = egress()
+            step("initial_psiphon", ok=ok, attempts=starts, state=ps_before, egress=initial_ip)
+            if not ok or not ident(initial_ip) or ':' in initial_ip:
+                raise RuntimeError("initial real Psiphon tunnel not verified")
+            # Short TTL is supplied through the controller; no forced backend.
+            time.sleep(2)
+            auto = ouc(["hop", "--wait", "300"], timeout=400,
+                       extra={"OUC_BLACKLIST_TTL":"1", "OUC_COOLDOWN_SECONDS":"0"})
+            warp_state = state()
+            warp_ip = egress()
+            step("automatic_ttl_return", hop=auto, state=warp_state, egress=warp_ip,
+                 psiphon_listener_stopped=not listening(9060))
+            rotation = warp_state.get("last_rotation") or {}
+            if auto["rc"] != 0 or warp_state.get("active_backend") != "warp" or not rotation.get("verified") or listening(9060) or ':' not in warp_ip:
+                raise RuntimeError("TTL return did not verify WARP and stop Psiphon")
+            ok, starts2 = escalate_psiphon(tries=2)
+            bounce_before = state()
+            if not ok:
+                raise RuntimeError("could not establish Psiphon before bounce")
+            stopped = sh(["sudo", "systemctl", "stop", "warp-svc"], timeout=90)
+            time.sleep(3)
+            bounce = ouc(["hop", "--wait", "300"], timeout=400,
+                         extra={"OUC_BLACKLIST_TTL":"1", "OUC_COOLDOWN_SECONDS":"0",
+                                "OUC_CONNECT_WAIT":"10", "OUC_EGRESS_WAIT":"10"})
+            bounce_state = state()
+            bounce_ip = egress()
+            controller_log = sh(["sudo", "tail", "-n", "120", "/var/lib/opencode-unlimited/ouc.log"])
+            step("failed_warp_bounce", warp_stop=stopped, before=bounce_before, hop=bounce,
+                 state=bounce_state, egress=bounce_ip, controller_log=controller_log)
+            rotation = bounce_state.get("last_rotation") or {}
+            if (stopped["rc"] != 0 or bounce["rc"] != 0 or bounce_state.get("active_backend") != "psiphon"
+                or not rotation.get("verified") or not ident(bounce_ip) or ':' in bounce_ip
+                or int(bounce_state.get("fallback_activated_at") or 0) <= int(bounce_before.get("fallback_activated_at") or 0)
+                or "WARP return failed; attempting Psiphon recovery" not in controller_log.get("out", "")):
+                raise RuntimeError("automatic failed-return bounce was not proven")
+            # Observe real exits, then mark only those measured /32s spent to
+            # make an actual duplicate detectable on a later region pass.
+            measured = [ident(initial_ip), ident(bounce_ip)]
+            region = str(rotation.get("region") or "US")
+            trials = []
+            for attempt in range(1, 7):
+                st = state()
+                blocks = list(dict.fromkeys((st.get("blacklist") or []) + measured))
+                times = dict(st.get("blacklist_ts") or {})
+                for block in measured:
+                    if block: times[block] = int(time.time())
+                setup = state_update({"blacklist":blocks, "blacklist_ts":times,
+                                      "psiphon_cycle_count":1, "psiphon_cycle_visited":[region],
+                                      "psiphon_region_index":0})
+                pid_before = sh(["sudo", "cat", "/var/lib/opencode-unlimited/psiphon/psiphon.pid"])
+                hop = ouc(["hop", "--backend", "psiphon", "--wait", "300"], timeout=400,
+                          extra={"OUC_PSIPHON_REGIONS":region, "OUC_PSIPHON_START_WAIT":"120",
+                                 "OUC_BLACKLIST_TTL":"14400", "OUC_COOLDOWN_SECONDS":"0"})
+                after_state = state()
+                ip = egress()
+                pid_after = sh(["sudo", "cat", "/var/lib/opencode-unlimited/psiphon/psiphon.pid"])
+                details = (after_state.get("last_rotation") or {}).get("attempts") or []
+                trials.append(dict(attempt=attempt, measured_blacklist=list(measured), setup=setup, hop=hop,
+                                   state=after_state, egress=ip, pid_before=pid_before, pid_after=pid_after,
+                                   backup_listing=sh(["sudo", "ls", "-la", "/var/lib/opencode-unlimited/psiphon"])))
+                step("cache_bust_trial", **trials[-1])
+                tested = [a for a in details if a.get("cache_bust") and a.get("cache_bust_connected") and a.get("accepted")]
+                if (hop["rc"] == 0 and tested and ident(ip) and ident(ip) not in measured
+                    and all(a.get("duplicate_block") in measured for a in tested)):
+                    res["passed"] = True
+                    save("live_reverse_lifecycle.json", res)
+                    break
+                if ident(ip) and ':' not in ip and ident(ip) not in measured:
+                    measured.append(ident(ip))
+            if not res["passed"]:
+                raise RuntimeError("no successful duplicate cache-bust with fresh real /32 observed")
+        except Exception as exc:
+            res["error"] = str(exc)
+            save("live_reverse_lifecycle.json", res)
+            log("reverse lifecycle phase failed:", exc)
+        finally:
+            sh(["sudo", "systemctl", "start", "warp-svc"], timeout=90)
+        if not res["passed"]:
+            raise SystemExit(1)
+        return
+
+    if any(p in which for p in ("tui_live", "pingpong_live", "pingpong_4turn_live")):
+        fourturn = "pingpong_4turn_live" in which
+        pingpong = fourturn or "pingpong_live" in which
         log("TUI: real interactive OpenCode, same process across Psiphon hop")
-        res = {"phase": "pingpong_live" if pingpong else "tui_live", "passed": False}
+        phase_name = "pingpong_4turn_live" if fourturn else ("pingpong_live" if pingpong else "tui_live")
+        res = {"phase": phase_name, "passed": False}
         def record(**fields):
             res.update(fields)
-            save(("pingpong_live.json" if pingpong else "tui_live.json"), res)
+            save(phase_name + ".json", res)
         def tmux(*args):
             return sh(["tmux", *args], timeout=30)
         def screen(name):
@@ -349,10 +446,11 @@ def main():
                                 "ss": "\n".join(line for line in snap["out"].splitlines() if ":8080" in line),
                                 "processes": ps["out"]})
         def events():
-            path = pathlib.Path("/var/lib/opencode-unlimited/bridge-events.jsonl")
+            # The root-owned telemetry file is deliberately mode 0600.
+            result = sh(["sudo", "cat", "/var/lib/opencode-unlimited/bridge-events.jsonl"], timeout=30)
             try:
-                return [json.loads(x) for x in path.read_text().splitlines() if x]
-            except (OSError, ValueError):
+                return [json.loads(x) for x in result["out"].splitlines() if x] if result["rc"] == 0 else []
+            except ValueError:
                 return []
         def matched(events_list, port, begin, end, proc_pid):
             # Match the bridge's client port with the kernel's process-labelled
@@ -590,6 +688,32 @@ def main():
                        passed=bool(turn3 and alive(pid) and warp_return_connections and ps_drains))
                 if not res["passed"]:
                     raise RuntimeError("return turn, PID-correlated WARP socket or Psiphon drain missing")
+                if fourturn:
+                    record(passed=False)
+                    second_ok, second_attempts = escalate_psiphon(tries=2)
+                    last_state = state()
+                    last_ip = egress()
+                    record(second_psiphon_hop=second_attempts, second_psiphon_egress=last_ip,
+                           second_psiphon_epoch=epoch(last_state), second_psiphon_ok=second_ok)
+                    if not (second_ok and ident(last_ip) and ":" not in last_ip and
+                            ident(last_ip) != ident(after) and ident(warp_ip) != ident(before) and
+                            epoch(last_state) != epoch(warp_state) and alive(pid)):
+                        raise RuntimeError("second Psiphon exit, distinct addresses or epoch not proven")
+                    warp_return_drains = [e for e in events() if e.get("event") == "epoch_drain" and
+                        e.get("client_addr") in {c["client_addr"] for c in warp_return_connections}]
+                    marker4 = "Recall the original secret token exactly"
+                    turn4_start = time.time()
+                    tmux("send-keys", "-t", "ouc-tui:0.0", "-l", marker4 + ". Reply with only the token.")
+                    tmux("send-keys", "-t", "ouc-tui:0.0", "Enter")
+                    turn4, text4 = wait_screen(lambda t: marker4 in t and token in t.split(marker4, 1)[1], 240, "turn4")
+                    turn4_end = time.time()
+                    second_connections = matched(events(), 9060, turn4_start, turn4_end, pid)
+                    record(turn4_recalled=turn4, screen_turn4=text4[-12000:],
+                           second_psiphon_tui_connections=second_connections,
+                           warp_return_tui_drains=warp_return_drains, final_same_pid=alive(pid),
+                           passed=bool(turn4 and alive(pid) and second_connections and warp_return_drains))
+                    if not res["passed"]:
+                        raise RuntimeError("turn 4 recall, PID-correlated socket or WARP drain missing")
         except Exception as exc:
             record(error=str(exc), screen_snippet=screen("failure")[-12000:])
             log("TUI phase failed:", exc)
@@ -600,7 +724,11 @@ def main():
             (EV / "tui_socket_samples.json").write_text(json.dumps(samples, indent=2))
             path = pathlib.Path("/var/lib/opencode-unlimited/bridge-events.jsonl")
             if path.exists():
-                (EV / "tui_bridge_events.jsonl").write_text(path.read_text())
+                telemetry_copy = sh(["sudo", "cat", str(path)], timeout=30)
+                if telemetry_copy["rc"] == 0:
+                    (EV / "tui_bridge_events.jsonl").write_text(telemetry_copy["out"])
+                else:
+                    record(telemetry_copy_error=telemetry_copy["err"])
             if uid is not None:
                 for binary in ("iptables", "ip6tables"):
                     sh(["sudo", binary, "-D", "OUTPUT", "-m", "owner", "--uid-owner", str(uid), "!", "-o", "lo", "-j", "REJECT"])
@@ -620,10 +748,15 @@ def main():
             ps_bytes = any(c.get("bytes_up", 0) > 500 and c.get("bytes_down", 0) > 500 for c in pc)
             rc = closes_for("warp_return_tui_connections") if pingpong else []
             return_bytes = (not pingpong or any(c.get("bytes_up", 0) > 500 and c.get("bytes_down", 0) > 500 for c in rc))
-            record(warp_return_tui_close_events=rc, warp_bytes_and_drain_proven=warp_bytes,
-                   psiphon_payload_proven=ps_bytes, warp_return_payload_proven=return_bytes,
-                   passed=bool(warp_bytes and ps_bytes and return_bytes))
-            if not (warp_bytes and ps_bytes and return_bytes):
+            fourth_close = closes_for("second_psiphon_tui_connections") if fourturn else []
+            fourth_bytes = not fourturn or any(c.get("bytes_up", 0) > 0 and c.get("bytes_down", 0) > 0 for c in fourth_close)
+            third_drained = not fourturn or any(c.get("drained") and c.get("bytes_up", 0) > 0 and c.get("bytes_down", 0) > 0 for c in rc)
+            record(warp_return_tui_close_events=rc, second_psiphon_tui_close_events=fourth_close,
+                   warp_bytes_and_drain_proven=warp_bytes, psiphon_payload_proven=ps_bytes,
+                   warp_return_payload_proven=return_bytes, fourth_payload_proven=fourth_bytes,
+                   third_drain_bytes_proven=third_drained,
+                   passed=bool(warp_bytes and ps_bytes and return_bytes and fourth_bytes and third_drained))
+            if not (warp_bytes and ps_bytes and return_bytes and fourth_bytes and third_drained):
                 record(error="PID-correlated tunnel close/byte evidence incomplete")
         if not res.get("passed"):
             raise SystemExit(1)

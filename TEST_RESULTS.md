@@ -8,20 +8,22 @@ The current release. Every number below was measured, not typed in by hand.
 
 ```
 bash tests/run_tests.sh --offline
-→ 87 passed / 0 failed / 11 skipped
+→ 89 passed / 0 failed / 11 skipped
 ```
 
 The 11 skips comprise five legacy installer tests requiring explicit disposable-host
 permission and six destructive real-WARP tests excluded from the offline run. New in this release: `t98` (installer wires up
 `psiphon-tunnel-core` end to end, offline stub) and `t99` (markdown
 link-integrity check across the flagship docs), and `t100` (persistent PTY
-stand-in across cross-port and same-port route changes).
+stand-in across cross-port and same-port route changes). `t105` exercises local
+bridge-log rotation and privacy, and `t106` injects local datastore/state faults
+and mixed concurrent CLI work. These tests do not constitute live provider proof.
 
 ### pytest suite
 
 ```
 python3 -m pytest tests -q
-→ 116 passed, 11 subtests passed
+→ 129 passed, 16 subtests passed
 ```
 
 ### Interactive reverse ping-pong: disposable Actions run 43814088627
@@ -79,8 +81,14 @@ byte-counted close events for cross-port and same-port transitions.
 **Telemetry privacy:** bridge lifecycle JSONL defaults to
 `/var/lib/opencode-unlimited/bridge-events.jsonl` (override with
 `OUC_BRIDGE_LOG`). It contains destination hostnames, loopback client ports,
-route epochs, timestamps and byte counts, but not TLS payloads. It currently
-appends without automatic rotation; operators should protect and manage it.
+route epochs, timestamps and byte counts, but not TLS payloads. Files are
+created with mode `0600`. `OUC_BRIDGE_LOG_MAX_BYTES` defaults to 5 MiB and
+`OUC_BRIDGE_LOG_BACKUPS` defaults to 2; a nonpositive maximum disables size
+rotation. `OUC_BRIDGE_LOG_REDACT=1` hashes target hostnames with SHA-256;
+these unsalted hashes can still reveal guessable hostnames. The same settings
+are available as `bridge_log_max_bytes`, `bridge_log_backups`, and
+`bridge_log_redact` in `config.json` and are shown by `ouc config`. Logging is
+best-effort: filesystem failures may lose telemetry but must not stop a relay.
 
 ### Real interactive TUI: separate disposable Actions run
 
