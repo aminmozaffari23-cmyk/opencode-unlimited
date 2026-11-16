@@ -1,0 +1,20 @@
+{
+  "phase": "tui_live",
+  "passed": false,
+  "egress_before": "2a09:bac1:7681:5e78::272:12a",
+  "epoch_before": [
+    0,
+    "warp",
+    40000,
+    "2a09:bac1:7681:5e78::272:12a"
+  ],
+  "bridge_ready": true,
+  "tui_pid_before": 4835,
+  "pane_pid": 4831,
+  "tui_uid": 1002,
+  "token": "TOKEN-TUI-6250349A42ED",
+  "ack": "ACK-TUI-34082F43",
+  "opencode_version": "1.19.5",
+  "error": "TUI did not become ready",
+  "screen_snippet": ""
+}

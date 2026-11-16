@@ -1,0 +1,6 @@
+{"event":"connect","timestamp":1794799170.9773762,"client_addr":"127.0.0.1:39566","target_host":"api64.ipify.org","socks_port":40000,"epoch":[0,"warp",40000,"2a09:bac1:7681:5e78::272:12a"]}
+{"event":"close","timestamp":1794799171.188232,"client_addr":"127.0.0.1:39566","socks_port":40000,"epoch":[0,"warp",40000,"2a09:bac1:7681:5e78::272:12a"],"bytes_up":1932,"bytes_down":5053,"drained":false}
+{"event":"connect","timestamp":1794799201.567529,"client_addr":"127.0.0.1:44056","target_host":"api64.ipify.org","socks_port":40000,"epoch":[0,"warp",40000,"2a09:bac1:7681:5e78::272:12a"]}
+{"event":"close","timestamp":1794799201.8624487,"client_addr":"127.0.0.1:44056","socks_port":40000,"epoch":[0,"warp",40000,"2a09:bac1:7681:5e78::272:12a"],"bytes_up":1932,"bytes_down":5053,"drained":false}
+{"event":"connect","timestamp":1794799262.60779,"client_addr":"127.0.0.1:48776","target_host":"api64.ipify.org","socks_port":40000,"epoch":[0,"warp",40000,"2a09:bac1:7681:5e78::272:12a"]}
+{"event":"close","timestamp":1794799262.7913823,"client_addr":"127.0.0.1:48776","socks_port":40000,"epoch":[0,"warp",40000,"2a09:bac1:7681:5e78::272:12a"],"bytes_up":1932,"bytes_down":5031,"drained":false}

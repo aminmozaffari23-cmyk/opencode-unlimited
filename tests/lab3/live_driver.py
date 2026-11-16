@@ -395,7 +395,7 @@ def main():
                        HTTP_PROXY="http://127.0.0.1:8080", ALL_PROXY="http://127.0.0.1:8080",
                        NO_PROXY="localhost,127.0.0.1,::1", TERM="xterm-256color")
             tmux("kill-session", "-t", "ouc-tui")
-            start = sh(["tmux", "new-session", "-d", "-s", "ouc-tui", "-x", "120", "-y", "40",
+            start = sh(["tmux", "new-session", "-d", "-s", "ouc-tui", "-x", "120", "-y", "40", "-c", "/tmp/ouc-tui-home",
                         "env", "HTTPS_PROXY=" + env["HTTPS_PROXY"], "HTTP_PROXY=" + env["HTTP_PROXY"],
                         "ALL_PROXY=" + env["ALL_PROXY"], "NO_PROXY=" + env["NO_PROXY"],
                         "TERM=xterm-256color", "sudo", "-u", "ouc-tui-test", "env", "HOME=/tmp/ouc-tui-home", "HTTPS_PROXY=" + env["HTTPS_PROXY"], "HTTP_PROXY=" + env["HTTP_PROXY"], "ALL_PROXY=" + env["ALL_PROXY"], "NO_PROXY=" + env["NO_PROXY"], OC, "-m", MODEL], env=env)
