@@ -405,7 +405,7 @@ def main():
                       "XDG_STATE_HOME=/tmp/ouc-tui-home/.local/state",
                       "HTTPS_PROXY=" + env["HTTPS_PROXY"], "HTTP_PROXY=" + env["HTTP_PROXY"],
                       "ALL_PROXY=" + env["ALL_PROXY"], "NO_PROXY=" + env["NO_PROXY"],
-                      "TERM=xterm-256color", OC, "-m", MODEL]
+                      "TERM=xterm-256color", OC, "/tmp/ouc-tui-home", "-m", MODEL]
             # Keep the pane after an early exit so startup errors are evidence.
             command = "sleep 4; exec " + " ".join(shlex.quote(x) for x in launch)
             start = sh(["tmux", "new-session", "-d", "-s", "ouc-tui", "-x", "120", "-y", "40",
