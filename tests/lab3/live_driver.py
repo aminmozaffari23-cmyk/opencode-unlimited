@@ -384,6 +384,21 @@ def main():
             if r["rc"] != 0:
                 raise RuntimeError("could not set initial WARP bridge route: " + r["err"])
             ensure_bridge()
+            # Find a usable WARP exit before attempting the interactive seed.
+            # A quota-walled initial address cannot prove anything about TUI
+            # continuity. All rotations use the product controller itself.
+            preflight = []
+            for attempt in range(3):
+                v = ouc(["verify", "-m", MODEL], timeout=300)
+                preflight.append({"attempt": attempt + 1, "verify": v})
+                if (v.get("json") or {}).get("ok"):
+                    break
+                hop = ouc(["hop", "--backend", "warp", "--wait", "300"], timeout=400,
+                          extra={"OUC_COOLDOWN_SECONDS": "0"})
+                preflight[-1]["hop"] = hop
+            record(warp_preflight=preflight)
+            if not (preflight[-1]["verify"].get("json") or {}).get("ok"):
+                raise RuntimeError("could not verify an unwalled WARP exit before the TUI seed")
             before = egress()
             before_state = state()
             def epoch(st):

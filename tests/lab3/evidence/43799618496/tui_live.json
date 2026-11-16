@@ -1,0 +1,22 @@
+{
+  "phase": "tui_live",
+  "passed": false,
+  "egress_before": "2a09:bac5:b1ba:4aa::77:b4",
+  "epoch_before": [
+    0,
+    "warp",
+    40000,
+    "2a09:bac5:b1ba:4aa::77:b4"
+  ],
+  "bridge_ready": true,
+  "tui_pid_before": 4866,
+  "pane_pid": 4825,
+  "tui_uid": 1002,
+  "token": "TOKEN-TUI-C20B3477AE32",
+  "ack": "ACK-TUI-BBDD0093",
+  "opencode_version": "1.19.5",
+  "turn1_response_visible": false,
+  "screen_turn1": "\n  \u2503\n  \u2503  Remember the exact secret token TOKEN-TUI-C20B3477AE32. Reply with only ACK-TUI-BBDD0093.\n  \u2503\n\n     \u25a3  Build \u00b7 DeepSeek V4.1 Flash Free\n\n\n\n\n\n                                 Free limit reached                                 esc\n\n                                 Subscribe to OpenCode Go for reliable access to the\n                                 best open-source models for $10/month.\n\n                                                       \u2580\u2580\u2580\u2580 \u2580\u2580\u2580\u2580\n                                                       \u2580 \u2580\u2580 \u2580  \u2580\n                                                       \u2580\u2580\u2580\u2580 \u2580\u2580\u2580\u2580\n\n\n                                                 https://opencode.ai/go\n\n\n                                   don't show again                         subscribe\n\n\n\n\n\n\n\n\n  \u2503\n  \u2503\n  \u2503\n  \u2503  Build \u00b7 DeepSeek V4.1 Flash Free OpenCode\n  \u2579\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\n   \u2b1d\u2b1d\u2b1d\u2b1d\u2b1d\u2b1d\u2b1d\u2b1d Free usage exceeded, subscribe to Go [retrying in 20h 26m attempt #1]                        esc interrupt\n\n",
+  "error": "Turn 1 response not proven or TUI exited",
+  "screen_snippet": "\n  \u2503\n  \u2503  Remember the exact secret token TOKEN-TUI-C20B3477AE32. Reply with only ACK-TUI-BBDD0093.\n  \u2503\n\n     \u25a3  Build \u00b7 DeepSeek V4.1 Flash Free\n\n\n\n\n\n                                 Free limit reached                                 esc\n\n                                 Subscribe to OpenCode Go for reliable access to the\n                                 best open-source models for $10/month.\n\n                                                       \u2580\u2580\u2580\u2580 \u2580\u2580\u2580\u2580\n                                                       \u2580 \u2580\u2580 \u2580  \u2580\n                                                       \u2580\u2580\u2580\u2580 \u2580\u2580\u2580\u2580\n\n\n                                                 https://opencode.ai/go\n\n\n                                   don't show again                         subscribe\n\n\n\n\n\n\n\n\n  \u2503\n  \u2503\n  \u2503\n  \u2503  Build \u00b7 DeepSeek V4.1 Flash Free OpenCode\n  \u2579\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\n   \u2b1d\u2b1d\u2b1d\u2b1d\u2b1d\u2b1d\u2b1d\u2b1d Free usage exceeded, subscribe to Go [retrying in 20h 26m attempt #1]                        esc interrupt\n\n"
+}
