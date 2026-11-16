@@ -343,7 +343,10 @@ def main():
         def monitor():
             while not monitor_stop.wait(0.25):
                 snap = sh(["sudo", "ss", "-tnp"], timeout=10)
-                samples.append({"timestamp": time.time(), "ss": snap["out"]})
+                ps = sh(["ps", "-eo", "pid=,ppid=,args="], timeout=10)
+                samples.append({"timestamp": time.time(),
+                                "ss": "\n".join(line for line in snap["out"].splitlines() if ":8080" in line),
+                                "processes": ps["out"]})
         def events():
             path = pathlib.Path("/var/lib/opencode-unlimited/bridge-events.jsonl")
             try:
@@ -361,9 +364,21 @@ def main():
                 for sample in samples:
                     if not begin <= sample["timestamp"] <= end:
                         continue
+                    parents = {}
+                    for process in sample.get("processes", "").splitlines():
+                        fields = process.strip().split(None, 2)
+                        if len(fields) >= 2 and fields[0].isdigit() and fields[1].isdigit():
+                            parents[int(fields[0])] = int(fields[1])
+                    descendants = {proc_pid}
+                    while True:
+                        expanded = descendants | {p for p, parent in parents.items() if parent in descendants}
+                        if expanded == descendants:
+                            break
+                        descendants = expanded
                     for line in sample["ss"].splitlines():
+                        owner = re.search(r"pid=(\d+)", line)
                         if (re.search(r"127\.0\.0\.1:" + re.escape(ep) + r"\s+127\.0\.0\.1:8080\b", line)
-                            and re.search(r"pid=" + str(proc_pid) + r"\b", line)):
+                            and owner and int(owner.group(1)) in descendants):
                             out.append(e)
                             break
                     if e in out:

@@ -1,0 +1,45 @@
+{
+  "phase": "tui_live",
+  "passed": false,
+  "warp_preflight": [
+    {
+      "attempt": 1,
+      "verify": {
+        "cmd": "verify -m opencode/deepseek-v4.1-flash-free",
+        "rc": 0,
+        "seconds": 6.569,
+        "json": {
+          "ran": true,
+          "ok": true,
+          "walled": false,
+          "detail": "opencode answered on the current block",
+          "failure_class": "",
+          "rc": 0,
+          "model": "opencode/deepseek-v4.1-flash-free",
+          "ipv6_egress": "2a09:bac5:c82e:166e::23c:ac"
+        },
+        "out": "{\n  \"ran\": true,\n  \"ok\": true,\n  \"walled\": false,\n  \"detail\": \"opencode answered on the current block\",\n  \"failure_class\": \"\",\n  \"rc\": 0,\n  \"model\": \"opencode/deepseek-v4.1-flash-free\",\n  \"ipv6_egress\": \"2a09:bac5:c82e:166e::23c:ac\"\n}\n",
+        "err": ""
+      }
+    }
+  ],
+  "egress_before": "2a09:bac5:c82e:166e::23c:ac",
+  "epoch_before": [
+    0,
+    "warp",
+    40000,
+    "2a09:bac5:c82e:166e::23c:ac"
+  ],
+  "bridge_ready": true,
+  "tui_pid_before": 4994,
+  "pane_pid": 4954,
+  "tui_uid": 1002,
+  "token": "TOKEN-TUI-A7358D0AF4E0",
+  "ack": "ACK-TUI-7A5B7562",
+  "opencode_version": "1.19.5",
+  "turn1_response_visible": true,
+  "screen_turn1": "\n  \u2503\n  \u2503  Remember the exact secret token TOKEN-TUI-A7358D0AF4E0. Reply with only ACK-TUI-7A5B7562.\n  \u2503\n\n     + Thought: 569ms\n\n     ACK-TUI-7A5B7562\n\n     \u25a3  Build \u00b7 DeepSeek V4.1 Flash Free \u00b7 5.0s\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n  \u2503\n  \u2503\n  \u2503\n  \u2503  Build \u00b7 DeepSeek V4.1 Flash Free OpenCode\n  \u2579\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\n   /tmp/ouc-tui-home                                                                        8.3K (4%)  ctrl+p commands\n\n",
+  "warp_tui_connections": [],
+  "error": "no WARP CONNECT correlated with TUI PID in kernel socket samples",
+  "screen_snippet": "\n  \u2503\n  \u2503  Remember the exact secret token TOKEN-TUI-A7358D0AF4E0. Reply with only ACK-TUI-7A5B7562.\n  \u2503\n\n     + Thought: 569ms\n\n     ACK-TUI-7A5B7562\n\n     \u25a3  Build \u00b7 DeepSeek V4.1 Flash Free \u00b7 5.0s\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n  \u2503\n  \u2503\n  \u2503\n  \u2503  Build \u00b7 DeepSeek V4.1 Flash Free OpenCode\n  \u2579\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\u2580\n   /tmp/ouc-tui-home                                                                        8.3K (4%)  ctrl+p commands\n\n"
+}

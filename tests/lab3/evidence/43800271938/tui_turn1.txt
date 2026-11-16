@@ -1,0 +1,40 @@
+
+  ┃
+  ┃  Remember the exact secret token TOKEN-TUI-A7358D0AF4E0. Reply with only ACK-TUI-7A5B7562.
+  ┃
+
+     + Thought: 569ms
+
+     ACK-TUI-7A5B7562
+
+     ▣  Build · DeepSeek V4.1 Flash Free · 5.0s
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  ┃
+  ┃
+  ┃
+  ┃  Build · DeepSeek V4.1 Flash Free OpenCode
+  ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+   /tmp/ouc-tui-home                                                                        8.3K (4%)  ctrl+p commands
+
